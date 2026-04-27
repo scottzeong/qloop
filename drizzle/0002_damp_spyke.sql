@@ -1,0 +1,1 @@
+ALTER TABLE `learningSessions` MODIFY COLUMN `completedTopics` json;
