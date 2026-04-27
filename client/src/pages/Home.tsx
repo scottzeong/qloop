@@ -47,10 +47,10 @@ export default function Home() {
 
           {/* Center column — headline */}
           <div className="col-span-7 pr-16">
-            <div className="swiss-label mb-6">AI Socratic Tutoring System</div>
+            <div className="swiss-label mb-6">NEURAL TUTORING SYSTEM</div>
             <h1 className="text-4xl font-black leading-[1.1] tracking-tight mb-8">
               학습자료를 올리면<br />
-              <span style={{ color: "var(--swiss-red)" }}>Socratic Tutor가 질문합니다</span>
+              <span style={{ color: "var(--swiss-red)" }}>Neural Tutor가 질문합니다</span>
             </h1>
             <div className="swiss-rule mb-8" />
             <p className="text-lg text-gray-600 leading-relaxed max-w-xl mb-12">
