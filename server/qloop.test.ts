@@ -133,6 +133,9 @@ vi.mock("./storage", () => ({
     key: "documents/1/test.pdf",
     url: "/manus-storage/test.pdf",
   }),
+  storageGetSignedUrl: vi.fn().mockResolvedValue(
+    "https://cdn.example.com/test.pdf?signed=1"
+  ),
 }));
 
 vi.mock("./_core/llm", () => ({

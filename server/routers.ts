@@ -4,7 +4,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { invokeLLM, type Message } from "./_core/llm";
-import { storagePut } from "./storage";
+import { storagePut, storageGetSignedUrl } from "./storage";
 import { notifyOwner } from "./_core/notification";
 import {
   createDocument,
@@ -357,7 +357,9 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         const buffer = Buffer.from(input.fileData, "base64");
-        const key = `documents/${ctx.user.id}/${Date.now()}-${input.fileName}`;
+        // ASCII-safe 파일명 생성 (한글 등 비ASCII 문자 제거)
+        const safeFileName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const key = `documents/${ctx.user.id}/${Date.now()}-${safeFileName}`;
         const { url } = await storagePut(key, buffer, input.mimeType);
 
         const docId = await createDocument({
@@ -382,7 +384,11 @@ export const appRouter = router({
         await updateDocumentAnalysis(input.documentId, "analyzing");
 
         try {
-          const structure = await analyzePdfStructure(doc.storageUrl, doc.title);
+          // /manus-storage/... 상대 경로를 실제 presigned S3 URL로 변환
+          // storageUrl에서 /manus-storage/ 접두사 제거 → 실제 S3 key (hash 포함)
+          const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, '');
+          const pdfSignedUrl = await storageGetSignedUrl(actualKey);
+          const structure = await analyzePdfStructure(pdfSignedUrl, doc.title);
           await updateDocumentAnalysis(input.documentId, "done", structure);
           return { success: true, structure };
         } catch (e) {
@@ -433,9 +439,11 @@ export const appRouter = router({
           answeredQuestions: 0,
         });
 
-        // 첫 번째 질문 생성
+        // 첫 번째 질문 생성 - presigned S3 URL 사용
+        const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, '');
+        const pdfSignedUrl = await storageGetSignedUrl(actualKey);
         const firstQuestion = await generateFirstQuestion(
-          doc.storageUrl,
+          pdfSignedUrl,
           input.topicTitle,
           input.topicDescription,
           doc.title
@@ -491,9 +499,11 @@ export const appRouter = router({
           messageType: m.messageType,
         }));
 
-        // AI 응답 생성
+        // AI 응답 생성 - presigned S3 URL 사용
+        const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, '');
+        const pdfSignedUrl = await storageGetSignedUrl(actualKey);
         const aiResponse = await generateNextMessage(
-          doc.storageUrl,
+          pdfSignedUrl,
           doc.title,
           session.startTopicTitle || "",
           history,
