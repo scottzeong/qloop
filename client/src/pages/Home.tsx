@@ -47,16 +47,14 @@ export default function Home() {
 
           {/* Center column — headline */}
           <div className="col-span-7 pr-16">
-            <div className="swiss-label mb-6">AI 문답 학습 플랫폼</div>
-            <h1 className="text-6xl font-black leading-[1.0] tracking-tight mb-8">
-              PDF를 올리면<br />
-              <span style={{ color: "var(--swiss-red)" }}>AI가 질문합니다</span>
+            <div className="swiss-label mb-6">AI Socratic Tutoring System</div>
+            <h1 className="text-4xl font-black leading-[1.1] tracking-tight mb-8">
+              학습자료를 올리면<br />
+              <span style={{ color: "var(--swiss-red)" }}>Socratic Tutor가 질문합니다</span>
             </h1>
             <div className="swiss-rule mb-8" />
             <p className="text-lg text-gray-600 leading-relaxed max-w-xl mb-12">
-              문서를 업로드하면 AI가 내용을 분석하여 계층적 구조로 파악합니다.
-              학습자는 원하는 토픽을 선택하고, AI와의 순차적 문답을 통해
-              깊이 있는 이해를 쌓아갑니다.
+              학습자료를 업로드하면 내용을 분석하여 다양한 구조를 보여줍니다. 학습자는 원하는 형태의 구조를 선택하여 문답으로 깊이 있고 효과적인 학습을 할 수 있습니다.
             </p>
             <div className="flex items-center gap-6">
               <a
