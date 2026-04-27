@@ -5,6 +5,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { invokeLLM, type Message } from "./_core/llm";
 import { storagePut } from "./storage";
+import { notifyOwner } from "./_core/notification";
 import {
   createDocument,
   getDocumentById,
@@ -574,6 +575,30 @@ export const appRouter = router({
           summary,
           completedAt: new Date(),
         });
+
+        // 학습 완료 알림 전송 (오너에게)
+        const msgCount = allMessages.length;
+        const answerCount = allMessages.filter((m) => m.role === "user").length;
+        const notificationContent = [
+          `📚 **학습 세션 완료**`,
+          ``,
+          `**문서:** ${doc.title}`,
+          `**토픽:** ${session.startTopicTitle}`,
+          `**총 메시지:** ${msgCount}개 (답변 ${answerCount}개)`,
+          ``,
+          `**학습 요약:**`,
+          summary.slice(0, 500) + (summary.length > 500 ? "..." : ""),
+        ].join("\n");
+
+        try {
+          await notifyOwner({
+            title: `[QLoop] 학습 완료: ${session.startTopicTitle}`,
+            content: notificationContent,
+          });
+        } catch (notifyErr) {
+          // 알림 실패는 세션 종료를 막지 않음
+          console.warn("[QLoop] 학습 완료 알림 전송 실패:", notifyErr);
+        }
 
         return { summary };
       }),

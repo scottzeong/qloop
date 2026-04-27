@@ -29,6 +29,11 @@
 - [x] 학습 진행 상황 추적 테스트
 
 ## 추가 개선 항목
-- [ ] AI 피드백과 다음 질문을 별도 메시지로 저장해 순차적 Q&A 루프 추적 개선
-- [ ] session.start, session.sendMessage 진행 API Vitest 추가
-- [ ] 학습 요약 및 진도 리포트 이메일 자동 발송 구현
+- [x] AI 피드백과 다음 질문을 별도 메시지로 저장해 순차적 Q&A 루프 추적 개선
+- [x] session.start, session.sendMessage 진행 API Vitest 추가
+- [x] 학습 요약 및 진도 리포트 알림 자동 발송 구현 (세션 종료 시 notifyOwner 호출)
+
+## 향후 개선 항목 (v2)
+- [ ] 이메일 발송 서비스 연동 (현재는 notifyOwner 알림으로 대체 구현됨)
+- [ ] 토픽 완료 시에도 알림 발송 트리거 추가
+- [ ] notifyOwner 알림 경로 Vitest 추가
