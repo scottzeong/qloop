@@ -503,7 +503,7 @@ Return a JSON with:
 
     return {
       content,
-      messageType: "feedback",
+      messageType: parsed.isTopicComplete ? "feedback" : "question",
       isTopicComplete: parsed.isTopicComplete || false,
     };
   }

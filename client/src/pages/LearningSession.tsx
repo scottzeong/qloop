@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { Send, ArrowLeft, CheckCircle, HelpCircle, MessageSquare, BookOpen } from "lucide-react";
 import { Streamdown } from "streamdown";
@@ -19,7 +19,7 @@ interface Message {
   createdAt: Date;
 }
 
-function MessageBubble({ msg }: { msg: Message }) {
+function MessageBubble({ msg, questionNumber }: { msg: Message; questionNumber?: number }) {
   const isAI = msg.role === "ai";
   const isQuestion = msg.messageType === "question";
   const isUserQuestion = msg.messageType === "user_question";
@@ -34,7 +34,7 @@ function MessageBubble({ msg }: { msg: Message }) {
               <div className="w-3 h-3 swiss-red-bg flex-shrink-0" />
               <span className="swiss-label">
                 {isQuestion ? "AI Tutor 질문" : "AI Tutor 질문"}
-                {msg.questionIndex ? ` #${msg.questionIndex}` : ""}
+                {questionNumber ? ` #${questionNumber}` : ""}
               </span>
             </>
           ) : (
@@ -99,6 +99,20 @@ export default function LearningSession() {
 
   const sendMessage = trpc.session.sendMessage.useMutation();
   const completeSession = trpc.session.complete.useMutation();
+
+  // AI Tutor 질문 메시지에 순차 번호 부여
+  const numberedMessages = useMemo(() => {
+    if (!messages) return [];
+    let count = 0;
+    return messages.map((msg) => {
+      const typedMsg = msg as Message;
+      if (typedMsg.role === "ai" && typedMsg.messageType === "question") {
+        count += 1;
+        return { ...typedMsg, _questionNumber: count };
+      }
+      return { ...typedMsg, _questionNumber: undefined };
+    });
+  }, [messages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -283,14 +297,14 @@ export default function LearningSession() {
               </div>
             ) : (
               <>
-                {messages.map((msg) => (
-                  <MessageBubble key={msg.id} msg={msg as Message} />
+                {numberedMessages.map((msg) => (
+                  <MessageBubble key={msg.id} msg={msg} questionNumber={msg._questionNumber} />
                 ))}
                 {sending && (
                   <div className="flex justify-start mb-6">
                     <div className="border-2 border-black p-4 flex items-center gap-3">
                       <div className="w-2 h-2 swiss-red-bg animate-pulse" />
-                      <span className="swiss-label">AI 응답 생성 중...</span>
+                      <span className="swiss-label">Tutor 생각중...</span>
                     </div>
                   </div>
                 )}

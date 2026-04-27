@@ -381,10 +381,12 @@ function ConceptCardsView({
   cards,
   structure,
   onSelectTopic,
+  onStartFromNode,
 }: {
   cards: ConceptCard[];
   structure: DocumentStructure;
   onSelectTopic: (topic: TopicNode) => void;
+  onStartFromNode: (nodeLabel: string, nodeDescription: string) => void;
 }) {
   const [filter, setFilter] = useState<"all" | "high" | "medium" | "low">("all");
 
@@ -457,9 +459,16 @@ function ConceptCardsView({
                     onClick={() => onSelectTopic(relatedTopic)}
                     className="mt-1 w-full text-xs font-bold uppercase tracking-widest text-red-600 border border-red-600 py-1 hover:bg-red-600 hover:text-white transition-colors"
                   >
-                    관련 토픽 학습
+                    학습 시작
                   </button>
-                ) : null;
+                ) : (
+                  <button
+                    onClick={() => onStartFromNode(card.term, card.definition)}
+                    className="mt-1 w-full text-xs font-bold uppercase tracking-widest text-red-600 border border-red-600 py-1 hover:bg-red-600 hover:text-white transition-colors"
+                  >
+                    학습 시작
+                  </button>
+                );
               })()}
             </div>
           </div>
@@ -622,12 +631,10 @@ function LearningPathView({
     return <EmptyState message="이 문서에서 학습 경로를 추출하지 못했습니다." />;
   }
 
-  const totalMinutes = steps.reduce((s, st) => s + st.estimatedMinutes, 0);
-
   return (
     <div className="space-y-4">
       <p className="text-xs text-black/40 font-bold uppercase tracking-widest">
-        {steps.length}단계 · 총 예상 {totalMinutes}분
+        {steps.length}단계
       </p>
       <div className="space-y-0">
         {steps.map((step, idx) => (
@@ -949,7 +956,7 @@ export default function DocumentDetail() {
             <div>
               {activeTab === "tree" && <TreeView structure={structure} onSelectTopic={handleSelectTopic} />}
               {activeTab === "concepts" && <ConceptMapView nodes={structure.conceptMap ?? []} structure={structure} onSelectTopic={handleSelectTopic} onStartFromNode={handleStartFromNode} />}
-              {activeTab === "cards" && <ConceptCardsView cards={structure.keyConceptCards ?? []} structure={structure} onSelectTopic={handleSelectTopic} />}
+              {activeTab === "cards" && <ConceptCardsView cards={structure.keyConceptCards ?? []} structure={structure} onSelectTopic={handleSelectTopic} onStartFromNode={handleStartFromNode} />}
               {activeTab === "timeline" && <TimelineView items={structure.timeline ?? []} structure={structure} onSelectTopic={handleSelectTopic} />}
               {activeTab === "comparison" && <ComparisonView tables={structure.comparisonTables ?? []} structure={structure} onSelectTopic={handleSelectTopic} />}
               {activeTab === "path" && <LearningPathView steps={structure.learningPath ?? []} onStartStep={handleStartPathStep} />}
