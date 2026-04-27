@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import DocumentDetail from "./pages/DocumentDetail";
 import LearningSession from "./pages/LearningSession";
 import SessionHistory from "./pages/SessionHistory";
+import GroupDetail from "./pages/GroupDetail";
 
 function Router() {
   return (
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/documents/:id" component={DocumentDetail} />
       <Route path="/sessions/:id" component={LearningSession} />
       <Route path="/history" component={SessionHistory} />
+      <Route path="/groups/:id" component={GroupDetail} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

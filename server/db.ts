@@ -1,12 +1,14 @@
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
   users,
   documents,
+  documentGroups,
   learningSessions,
   sessionMessages,
   InsertDocument,
+  InsertDocumentGroup,
   InsertLearningSession,
   InsertSessionMessage,
 } from "../drizzle/schema";
@@ -68,6 +70,52 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+// ─── Document Groups ──────────────────────────────────────────────────────────
+
+export async function createDocumentGroup(data: InsertDocumentGroup) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [result] = await db.insert(documentGroups).values(data);
+  return result.insertId as number;
+}
+
+export async function getDocumentGroupById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(documentGroups).where(eq(documentGroups.id, id)).limit(1);
+  return result[0];
+}
+
+export async function getDocumentGroupsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(documentGroups)
+    .where(eq(documentGroups.userId, userId))
+    .orderBy(desc(documentGroups.createdAt));
+}
+
+export async function updateDocumentGroup(
+  id: number,
+  data: Partial<{
+    name: string;
+    description: string;
+    analysisStatus: "pending" | "analyzing" | "done" | "error";
+    structure: unknown;
+  }>
+) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(documentGroups).set(data as Record<string, unknown>).where(eq(documentGroups.id, id));
+}
+
+export async function deleteDocumentGroup(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(documentGroups).where(eq(documentGroups.id, id));
+}
+
 // ─── Documents ────────────────────────────────────────────────────────────────
 
 export async function createDocument(data: InsertDocument) {
@@ -94,6 +142,28 @@ export async function getDocumentsByUserId(userId: number) {
     .orderBy(desc(documents.createdAt));
 }
 
+/** 그룹에 속한 문서 목록 */
+export async function getDocumentsByGroupId(groupId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(documents)
+    .where(eq(documents.groupId, groupId))
+    .orderBy(documents.createdAt);
+}
+
+/** 그룹에 속하지 않은 단독 문서 목록 */
+export async function getStandaloneDocumentsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(documents)
+    .where(and(eq(documents.userId, userId), isNull(documents.groupId)))
+    .orderBy(desc(documents.createdAt));
+}
+
 export async function updateDocumentAnalysis(
   id: number,
   status: "pending" | "analyzing" | "done" | "error",
@@ -110,6 +180,12 @@ export async function updateDocumentAnalysis(
       ...(pageCount !== undefined ? { pageCount } : {}),
     })
     .where(eq(documents.id, id));
+}
+
+export async function deleteDocument(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(documents).where(eq(documents.id, id));
 }
 
 // ─── Learning Sessions ────────────────────────────────────────────────────────

@@ -10,7 +10,15 @@ import {
   createDocument,
   getDocumentById,
   getDocumentsByUserId,
+  getDocumentsByGroupId,
+  getStandaloneDocumentsByUserId,
   updateDocumentAnalysis,
+  deleteDocument,
+  createDocumentGroup,
+  getDocumentGroupById,
+  getDocumentGroupsByUserId,
+  updateDocumentGroup,
+  deleteDocumentGroup,
   createLearningSession,
   getLearningSessionById,
   getSessionsByUserId,
@@ -37,16 +45,14 @@ export interface ChapterNode {
   topics: TopicNode[];
 }
 
-// 개념 맵 노드
 export interface ConceptNode {
   id: string;
   label: string;
   description: string;
-  type: "core" | "sub" | "related"; // core=핵심, sub=하위, related=연관
-  connections: string[]; // 연결된 다른 노드 id 목록
+  type: "core" | "sub" | "related";
+  connections: string[];
 }
 
-// 핵심 개념 카드
 export interface ConceptCard {
   id: string;
   term: string;
@@ -56,35 +62,32 @@ export interface ConceptCard {
   importance: "high" | "medium" | "low";
 }
 
-// 타임라인 항목 (역사적 흐름, 단계적 발전 등)
 export interface TimelineItem {
   id: string;
-  period: string; // 연도, 시기, 단계 등
+  period: string;
   title: string;
   description: string;
-  significance: string; // 이 시점의 의의
+  significance: string;
 }
 
-// 비교표 항목
 export interface ComparisonItem {
   id: string;
-  subject: string; // 비교 대상
-  attributes: Record<string, string>; // 속성명 → 값
+  subject: string;
+  attributes: Record<string, string>;
 }
 
 export interface ComparisonTable {
   title: string;
-  headers: string[]; // 비교 속성 목록
+  headers: string[];
   rows: ComparisonItem[];
 }
 
-// 학습 경로 단계
 export interface LearningPathStep {
   id: string;
   order: number;
   title: string;
   description: string;
-  topicIds: string[]; // 이 단계에서 학습할 토픽 id 목록
+  topicIds: string[];
   estimatedMinutes: number;
 }
 
@@ -92,7 +95,6 @@ export interface DocumentStructure {
   title: string;
   summary: string;
   chapters: ChapterNode[];
-  // 추가 구조화 형태 (선택적)
   conceptMap?: ConceptNode[];
   keyConceptCards?: ConceptCard[];
   timeline?: TimelineItem[];
@@ -101,11 +103,43 @@ export interface DocumentStructure {
   documentType?: "textbook" | "research" | "manual" | "report" | "narrative" | "reference" | "other";
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── MIME type helpers ────────────────────────────────────────────────────────
 
-async function analyzePdfStructure(pdfUrl: string, docTitle: string): Promise<DocumentStructure> {
+const ALLOWED_MIME_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+] as const;
+
+type AllowedMime = typeof ALLOWED_MIME_TYPES[number];
+
+const MIME_TO_FILE_TYPE: Record<AllowedMime, "pdf" | "doc" | "docx" | "ppt" | "pptx"> = {
+  "application/pdf": "pdf",
+  "application/msword": "doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "application/vnd.ms-powerpoint": "ppt",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+};
+
+const MIME_TO_LLM_TYPE: Record<AllowedMime, "application/pdf"> = {
+  "application/pdf": "application/pdf",
+  "application/msword": "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "application/pdf",
+  "application/vnd.ms-powerpoint": "application/pdf",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "application/pdf",
+};
+
+// ─── AI Helpers ───────────────────────────────────────────────────────────────
+
+async function analyzeDocumentStructure(
+  fileUrl: string,
+  docTitle: string,
+  mimeType: string = "application/pdf"
+): Promise<DocumentStructure> {
   const systemPrompt = `You are an expert educational content analyzer.
-Analyze the provided PDF document comprehensively and extract its structure in MULTIPLE formats simultaneously.
+Analyze the provided document comprehensively and extract its structure in MULTIPLE formats simultaneously.
 Return a single JSON object containing ALL of the following:
 
 1. chapters: Hierarchical chapter/topic/subtopic tree
@@ -131,6 +165,8 @@ For learningPath:
 Be thorough. Use the same language as the document (Korean if Korean).
 Return ONLY valid JSON matching the schema exactly.`;
 
+  const llmMime = (MIME_TO_LLM_TYPE[mimeType as AllowedMime]) ?? "application/pdf";
+
   const response = await invokeLLM({
     messages: [
       { role: "system", content: systemPrompt },
@@ -139,11 +175,11 @@ Return ONLY valid JSON matching the schema exactly.`;
         content: [
           {
             type: "file_url" as const,
-            file_url: { url: pdfUrl, mime_type: "application/pdf" as const },
+            file_url: { url: fileUrl, mime_type: llmMime },
           },
           {
             type: "text" as const,
-            text: `Please analyze this PDF document titled "${docTitle}" and return the hierarchical structure as JSON.`,
+            text: `Please analyze this document titled "${docTitle}" and return the hierarchical structure as JSON.`,
           },
         ],
       },
@@ -309,7 +345,6 @@ Return ONLY valid JSON matching the schema exactly.`;
     throw new Error("AI 분석 결과를 파싱하지 못했습니다. 다시 시도해 주세요.");
   }
 
-  // 필수 필드 검증 및 기본값 보장
   if (!parsed.title) parsed.title = docTitle;
   if (!parsed.summary) parsed.summary = "";
   if (!Array.isArray(parsed.chapters)) parsed.chapters = [];
@@ -323,8 +358,11 @@ Return ONLY valid JSON matching the schema exactly.`;
   return parsed;
 }
 
+/**
+ * 첫 번째 질문 생성 — 문서를 직접 참조하지 않고 토픽 제목/설명만으로 질문 생성
+ * 학습자가 문서를 읽지 않고 순수 문답으로 학습할 수 있도록 함
+ */
 async function generateFirstQuestion(
-  pdfUrl: string,
   topicTitle: string,
   topicDescription: string,
   docTitle: string
@@ -333,37 +371,35 @@ async function generateFirstQuestion(
     messages: [
       {
         role: "system" as const,
-        content: `You are an expert educational tutor using the Socratic method. 
-You are helping a learner study a specific topic from a document.
+        content: `You are an expert educational tutor using the Socratic method.
+You are helping a learner study a specific topic.
 Generate an engaging first question to start the learning session.
-The question should:
-- Be open-ended and thought-provoking
-- Assess the learner's baseline understanding
-- Be directly related to the topic
-- Be in the same language as the document (Korean if Korean)
+
+CRITICAL RULES:
+- Do NOT ask the learner to read, look at, or refer to any document, book, or material.
+- Do NOT say things like "according to the document", "as described in the text", "what does the document say about...".
+- Ask questions that test the learner's own understanding and thinking.
+- The question should be open-ended and thought-provoking.
+- Assess the learner's baseline understanding of the topic concept itself.
+- Be directly related to the topic.
+- Use the same language as the topic title (Korean if Korean).
+
 Return only the question text, nothing else.`,
       },
       {
         role: "user" as const,
-        content: [
-          {
-            type: "file_url" as const,
-            file_url: { url: pdfUrl, mime_type: "application/pdf" as const },
-          },
-          {
-            type: "text" as const,
-            text: `Document: "${docTitle}"\nTopic: "${topicTitle}"\nDescription: "${topicDescription}"\n\nGenerate the first learning question for this topic.`,
-          },
-        ],
+        content: `Document context: "${docTitle}"\nTopic: "${topicTitle}"\nTopic description: "${topicDescription}"\n\nGenerate the first learning question for this topic. Remember: ask about the concept, not about the document.`,
       },
-    ] satisfies Message[],
+    ],
   });
   const raw = response.choices[0]?.message?.content;
   return (typeof raw === "string" ? raw : null) || "이 토픽에 대해 무엇을 알고 있나요?";
 }
 
+/**
+ * 다음 AI 메시지 생성 — 문서 직접 참조 없이 순수 문답으로 학습 진행
+ */
 async function generateNextMessage(
-  pdfUrl: string,
   docTitle: string,
   topicTitle: string,
   conversationHistory: Array<{ role: string; content: string; messageType: string }>,
@@ -371,43 +407,31 @@ async function generateNextMessage(
   isUserQuestion: boolean
 ): Promise<{ content: string; messageType: string; isTopicComplete: boolean }> {
   const historyText = conversationHistory
-    .map((m) => `[${m.role === "ai" ? "AI" : "학습자"}]: ${m.content}`)
+    .map((m) => `[${m.role === "ai" ? "AI 튜터" : "학습자"}]: ${m.content}`)
     .join("\n");
 
-  const systemPrompt = isUserQuestion
-    ? `You are an expert educational tutor. The learner has asked you a question.
-Answer their question clearly and thoroughly based on the document content.
-After answering, naturally transition back to the learning session with a follow-up question.
-Use the same language as the conversation (Korean if Korean).`
-    : `You are an expert educational tutor using the Socratic method.
-The learner has answered your question. You should:
-1. Provide constructive feedback on their answer (acknowledge what's correct, gently correct misconceptions)
-2. Deepen their understanding with a follow-up question OR
-3. If the topic has been thoroughly covered (after 4-6 exchanges), provide a summary and indicate completion
-
-Return a JSON with:
-{
-  "feedback": "feedback on the answer",
-  "nextQuestion": "next question OR null if topic is complete",
-  "topicSummary": "summary if topic is complete OR null",
-  "isTopicComplete": boolean
-}`;
+  const baseRules = `CRITICAL RULES:
+- Do NOT ask the learner to read, look at, or refer to any document, book, or material.
+- Do NOT say things like "according to the document", "as described in the text", "what does the document say about...".
+- All questions and feedback must be based on the learner's own thinking and understanding.
+- Use the same language as the conversation (Korean if Korean).`;
 
   if (isUserQuestion) {
     const response = await invokeLLM({
       messages: [
-        { role: "system" as const, content: systemPrompt },
+        {
+          role: "system" as const,
+          content: `You are an expert educational tutor. The learner has asked you a question.
+Answer their question clearly and thoroughly based on your knowledge of the topic.
+After answering, naturally transition back to the learning session with a follow-up question.
+
+${baseRules}`,
+        },
         {
           role: "user" as const,
-          content: [
-            { type: "file_url" as const, file_url: { url: pdfUrl, mime_type: "application/pdf" as const } },
-            {
-              type: "text" as const,
-              text: `Document: "${docTitle}"\nTopic: "${topicTitle}"\n\nConversation so far:\n${historyText}\n\nLearner's question: ${userMessage}`,
-            },
-          ],
+          content: `Topic context: "${docTitle}" > "${topicTitle}"\n\nConversation so far:\n${historyText}\n\nLearner's question: ${userMessage}`,
         },
-      ] satisfies Message[],
+      ],
     });
     return {
       content: (typeof response.choices[0]?.message?.content === "string" ? response.choices[0]?.message?.content : null) || "좋은 질문입니다.",
@@ -417,18 +441,29 @@ Return a JSON with:
   } else {
     const response = await invokeLLM({
       messages: [
-        { role: "system" as const, content: systemPrompt },
+        {
+          role: "system" as const,
+          content: `You are an expert educational tutor using the Socratic method.
+The learner has answered your question. You should:
+1. Provide constructive feedback on their answer (acknowledge what's correct, gently correct misconceptions)
+2. Deepen their understanding with a follow-up question OR
+3. If the topic has been thoroughly covered (after 4-6 exchanges), provide a summary and indicate completion
+
+${baseRules}
+
+Return a JSON with:
+{
+  "feedback": "feedback on the answer",
+  "nextQuestion": "next question OR null if topic is complete",
+  "topicSummary": "summary if topic is complete OR null",
+  "isTopicComplete": boolean
+}`,
+        },
         {
           role: "user" as const,
-          content: [
-            { type: "file_url" as const, file_url: { url: pdfUrl, mime_type: "application/pdf" as const } },
-            {
-              type: "text" as const,
-              text: `Document: "${docTitle}"\nTopic: "${topicTitle}"\n\nConversation so far:\n${historyText}\n\nLearner's answer: ${userMessage}`,
-            },
-          ],
+          content: `Topic context: "${docTitle}" > "${topicTitle}"\n\nConversation so far:\n${historyText}\n\nLearner's answer: ${userMessage}`,
         },
-      ] satisfies Message[],
+      ],
       response_format: {
         type: "json_schema",
         json_schema: {
@@ -457,7 +492,7 @@ Return a JSON with:
 
     return {
       content,
-      messageType: parsed.isTopicComplete ? "feedback" : "feedback",
+      messageType: "feedback",
       isTopicComplete: parsed.isTopicComplete || false,
     };
   }
@@ -505,9 +540,117 @@ export const appRouter = router({
     }),
   }),
 
+  // ─── Document Groups ─────────────────────────────────────────────────────────
+  group: router({
+    // 그룹 생성
+    create: protectedProcedure
+      .input(z.object({ name: z.string().min(1), description: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const groupId = await createDocumentGroup({
+          userId: ctx.user.id,
+          name: input.name,
+          description: input.description ?? null,
+          analysisStatus: "pending",
+        });
+        return { groupId };
+      }),
+
+    // 그룹 목록 조회
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const groups = await getDocumentGroupsByUserId(ctx.user.id);
+      return groups;
+    }),
+
+    // 그룹 상세 조회 (소속 문서 포함)
+    get: protectedProcedure
+      .input(z.object({ groupId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const group = await getDocumentGroupById(input.groupId);
+        if (!group || group.userId !== ctx.user.id) throw new Error("그룹을 찾을 수 없습니다.");
+        const docs = await getDocumentsByGroupId(input.groupId);
+        return { ...group, documents: docs };
+      }),
+
+    // 그룹 이름/설명 수정
+    update: protectedProcedure
+      .input(z.object({ groupId: z.number(), name: z.string().min(1).optional(), description: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const group = await getDocumentGroupById(input.groupId);
+        if (!group || group.userId !== ctx.user.id) throw new Error("그룹을 찾을 수 없습니다.");
+        await updateDocumentGroup(input.groupId, {
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.description !== undefined ? { description: input.description } : {}),
+        });
+        return { success: true };
+      }),
+
+    // 그룹 삭제 (소속 문서도 함께 삭제)
+    delete: protectedProcedure
+      .input(z.object({ groupId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const group = await getDocumentGroupById(input.groupId);
+        if (!group || group.userId !== ctx.user.id) throw new Error("그룹을 찾을 수 없습니다.");
+        const docs = await getDocumentsByGroupId(input.groupId);
+        for (const doc of docs) {
+          await deleteDocument(doc.id);
+        }
+        await deleteDocumentGroup(input.groupId);
+        return { success: true };
+      }),
+
+    // 그룹 전체 분석 (소속 문서 통합 구조 생성)
+    analyze: protectedProcedure
+      .input(z.object({ groupId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const group = await getDocumentGroupById(input.groupId);
+        if (!group || group.userId !== ctx.user.id) throw new Error("그룹을 찾을 수 없습니다.");
+        const docs = await getDocumentsByGroupId(input.groupId);
+        if (docs.length === 0) throw new Error("그룹에 문서가 없습니다.");
+
+        await updateDocumentGroup(input.groupId, { analysisStatus: "analyzing" });
+
+        try {
+          // 각 문서를 개별 분석 후 통합
+          const structures: DocumentStructure[] = [];
+          for (const doc of docs) {
+            if (doc.analysisStatus === "done" && doc.structure) {
+              structures.push(doc.structure as DocumentStructure);
+            } else {
+              const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, "");
+              const signedUrl = await storageGetSignedUrl(actualKey);
+              const structure = await analyzeDocumentStructure(signedUrl, doc.title, doc.fileType === "pdf" ? "application/pdf" : "application/pdf");
+              await updateDocumentAnalysis(doc.id, "done", structure);
+              structures.push(structure);
+            }
+          }
+
+          // 통합 구조 생성
+          const mergedStructure: DocumentStructure = {
+            title: group.name,
+            summary: structures.map((s) => s.summary).filter(Boolean).join(" | "),
+            chapters: structures.flatMap((s, i) =>
+              s.chapters.map((ch) => ({ ...ch, id: `doc${i}_${ch.id}`, title: `[${docs[i]?.title ?? ""}] ${ch.title}` }))
+            ),
+            conceptMap: structures.flatMap((s) => s.conceptMap ?? []),
+            keyConceptCards: structures.flatMap((s) => s.keyConceptCards ?? []),
+            timeline: structures.flatMap((s) => s.timeline ?? []),
+            comparisonTables: structures.flatMap((s) => s.comparisonTables ?? []),
+            learningPath: structures.flatMap((s) => s.learningPath ?? []),
+            documentType: "other",
+          };
+
+          await updateDocumentGroup(input.groupId, { analysisStatus: "done", structure: mergedStructure });
+          return { success: true, structure: mergedStructure };
+        } catch (e) {
+          await updateDocumentGroup(input.groupId, { analysisStatus: "error" });
+          throw e;
+        }
+      }),
+  }),
+
   // ─── Documents ──────────────────────────────────────────────────────────────
   document: router({
-    // PDF 업로드 (base64 인코딩된 파일 데이터 수신)
+    // 파일 업로드 (PDF / DOC / DOCX / PPT / PPTX)
     upload: protectedProcedure
       .input(
         z.object({
@@ -515,18 +658,28 @@ export const appRouter = router({
           fileData: z.string(), // base64
           fileSize: z.number(),
           mimeType: z.string(),
+          groupId: z.number().optional(), // 그룹에 추가할 경우
         })
       )
       .mutation(async ({ ctx, input }) => {
+        // 허용된 MIME 타입 검증
+        if (!ALLOWED_MIME_TYPES.includes(input.mimeType as AllowedMime)) {
+          throw new Error("지원하지 않는 파일 형식입니다. PDF, DOC, DOCX, PPT, PPTX만 업로드 가능합니다.");
+        }
+
         const buffer = Buffer.from(input.fileData, "base64");
-        // ASCII-safe 파일명 생성 (한글 등 비ASCII 문자 제거)
-        const safeFileName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const safeFileName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
         const key = `documents/${ctx.user.id}/${Date.now()}-${safeFileName}`;
         const { url } = await storagePut(key, buffer, input.mimeType);
 
+        const fileType = MIME_TO_FILE_TYPE[input.mimeType as AllowedMime] ?? "pdf";
+        const titleWithoutExt = input.fileName.replace(/\.(pdf|doc|docx|ppt|pptx)$/i, "");
+
         const docId = await createDocument({
           userId: ctx.user.id,
-          title: input.fileName.replace(/\.pdf$/i, ""),
+          groupId: input.groupId ?? null,
+          title: titleWithoutExt,
+          fileType,
           storageKey: key,
           storageUrl: url,
           fileSize: input.fileSize,
@@ -546,11 +699,9 @@ export const appRouter = router({
         await updateDocumentAnalysis(input.documentId, "analyzing");
 
         try {
-          // /manus-storage/... 상대 경로를 실제 presigned S3 URL로 변환
-          // storageUrl에서 /manus-storage/ 접두사 제거 → 실제 S3 key (hash 포함)
-          const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, '');
-          const pdfSignedUrl = await storageGetSignedUrl(actualKey);
-          const structure = await analyzePdfStructure(pdfSignedUrl, doc.title);
+          const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, "");
+          const signedUrl = await storageGetSignedUrl(actualKey);
+          const structure = await analyzeDocumentStructure(signedUrl, doc.title, doc.fileType === "pdf" ? "application/pdf" : "application/pdf");
           await updateDocumentAnalysis(input.documentId, "done", structure);
           return { success: true, structure };
         } catch (e) {
@@ -559,8 +710,13 @@ export const appRouter = router({
         }
       }),
 
-    // 문서 목록 조회
+    // 문서 목록 조회 (단독 문서만)
     list: protectedProcedure.query(async ({ ctx }) => {
+      return getStandaloneDocumentsByUserId(ctx.user.id);
+    }),
+
+    // 전체 문서 목록 (그룹 포함)
+    listAll: protectedProcedure.query(async ({ ctx }) => {
       return getDocumentsByUserId(ctx.user.id);
     }),
 
@@ -571,6 +727,16 @@ export const appRouter = router({
         const doc = await getDocumentById(input.documentId);
         if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
         return doc;
+      }),
+
+    // 문서 삭제
+    delete: protectedProcedure
+      .input(z.object({ documentId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const doc = await getDocumentById(input.documentId);
+        if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
+        await deleteDocument(input.documentId);
+        return { success: true };
       }),
   }),
 
@@ -584,6 +750,7 @@ export const appRouter = router({
           topicId: z.string(),
           topicTitle: z.string(),
           topicDescription: z.string(),
+          groupId: z.number().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -593,6 +760,7 @@ export const appRouter = router({
         const sessionId = await createLearningSession({
           userId: ctx.user.id,
           documentId: input.documentId,
+          groupId: input.groupId ?? null,
           startTopicId: input.topicId,
           startTopicTitle: input.topicTitle,
           status: "active",
@@ -601,11 +769,8 @@ export const appRouter = router({
           answeredQuestions: 0,
         });
 
-        // 첫 번째 질문 생성 - presigned S3 URL 사용
-        const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, '');
-        const pdfSignedUrl = await storageGetSignedUrl(actualKey);
+        // 첫 번째 질문 생성 — 문서 직접 참조 없이 토픽 정보만 사용
         const firstQuestion = await generateFirstQuestion(
-          pdfSignedUrl,
           input.topicTitle,
           input.topicDescription,
           doc.title
@@ -661,11 +826,8 @@ export const appRouter = router({
           messageType: m.messageType,
         }));
 
-        // AI 응답 생성 - presigned S3 URL 사용
-        const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, '');
-        const pdfSignedUrl = await storageGetSignedUrl(actualKey);
+        // AI 응답 생성 — 문서 직접 참조 없이 순수 문답
         const aiResponse = await generateNextMessage(
-          pdfSignedUrl,
           doc.title,
           session.startTopicTitle || "",
           history,
@@ -697,7 +859,6 @@ export const appRouter = router({
             completedTopics.push(session.currentTopicId);
           }
 
-          // 학습 요약 생성
           const allMessages = await getSessionMessages(input.sessionId);
           const summary = await generateSessionSummary(
             doc.title,
@@ -734,7 +895,6 @@ export const appRouter = router({
         const doc = await getDocumentById(session.documentId);
         if (!doc) throw new Error("문서를 찾을 수 없습니다.");
 
-        // 요약 생성
         const allMessages = await getSessionMessages(input.sessionId);
         const summary = await generateSessionSummary(
           doc.title,
@@ -748,7 +908,7 @@ export const appRouter = router({
           completedAt: new Date(),
         });
 
-        // 학습 완료 알림 전송 (오너에게)
+        // 학습 완료 알림
         const msgCount = allMessages.length;
         const answerCount = allMessages.filter((m) => m.role === "user").length;
         const notificationContent = [
@@ -768,7 +928,6 @@ export const appRouter = router({
             content: notificationContent,
           });
         } catch (notifyErr) {
-          // 알림 실패는 세션 종료를 막지 않음
           console.warn("[QLoop] 학습 완료 알림 전송 실패:", notifyErr);
         }
 

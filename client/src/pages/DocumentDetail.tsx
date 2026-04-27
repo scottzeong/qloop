@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Trash2 } from "lucide-react";
 import type {
   DocumentStructure,
   TopicNode,
@@ -676,6 +676,7 @@ export default function DocumentDetail() {
     { enabled: isAuthenticated && !!docId }
   );
 
+  const deleteDocMutation = trpc.document.delete.useMutation();
   const analyzeMutation = trpc.document.analyze.useMutation({
     onSuccess: () => {
       toast.success("AI 분석이 완료되었습니다.");
@@ -807,6 +808,22 @@ export default function DocumentDetail() {
               재분석
             </button>
           )}
+          <button
+            onClick={async () => {
+              if (!window.confirm(`"${doc.title}" 문서를 삭제하시겠습니까?\n관련 학습 세션도 모두 삭제됩니다.`)) return;
+              try {
+                await deleteDocMutation.mutateAsync({ documentId: docId });
+                toast.success("문서가 삭제되었습니다.");
+                navigate("/dashboard");
+              } catch {
+                toast.error("삭제에 실패했습니다.");
+              }
+            }}
+            className="flex items-center gap-1 text-xs font-bold text-black/30 hover:text-red-600 transition-colors px-2 py-1.5"
+            title="문서 삭제"
+          >
+            <Trash2 size={13} />
+          </button>
         </div>
       </header>
 

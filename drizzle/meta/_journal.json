@@ -22,6 +22,13 @@
       "when": 1777268588660,
       "tag": "0002_damp_spyke",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1777276771866,
+      "tag": "0003_right_supernaut",
+      "breakpoints": true
     }
   ]
 }
