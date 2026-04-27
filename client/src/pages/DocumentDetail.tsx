@@ -146,10 +146,12 @@ function ConceptMapView({
   nodes,
   structure,
   onSelectTopic,
+  onStartFromNode,
 }: {
   nodes: ConceptNode[];
   structure: DocumentStructure;
   onSelectTopic: (topic: TopicNode) => void;
+  onStartFromNode: (nodeLabel: string, nodeDescription: string) => void;
 }) {
   // 클릭 선택 고정 (호버 아님)
   const [selected, setSelected] = useState<string | null>(null);
@@ -346,7 +348,14 @@ function ConceptMapView({
                   >
                     학습 시작
                   </button>
-                ) : null;
+                ) : (
+                  <button
+                    onClick={() => onStartFromNode(selectedNode.label, selectedNode.description)}
+                    className="text-xs font-bold uppercase tracking-widest text-white bg-red-600 border border-red-600 px-4 py-2 hover:bg-red-700 transition-colors whitespace-nowrap"
+                  >
+                    학습 시작
+                  </button>
+                );
               })()}
               <button
                 onClick={() => setSelected(null)}
@@ -742,6 +751,25 @@ export default function DocumentDetail() {
     }
   };
 
+  // 개념 맵 노드에서 직접 학습 시작 (토픽 매핑 없이 노드 자체를 토픽으로 사용)
+  const handleStartFromNode = async (nodeLabel: string, nodeDescription: string) => {
+    if (!doc || starting) return;
+    setStarting(true);
+    try {
+      const nodeId = `concept-${nodeLabel.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}`;
+      const { sessionId } = await startSession.mutateAsync({
+        documentId: docId,
+        topicId: nodeId,
+        topicTitle: nodeLabel,
+        topicDescription: nodeDescription || nodeLabel,
+      });
+      navigate(`/sessions/${sessionId}`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "세션 시작 실패");
+      setStarting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -920,7 +948,7 @@ export default function DocumentDetail() {
             {/* 탭 콘텐츠 */}
             <div>
               {activeTab === "tree" && <TreeView structure={structure} onSelectTopic={handleSelectTopic} />}
-              {activeTab === "concepts" && <ConceptMapView nodes={structure.conceptMap ?? []} structure={structure} onSelectTopic={handleSelectTopic} />}
+              {activeTab === "concepts" && <ConceptMapView nodes={structure.conceptMap ?? []} structure={structure} onSelectTopic={handleSelectTopic} onStartFromNode={handleStartFromNode} />}
               {activeTab === "cards" && <ConceptCardsView cards={structure.keyConceptCards ?? []} structure={structure} onSelectTopic={handleSelectTopic} />}
               {activeTab === "timeline" && <TimelineView items={structure.timeline ?? []} structure={structure} onSelectTopic={handleSelectTopic} />}
               {activeTab === "comparison" && <ComparisonView tables={structure.comparisonTables ?? []} structure={structure} onSelectTopic={handleSelectTopic} />}
