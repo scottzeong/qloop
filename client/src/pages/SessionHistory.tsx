@@ -247,7 +247,7 @@ export default function SessionHistory() {
                         <div className="flex items-center gap-2 mb-1">
                           <div className={`w-2 h-2 ${msg.role === "ai" ? "swiss-red-bg" : "bg-black"}`} />
                           <span className="swiss-label">
-                            {msg.role === "ai" ? (msg.messageType === "question" ? "AI 질문" : "AI 답변") : msg.messageType === "user_question" ? "역질문" : "답변"}
+                            {msg.role === "ai" ? "AI Tutor 질문" : msg.messageType === "user_question" ? "역질문" : "내 답변"}
                           </span>
                         </div>
                         <p className="text-xs leading-relaxed text-gray-700 pl-4">{msg.content}</p>

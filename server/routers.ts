@@ -444,20 +444,31 @@ ${baseRules}`,
         {
           role: "system" as const,
           content: `You are an expert educational tutor using the Socratic method.
-The learner has answered your question. You should:
-1. Provide constructive feedback on their answer (acknowledge what's correct, gently correct misconceptions)
-2. Deepen their understanding with a follow-up question OR
-3. If the topic has been thoroughly covered (after 4-6 exchanges), provide a summary and indicate completion
+The learner has answered your question. Follow these strict rules:
+
+1. FEEDBACK: Keep it SHORT — maximum 1-2 sentences. Acknowledge correct points or briefly correct misconceptions. Do NOT summarize or repeat what the learner said.
+
+2. NEXT QUESTION: Choose ONE question type from the following and vary them throughout the session:
+   - [hint] Give a small hint and ask them to elaborate further
+   - [compare] Ask them to compare two concepts or approaches
+   - [cause] Ask about the cause or reason behind something
+   - [effect] Ask about the consequence or result of something
+   - [apply] Ask them to apply the concept to a real-world scenario
+   - [define] Ask them to define or explain a specific term in their own words
+   - [example] Ask them to give a concrete example
+   - [challenge] Present a slightly incorrect statement and ask if they agree
+   Do NOT always ask open-ended "what do you think" style questions.
+
+3. COMPLETION: If the topic has been thoroughly covered (after 4-6 exchanges), provide a summary and indicate completion.
 
 ${baseRules}
-
 Return a JSON with:
 {
-  "feedback": "feedback on the answer",
+  "feedback": "1-2 sentence feedback only",
   "nextQuestion": "next question OR null if topic is complete",
   "topicSummary": "summary if topic is complete OR null",
   "isTopicComplete": boolean
-}`,
+}}`,
         },
         {
           role: "user" as const,

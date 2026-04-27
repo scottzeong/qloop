@@ -33,7 +33,7 @@ function MessageBubble({ msg }: { msg: Message }) {
             <>
               <div className="w-3 h-3 swiss-red-bg flex-shrink-0" />
               <span className="swiss-label">
-                {isQuestion ? "AI 질문" : "AI 답변"}
+                {isQuestion ? "AI Tutor 질문" : "AI Tutor 질문"}
                 {msg.questionIndex ? ` #${msg.questionIndex}` : ""}
               </span>
             </>
@@ -264,7 +264,7 @@ export default function LearningSession() {
               <div className="swiss-rule my-4" />
               <div>
                 <div className="swiss-label mb-2">학습 요약</div>
-                <div className="text-xs text-gray-600 leading-relaxed max-h-48 overflow-y-auto">
+                <div className="text-xs text-gray-600 leading-relaxed max-h-72 overflow-y-auto">
                   <Streamdown>{session.summary}</Streamdown>
                 </div>
               </div>
