@@ -260,9 +260,8 @@ export default function Dashboard() {
       {/* Header */}
       <header className="border-b-2 border-black bg-white z-50">
         <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate("/")}>
-            <div className="w-6 h-6 swiss-red-bg flex-shrink-0" />
-            <span className="text-lg font-black tracking-tight">QLOOP</span>
+          <div className="flex items-center cursor-pointer" onClick={() => navigate("/")}>
+            <img src="/manus-storage/QLoopLogo_be7719bb.png" alt="QLoop" className="h-8 w-auto" />
           </div>
           <nav className="flex items-center gap-6">
             <button
