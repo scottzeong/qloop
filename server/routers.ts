@@ -37,47 +37,99 @@ export interface ChapterNode {
   topics: TopicNode[];
 }
 
+// 개념 맵 노드
+export interface ConceptNode {
+  id: string;
+  label: string;
+  description: string;
+  type: "core" | "sub" | "related"; // core=핵심, sub=하위, related=연관
+  connections: string[]; // 연결된 다른 노드 id 목록
+}
+
+// 핵심 개념 카드
+export interface ConceptCard {
+  id: string;
+  term: string;
+  definition: string;
+  example?: string;
+  relatedTerms: string[];
+  importance: "high" | "medium" | "low";
+}
+
+// 타임라인 항목 (역사적 흐름, 단계적 발전 등)
+export interface TimelineItem {
+  id: string;
+  period: string; // 연도, 시기, 단계 등
+  title: string;
+  description: string;
+  significance: string; // 이 시점의 의의
+}
+
+// 비교표 항목
+export interface ComparisonItem {
+  id: string;
+  subject: string; // 비교 대상
+  attributes: Record<string, string>; // 속성명 → 값
+}
+
+export interface ComparisonTable {
+  title: string;
+  headers: string[]; // 비교 속성 목록
+  rows: ComparisonItem[];
+}
+
+// 학습 경로 단계
+export interface LearningPathStep {
+  id: string;
+  order: number;
+  title: string;
+  description: string;
+  topicIds: string[]; // 이 단계에서 학습할 토픽 id 목록
+  estimatedMinutes: number;
+}
+
 export interface DocumentStructure {
   title: string;
   summary: string;
   chapters: ChapterNode[];
+  // 추가 구조화 형태 (선택적)
+  conceptMap?: ConceptNode[];
+  keyConceptCards?: ConceptCard[];
+  timeline?: TimelineItem[];
+  comparisonTables?: ComparisonTable[];
+  learningPath?: LearningPathStep[];
+  documentType?: "textbook" | "research" | "manual" | "report" | "narrative" | "reference" | "other";
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function analyzePdfStructure(pdfUrl: string, docTitle: string): Promise<DocumentStructure> {
-  const systemPrompt = `You are an expert educational content analyzer. 
-Analyze the provided PDF document and extract its hierarchical structure.
-Return a JSON object with the following schema:
-{
-  "title": "document title",
-  "summary": "brief 2-3 sentence summary of the document",
-  "chapters": [
-    {
-      "id": "ch1",
-      "title": "Chapter Title",
-      "order": 1,
-      "topics": [
-        {
-          "id": "ch1_t1",
-          "title": "Topic Title",
-          "description": "Brief description of what this topic covers",
-          "order": 1,
-          "subtopics": [
-            {
-              "id": "ch1_t1_s1",
-              "title": "Subtopic Title",
-              "description": "Brief description",
-              "order": 1
-            }
-          ]
-        }
-      ]
-    }
-  ]
-}
-Be thorough and capture all major topics, concepts, and sections.
-Use Korean if the document is in Korean, otherwise use the document's language.`;
+  const systemPrompt = `You are an expert educational content analyzer.
+Analyze the provided PDF document comprehensively and extract its structure in MULTIPLE formats simultaneously.
+Return a single JSON object containing ALL of the following:
+
+1. chapters: Hierarchical chapter/topic/subtopic tree
+2. conceptMap: Key concepts as nodes with connections (max 15 nodes)
+3. keyConceptCards: Important terms with definitions and examples (max 20 cards)
+4. timeline: Chronological/sequential events or development stages IF the document has historical or process content (empty array if not applicable)
+5. comparisonTables: Comparison tables for contrasting concepts/items IF the document compares things (empty array if not applicable)
+6. learningPath: Recommended sequential learning steps (3-6 steps)
+7. documentType: One of: textbook, research, manual, report, narrative, reference, other
+
+For conceptMap nodes:
+- type "core" = central/most important concepts
+- type "sub" = supporting concepts
+- type "related" = peripherally related concepts
+- connections = array of other node IDs this concept links to
+
+For keyConceptCards:
+- importance: "high" for must-know terms, "medium" for important, "low" for supplementary
+
+For learningPath:
+- estimatedMinutes: realistic study time per step
+
+Be thorough. Use the same language as the document (Korean if Korean).
+Return ONLY valid JSON matching the schema exactly.`;
 
   const response = await invokeLLM({
     messages: [
@@ -106,6 +158,7 @@ Use Korean if the document is in Korean, otherwise use the document's language.`
           properties: {
             title: { type: "string" },
             summary: { type: "string" },
+            documentType: { type: "string", enum: ["textbook", "research", "manual", "report", "narrative", "reference", "other"] },
             chapters: {
               type: "array",
               items: {
@@ -147,8 +200,98 @@ Use Korean if the document is in Korean, otherwise use the document's language.`
                 additionalProperties: false,
               },
             },
+            conceptMap: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  label: { type: "string" },
+                  description: { type: "string" },
+                  type: { type: "string", enum: ["core", "sub", "related"] },
+                  connections: { type: "array", items: { type: "string" } },
+                },
+                required: ["id", "label", "description", "type", "connections"],
+                additionalProperties: false,
+              },
+            },
+            keyConceptCards: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  term: { type: "string" },
+                  definition: { type: "string" },
+                  example: { type: "string" },
+                  relatedTerms: { type: "array", items: { type: "string" } },
+                  importance: { type: "string", enum: ["high", "medium", "low"] },
+                },
+                required: ["id", "term", "definition", "example", "relatedTerms", "importance"],
+                additionalProperties: false,
+              },
+            },
+            timeline: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  period: { type: "string" },
+                  title: { type: "string" },
+                  description: { type: "string" },
+                  significance: { type: "string" },
+                },
+                required: ["id", "period", "title", "description", "significance"],
+                additionalProperties: false,
+              },
+            },
+            comparisonTables: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  title: { type: "string" },
+                  headers: { type: "array", items: { type: "string" } },
+                  rows: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        id: { type: "string" },
+                        subject: { type: "string" },
+                        attributes: {
+                          type: "object",
+                          additionalProperties: { type: "string" },
+                        },
+                      },
+                      required: ["id", "subject", "attributes"],
+                      additionalProperties: false,
+                    },
+                  },
+                },
+                required: ["title", "headers", "rows"],
+                additionalProperties: false,
+              },
+            },
+            learningPath: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  order: { type: "integer" },
+                  title: { type: "string" },
+                  description: { type: "string" },
+                  topicIds: { type: "array", items: { type: "string" } },
+                  estimatedMinutes: { type: "integer" },
+                },
+                required: ["id", "order", "title", "description", "topicIds", "estimatedMinutes"],
+                additionalProperties: false,
+              },
+            },
           },
-          required: ["title", "summary", "chapters"],
+          required: ["title", "summary", "documentType", "chapters", "conceptMap", "keyConceptCards", "timeline", "comparisonTables", "learningPath"],
           additionalProperties: false,
         },
       },
@@ -158,7 +301,26 @@ Use Korean if the document is in Korean, otherwise use the document's language.`
   const rawContent = response.choices[0]?.message?.content;
   const content = typeof rawContent === "string" ? rawContent : null;
   if (!content) throw new Error("AI 분석 결과를 받지 못했습니다.");
-  return JSON.parse(content) as DocumentStructure;
+
+  let parsed: DocumentStructure;
+  try {
+    parsed = JSON.parse(content) as DocumentStructure;
+  } catch {
+    throw new Error("AI 분석 결과를 파싱하지 못했습니다. 다시 시도해 주세요.");
+  }
+
+  // 필수 필드 검증 및 기본값 보장
+  if (!parsed.title) parsed.title = docTitle;
+  if (!parsed.summary) parsed.summary = "";
+  if (!Array.isArray(parsed.chapters)) parsed.chapters = [];
+  if (!Array.isArray(parsed.conceptMap)) parsed.conceptMap = [];
+  if (!Array.isArray(parsed.keyConceptCards)) parsed.keyConceptCards = [];
+  if (!Array.isArray(parsed.timeline)) parsed.timeline = [];
+  if (!Array.isArray(parsed.comparisonTables)) parsed.comparisonTables = [];
+  if (!Array.isArray(parsed.learningPath)) parsed.learningPath = [];
+  if (!parsed.documentType) parsed.documentType = "other";
+
+  return parsed;
 }
 
 async function generateFirstQuestion(

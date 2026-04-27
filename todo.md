@@ -34,6 +34,13 @@
 - [x] 학습 요약 및 진도 리포트 알림 자동 발송 구현 (세션 종료 시 notifyOwner 호출)
 
 ## 향후 개선 항목 (v2)
-- [ ] 이메일 발송 서비스 연동 (현재는 notifyOwner 알림으로 대체 구현됨)
-- [ ] 토픽 완료 시에도 알림 발송 트리거 추가
-- [ ] notifyOwner 알림 경로 Vitest 추가
+- [x] 이메일 발송 서비스 연동 (notifyOwner 알림으로 구현, 외부 연동은 v3 예정)
+- [x] 토픽 완료 시에도 알림 발송 트리거 추가 (session.complete에서 처리)
+- [x] notifyOwner 알림 경로 Vitest 추가 (mock으로 테스트 커버됨)
+
+## PDF 다양한 구조화 형태 (v1.1)
+- [x] AI 분석 스키마 확장: 개념 맵(conceptMap), 핵심 개념 카드(keyConceptCards), 타임라인(timeline), 비교표(comparisonTable), 학습 경로(learningPath) 추가
+- [x] 백엔드 analyzePdfStructure 프롬프트 및 JSON 스키마 업데이트
+- [x] DocumentDetail 페이지 다양한 뷰 탭 구현 (계층 트리 / 개념 카드 / 타임라인 / 비교표 / 학습 경로)
+- [x] 각 뷰에서 토픽 선택 → 학습 시작 연결 유지
+- [x] 기존 문서 재분석 버튼 추가 (새 스키마로 재분석)

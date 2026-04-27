@@ -138,14 +138,50 @@ vi.mock("./storage", () => ({
   ),
 }));
 
+// mockFullStructure is defined here for use in tests (NOT inside vi.mock factory due to hoisting)
+const mockFullStructure = {
+  title: "Test Document",
+  summary: "A test summary.",
+  documentType: "textbook",
+  chapters: [
+    {
+      id: "ch1",
+      title: "Chapter 1",
+      order: 1,
+      topics: [
+        {
+          id: "ch1_t1",
+          title: "Topic 1",
+          description: "First topic",
+          order: 1,
+          subtopics: [],
+        },
+      ],
+    },
+  ],
+  conceptMap: [
+    { id: "c1", label: "Topic 1", description: "Core concept", type: "core", connections: [] },
+  ],
+  keyConceptCards: [
+    { id: "k1", term: "Topic 1", definition: "A key concept", example: "Example", relatedTerms: [], importance: "high" },
+  ],
+  timeline: [],
+  comparisonTables: [],
+  learningPath: [
+    { id: "lp1", order: 1, title: "Step 1", description: "Learn Topic 1", topicIds: ["ch1_t1"], estimatedMinutes: 15 },
+  ],
+};
+
 vi.mock("./_core/llm", () => ({
   invokeLLM: vi.fn().mockResolvedValue({
     choices: [
       {
         message: {
+          // Inline the structure to avoid hoisting issues with vi.mock factory
           content: JSON.stringify({
             title: "Test Document",
             summary: "A test summary.",
+            documentType: "textbook",
             chapters: [
               {
                 id: "ch1",
@@ -161,6 +197,17 @@ vi.mock("./_core/llm", () => ({
                   },
                 ],
               },
+            ],
+            conceptMap: [
+              { id: "c1", label: "Topic 1", description: "Core concept", type: "core", connections: [] },
+            ],
+            keyConceptCards: [
+              { id: "k1", term: "Topic 1", definition: "A key concept", example: "Example", relatedTerms: [], importance: "high" },
+            ],
+            timeline: [],
+            comparisonTables: [],
+            learningPath: [
+              { id: "lp1", order: 1, title: "Step 1", description: "Learn Topic 1", topicIds: ["ch1_t1"], estimatedMinutes: 15 },
             ],
           }),
         },
@@ -520,5 +567,138 @@ describe("session", () => {
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
     await expect(caller.session.get({ sessionId: 99 })).rejects.toThrow("세션을 찾을 수 없습니다.");
+  });
+});
+
+// ─── analyzePdfStructure fallback Tests ──────────────────────────────────────
+
+describe("document.analyze - structure fallback", () => {
+  it("returns full structure with all new fields when LLM returns complete data", async () => {
+    const { invokeLLM } = vi.mocked(await import("./_core/llm"));
+    invokeLLM.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify(mockFullStructure) } }],
+    });
+    const { updateDocumentAnalysis, getDocumentById } = vi.mocked(await import("./db"));
+    getDocumentById.mockResolvedValueOnce({
+      id: 1,
+      userId: 1,
+      title: "Test Document",
+      storageKey: "documents/1/test.pdf",
+      storageUrl: "/manus-storage/test.pdf",
+      fileSize: 1024,
+      pageCount: 10,
+      analysisStatus: "pending",
+      structure: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    updateDocumentAnalysis.mockResolvedValueOnce(undefined);
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.document.analyze({ documentId: 1 });
+    expect(result.structure.documentType).toBe("textbook");
+    expect(Array.isArray(result.structure.conceptMap)).toBe(true);
+    expect(Array.isArray(result.structure.keyConceptCards)).toBe(true);
+    expect(Array.isArray(result.structure.learningPath)).toBe(true);
+  });
+
+  it("applies fallback defaults when LLM returns partial structure (missing optional fields)", async () => {
+    const { invokeLLM } = vi.mocked(await import("./_core/llm"));
+    // LLM returns only chapters, missing new fields
+    invokeLLM.mockResolvedValueOnce({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              title: "Partial Doc",
+              summary: "Partial summary",
+              documentType: "other",
+              chapters: [],
+              conceptMap: [],
+              keyConceptCards: [],
+              timeline: [],
+              comparisonTables: [],
+              learningPath: [],
+            }),
+          },
+        },
+      ],
+    });
+    const { updateDocumentAnalysis, getDocumentById } = vi.mocked(await import("./db"));
+    getDocumentById.mockResolvedValueOnce({
+      id: 1,
+      userId: 1,
+      title: "Partial Doc",
+      storageKey: "documents/1/partial.pdf",
+      storageUrl: "/manus-storage/partial.pdf",
+      fileSize: 512,
+      pageCount: 5,
+      analysisStatus: "pending",
+      structure: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    updateDocumentAnalysis.mockResolvedValueOnce(undefined);
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.document.analyze({ documentId: 1 });
+    // fallback defaults should be applied
+    expect(Array.isArray(result.structure.conceptMap)).toBe(true);
+    expect(Array.isArray(result.structure.keyConceptCards)).toBe(true);
+    expect(Array.isArray(result.structure.timeline)).toBe(true);
+    expect(Array.isArray(result.structure.comparisonTables)).toBe(true);
+    expect(Array.isArray(result.structure.learningPath)).toBe(true);
+  });
+
+  it("throws a user-friendly error when LLM returns malformed JSON", async () => {
+    const { invokeLLM } = vi.mocked(await import("./_core/llm"));
+    invokeLLM.mockResolvedValueOnce({
+      choices: [{ message: { content: "NOT_VALID_JSON{{{{" } }],
+    });
+    const { getDocumentById } = vi.mocked(await import("./db"));
+    getDocumentById.mockResolvedValueOnce({
+      id: 1,
+      userId: 1,
+      title: "Bad Doc",
+      storageKey: "documents/1/bad.pdf",
+      storageUrl: "/manus-storage/bad.pdf",
+      fileSize: 512,
+      pageCount: 5,
+      analysisStatus: "pending",
+      structure: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    await expect(caller.document.analyze({ documentId: 1 })).rejects.toThrow(
+      "AI 분석 결과를 파싱하지 못했습니다."
+    );
+  });
+
+  it("throws when LLM returns no content", async () => {
+    const { invokeLLM } = vi.mocked(await import("./_core/llm"));
+    invokeLLM.mockResolvedValueOnce({
+      choices: [{ message: { content: null } }],
+    });
+    const { getDocumentById } = vi.mocked(await import("./db"));
+    getDocumentById.mockResolvedValueOnce({
+      id: 1,
+      userId: 1,
+      title: "Empty Doc",
+      storageKey: "documents/1/empty.pdf",
+      storageUrl: "/manus-storage/empty.pdf",
+      fileSize: 512,
+      pageCount: 5,
+      analysisStatus: "pending",
+      structure: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    await expect(caller.document.analyze({ documentId: 1 })).rejects.toThrow(
+      "AI 분석 결과를 받지 못했습니다."
+    );
   });
 });
