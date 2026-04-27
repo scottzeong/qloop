@@ -710,3 +710,32 @@ describe("document.analyze - structure fallback", () => {
     );
   });
 });
+
+describe("document.delete — cascade sessions", () => {
+  it("calls deleteDocument and returns success (cascade handled in db layer)", async () => {
+    const { deleteDocument, getDocumentById } = vi.mocked(await import("./db"));
+    getDocumentById.mockResolvedValueOnce({
+      id: 42,
+      userId: 1,
+      title: "To Delete",
+      storageKey: "documents/42/file.pdf",
+      storageUrl: "/manus-storage/documents/42/file.pdf",
+      fileSize: 1024,
+      pageCount: 10,
+      analysisStatus: "done" as const,
+      structure: null,
+      groupId: null,
+      fileType: "pdf" as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    deleteDocument.mockResolvedValueOnce(undefined);
+
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.document.delete({ documentId: 42 });
+
+    expect(result.success).toBe(true);
+    expect(deleteDocument).toHaveBeenCalledWith(42);
+  });
+});

@@ -113,6 +113,25 @@ export async function updateDocumentGroup(
 export async function deleteDocumentGroup(id: number) {
   const db = await getDb();
   if (!db) return;
+  // 1) 그룹 소속 문서 목록 조회
+  const docs = await db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(eq(documents.groupId, id));
+  // 2) 각 문서의 세션 및 메시지 연쇄 삭제
+  for (const doc of docs) {
+    const sessions = await db
+      .select({ id: learningSessions.id })
+      .from(learningSessions)
+      .where(eq(learningSessions.documentId, doc.id));
+    for (const session of sessions) {
+      await db.delete(sessionMessages).where(eq(sessionMessages.sessionId, session.id));
+    }
+    await db.delete(learningSessions).where(eq(learningSessions.documentId, doc.id));
+  }
+  // 3) 문서 삭제
+  await db.delete(documents).where(eq(documents.groupId, id));
+  // 4) 그룹 삭제
   await db.delete(documentGroups).where(eq(documentGroups.id, id));
 }
 
@@ -185,6 +204,18 @@ export async function updateDocumentAnalysis(
 export async function deleteDocument(id: number) {
   const db = await getDb();
   if (!db) return;
+  // 1) 해당 문서의 세션 ID 목록 조회
+  const sessions = await db
+    .select({ id: learningSessions.id })
+    .from(learningSessions)
+    .where(eq(learningSessions.documentId, id));
+  // 2) 각 세션의 메시지 연쇄 삭제
+  for (const session of sessions) {
+    await db.delete(sessionMessages).where(eq(sessionMessages.sessionId, session.id));
+  }
+  // 3) 세션 삭제
+  await db.delete(learningSessions).where(eq(learningSessions.documentId, id));
+  // 4) 문서 삭제
   await db.delete(documents).where(eq(documents.id, id));
 }
 

@@ -85,8 +85,8 @@
 
 @layer base {
   html {
-    /* 전체 폰트 크기 1.5배 확대: 기본 16px → 24px */
-    font-size: 24px;
+    /* 전체 폰트 크기: 24px에서 20% 축소 → 19.2px */
+    font-size: 19.2px;
   }
   * {
     @apply border-border outline-ring/50;
