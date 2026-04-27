@@ -118,6 +118,30 @@ function TreeView({
 
 // ─── Concept Map View ─────────────────────────────────────────────────────────
 
+/** SVG 내부에서 텍스트를 여러 줄로 래핑하는 헬퍼 */
+function wrapText(text: string, maxCharsPerLine: number): string[] {
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length <= maxCharsPerLine) {
+      current = candidate;
+    } else {
+      if (current) lines.push(current);
+      // 단어 자체가 최대 글자 수 초과 시 강제 자르기
+      if (word.length > maxCharsPerLine) {
+        lines.push(word.slice(0, maxCharsPerLine - 1) + "…");
+        current = "";
+      } else {
+        current = word;
+      }
+    }
+  }
+  if (current) lines.push(current);
+  return lines.slice(0, 3); // 최대 3줄
+}
+
 function ConceptMapView({
   nodes,
   structure,
@@ -127,7 +151,8 @@ function ConceptMapView({
   structure: DocumentStructure;
   onSelectTopic: (topic: TopicNode) => void;
 }) {
-  const [hovered, setHovered] = useState<string | null>(null);
+  // 클릭 선택 고정 (호버 아님)
+  const [selected, setSelected] = useState<string | null>(null);
 
   if (!nodes || nodes.length === 0) {
     return <EmptyState message="이 문서에서 개념 맵 데이터를 추출하지 못했습니다." />;
@@ -137,30 +162,34 @@ function ConceptMapView({
   const subNodes = nodes.filter((n) => n.type === "sub");
   const relatedNodes = nodes.filter((n) => n.type === "related");
 
-  const W = 800;
-  const H = 560;
+  // 노드 수에 따라 SVG 캔버스 크기 동적 조정
+  const W = 900;
+  const H = Math.max(620, Math.min(800, nodes.length * 40 + 200));
   const cx = W / 2;
   const cy = H / 2;
 
   const positions: Record<string, { x: number; y: number }> = {};
 
+  // 노드 타입별 반지름 (확대)
+  const RADIUS: Record<string, number> = { core: 58, sub: 46, related: 36 };
+
   coreNodes.forEach((n, i) => {
     const angle = (2 * Math.PI * i) / Math.max(coreNodes.length, 1) - Math.PI / 2;
-    const r = coreNodes.length === 1 ? 0 : 90;
+    const r = coreNodes.length === 1 ? 0 : 110;
     positions[n.id] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
   });
 
   subNodes.forEach((n, i) => {
     const angle = (2 * Math.PI * i) / Math.max(subNodes.length, 1) - Math.PI / 4;
-    positions[n.id] = { x: cx + 190 * Math.cos(angle), y: cy + 190 * Math.sin(angle) };
+    positions[n.id] = { x: cx + 230 * Math.cos(angle), y: cy + 230 * Math.sin(angle) };
   });
 
   relatedNodes.forEach((n, i) => {
     const angle = (2 * Math.PI * i) / Math.max(relatedNodes.length, 1);
-    positions[n.id] = { x: cx + 270 * Math.cos(angle), y: cy + 270 * Math.sin(angle) };
+    positions[n.id] = { x: cx + 330 * Math.cos(angle), y: cy + 330 * Math.sin(angle) };
   });
 
-  const nodeColor: Record<string, string> = { core: "#dc2626", sub: "#000000", related: "#9ca3af" };
+  const nodeColor: Record<string, string> = { core: "#dc2626", sub: "#000000", related: "#6b7280" };
 
   const edgeSet = new Set<string>();
   const edges: Array<{ from: string; to: string }> = [];
@@ -174,118 +203,165 @@ function ConceptMapView({
     });
   });
 
-  const hoveredNode = hovered ? nodes.find((n) => n.id === hovered) : null;
+  const selectedNode = selected ? nodes.find((n) => n.id === selected) : null;
+
+  const handleNodeClick = (nodeId: string) => {
+    setSelected((prev) => (prev === nodeId ? null : nodeId));
+  };
 
   return (
     <div className="space-y-4">
+      {/* 레전드 */}
       <div className="flex gap-6 text-xs font-bold uppercase tracking-widest">
-        {[["core", "핵심 개념"], ["sub", "하위 개념"], ["related", "연관 개념"]].map(([type, label]) => (
+        {([["core", "핵심 개념"], ["sub", "하위 개념"], ["related", "연관 개념"]] as const).map(([type, label]) => (
           <span key={type} className="flex items-center gap-1.5">
             <span className="w-3 h-3 inline-block" style={{ background: nodeColor[type] }} />
             {label}
           </span>
         ))}
+        <span className="ml-auto text-black/30">● 클릭하여 선택</span>
       </div>
 
-      <div className="border border-black overflow-auto">
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: 480, maxHeight: 560 }}>
+      {/* SVG 개념맵 */}
+      <div className="border border-black overflow-auto bg-white">
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          className="w-full"
+          style={{ minWidth: 520, maxHeight: H }}
+        >
+          {/* 엣지 */}
           {edges.map((e) => {
             const from = positions[e.from];
             const to = positions[e.to];
-            const isActive = hovered === e.from || hovered === e.to;
+            const isActive = selected === e.from || selected === e.to;
             return (
               <line
                 key={`${e.from}-${e.to}`}
                 x1={from.x} y1={from.y} x2={to.x} y2={to.y}
                 stroke={isActive ? "#dc2626" : "#000"}
-                strokeWidth={isActive ? 1.5 : 0.5}
-                strokeOpacity={isActive ? 0.8 : 0.15}
+                strokeWidth={isActive ? 2 : 0.8}
+                strokeOpacity={isActive ? 0.9 : 0.18}
               />
             );
           })}
+
+          {/* 노드 */}
           {nodes.map((n) => {
             const pos = positions[n.id];
             if (!pos) return null;
-            const isHov = hovered === n.id;
-            const isConnected = hovered ? nodes.find((x) => x.id === hovered)?.connections.includes(n.id) : false;
-            const radius = n.type === "core" ? 38 : n.type === "sub" ? 30 : 24;
+            const isSel = selected === n.id;
+            const isConnected = selected
+              ? nodes.find((x) => x.id === selected)?.connections.includes(n.id)
+              : false;
+            const r = RADIUS[n.type] ?? 36;
             const color = nodeColor[n.type];
+            // 텍스트 래핑: 노드 지름에 따라 한 줄 최대 글자 수 조정
+            const charsPerLine = n.type === "core" ? 6 : n.type === "sub" ? 5 : 4;
+            const lines = wrapText(n.label, charsPerLine);
+            const lineHeight = n.type === "core" ? 14 : 12;
+            const fontSize = n.type === "core" ? 12 : n.type === "sub" ? 11 : 10;
+            const totalTextH = lines.length * lineHeight;
+            const startY = -totalTextH / 2 + lineHeight / 2;
+
             return (
               <g
                 key={n.id}
                 transform={`translate(${pos.x},${pos.y})`}
-                onMouseEnter={() => setHovered(n.id)}
-                onMouseLeave={() => setHovered(null)}
+                onClick={() => handleNodeClick(n.id)}
                 style={{ cursor: "pointer" }}
               >
+                {/* 선택 시 외부 링 */}
+                {isSel && (
+                  <circle r={r + 8} fill="none" stroke={color} strokeWidth={2} strokeDasharray="4 3" strokeOpacity={0.5} />
+                )}
                 <circle
-                  r={radius}
-                  fill={isHov || isConnected ? color : "white"}
+                  r={r}
+                  fill={isSel || isConnected ? color : "white"}
                   stroke={color}
-                  strokeWidth={isHov ? 2.5 : 1.5}
+                  strokeWidth={isSel ? 3 : 1.5}
                 />
-                <text
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fontSize={n.type === "core" ? 10 : 9}
-                  fontWeight="bold"
-                  fill={isHov || isConnected ? "white" : color}
-                  style={{ userSelect: "none", fontFamily: "Inter, sans-serif" }}
-                >
-                  {n.label.length > 8 ? n.label.slice(0, 7) + "…" : n.label}
-                </text>
+                {/* 래핑된 텍스트 */}
+                {lines.map((line, li) => (
+                  <text
+                    key={li}
+                    x={0}
+                    y={startY + li * lineHeight}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fontSize={fontSize}
+                    fontWeight="bold"
+                    fill={isSel || isConnected ? "white" : color}
+                    style={{ userSelect: "none", fontFamily: "Helvetica Neue, Inter, Arial, sans-serif" }}
+                  >
+                    {line}
+                  </text>
+                ))}
               </g>
             );
           })}
         </svg>
       </div>
 
-      {hoveredNode && (
-        <div className="border-l-4 border-red-600 pl-4 py-2 bg-black/[0.02]">
+      {/* 선택된 노드 상세 패널 (클릭 후 고정, 다른 노드 선택 전까지 유지) */}
+      {selectedNode ? (
+        <div className="border-l-4 border-red-600 pl-5 py-4 bg-black/[0.02] border border-black/10">
           <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="font-bold text-sm">{hoveredNode.label}</p>
-              <p className="text-xs text-black/60 mt-1">{hoveredNode.description}</p>
-              {hoveredNode.connections.length > 0 && (
-                <p className="text-xs text-black/40 mt-1">
-                  연결: {hoveredNode.connections.map((cid) => nodes.find((n) => n.id === cid)?.label).filter(Boolean).join(", ")}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-2">
+                <span
+                  className="w-3 h-3 flex-shrink-0 inline-block"
+                  style={{ background: nodeColor[selectedNode.type] }}
+                />
+                <p className="font-black text-base tracking-tight">{selectedNode.label}</p>
+                <span className="text-xs font-bold uppercase tracking-widest text-black/30 ml-1">
+                  {selectedNode.type === "core" ? "핵심" : selectedNode.type === "sub" ? "하위" : "연관"}
+                </span>
+              </div>
+              <p className="text-sm text-black/70 leading-relaxed">{selectedNode.description}</p>
+              {selectedNode.connections.length > 0 && (
+                <p className="text-xs text-black/40 mt-2">
+                  <span className="font-bold uppercase tracking-widest">연결 </span>
+                  {selectedNode.connections
+                    .map((cid) => nodes.find((n) => n.id === cid)?.label)
+                    .filter(Boolean)
+                    .join(" · ")}
                 </p>
               )}
             </div>
-            {(() => {
-              // 이 개념과 관련된 토픽 찾기
-              const relatedTopic = structure.chapters
-                .flatMap((ch) => [...ch.topics, ...(ch.topics.flatMap((t) => t.subtopics ?? []))])
-                .find((t) => t.title.toLowerCase().includes(hoveredNode.label.toLowerCase()) || hoveredNode.label.toLowerCase().includes(t.title.toLowerCase()));
-              return relatedTopic ? (
-                <button
-                  onClick={() => onSelectTopic(relatedTopic)}
-                  className="flex-shrink-0 text-xs font-bold uppercase tracking-widest text-red-600 border border-red-600 px-2 py-1 hover:bg-red-600 hover:text-white transition-colors whitespace-nowrap"
-                >
-                  학습 시작
-                </button>
-              ) : null;
-            })()}
+            <div className="flex flex-col gap-2 flex-shrink-0">
+              {(() => {
+                const allTopics = structure.chapters.flatMap((ch) => [
+                  ...ch.topics,
+                  ...(ch.topics.flatMap((t) => t.subtopics ?? [])),
+                ]);
+                const relatedTopic = allTopics.find(
+                  (t) =>
+                    t.title.toLowerCase().includes(selectedNode.label.toLowerCase()) ||
+                    selectedNode.label.toLowerCase().includes(t.title.toLowerCase())
+                );
+                return relatedTopic ? (
+                  <button
+                    onClick={() => onSelectTopic(relatedTopic)}
+                    className="text-xs font-bold uppercase tracking-widest text-white bg-red-600 border border-red-600 px-4 py-2 hover:bg-red-700 transition-colors whitespace-nowrap"
+                  >
+                    학습 시작
+                  </button>
+                ) : null;
+              })()}
+              <button
+                onClick={() => setSelected(null)}
+                className="text-xs font-bold uppercase tracking-widest text-black/40 border border-black/20 px-4 py-2 hover:border-black hover:text-black transition-colors whitespace-nowrap"
+              >
+                닫기
+              </button>
+            </div>
           </div>
         </div>
+      ) : (
+        <div className="border border-dashed border-black/20 py-5 text-center">
+          <p className="text-sm text-black/30 font-bold uppercase tracking-widest">개념맵에서 원하는 노드를 클릭하세요</p>
+        </div>
       )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {nodes.map((n) => (
-          <div
-            key={n.id}
-            className={`border p-3 cursor-pointer transition-colors ${hovered === n.id ? "border-red-600 bg-red-50" : "border-black/20 hover:border-black"}`}
-            onMouseEnter={() => setHovered(n.id)}
-            onMouseLeave={() => setHovered(null)}
-          >
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 flex-shrink-0" style={{ background: nodeColor[n.type] }} />
-              <span className="font-bold text-xs uppercase tracking-wide">{n.label}</span>
-            </div>
-            <p className="text-xs text-black/50 mt-1 leading-relaxed">{n.description}</p>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
