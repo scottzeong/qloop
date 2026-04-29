@@ -49,37 +49,42 @@ function TopicItem({
   const [expanded, setExpanded] = useState(depth < 1);
   const hasSubs = topic.subtopics && topic.subtopics.length > 0;
   const status: TopicStatus = topicProgress[topic.id] ?? "none";
+  // 완성도별 배경색: 미진행=흰색, 진행중=회색, 완료=dark gray
+  const bgClass = status === "completed" ? "bg-gray-500" : status === "active" ? "bg-gray-200" : "bg-white";
+  const textClass = status === "completed" ? "text-white" : "text-black";
+  const subTextClass = status === "completed" ? "text-white/70" : "text-black/50";
 
   return (
     <div className={`border-l-2 border-black/10 ${depth > 0 ? "ml-5" : ""}`}>
-      <div className="flex items-start gap-2 py-2 px-3 hover:bg-black/[0.03] group">
+      <div className={`flex items-start gap-2 py-2 px-3 group transition-colors ${bgClass} hover:brightness-95`}>
         {hasSubs ? (
           <button
             onClick={() => setExpanded(!expanded)}
-            className="mt-0.5 w-4 h-4 flex-shrink-0 text-xs font-mono text-black/40 hover:text-black"
+            className={`mt-0.5 w-4 h-4 flex-shrink-0 text-xs font-mono hover:opacity-80 ${status === "completed" ? "text-white/60" : "text-black/40"}`}
           >
             {expanded ? "▾" : "▸"}
           </button>
         ) : (
           <span className="mt-1.5 w-4 flex-shrink-0 flex items-center justify-center">
-            <span className="w-1.5 h-1.5 bg-red-600 block" />
+            <span className={`w-1.5 h-1.5 block ${status === "completed" ? "bg-white" : "bg-red-600"}`} />
           </span>
         )}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-black leading-snug">{topic.title}</p>
+          <p className={`text-sm font-bold leading-snug ${textClass}`}>{topic.title}</p>
           {topic.description && (
-            <p className="text-xs text-black/50 mt-0.5 leading-relaxed">{topic.description}</p>
+            <p className={`text-xs mt-0.5 leading-relaxed ${subTextClass}`}>{topic.description}</p>
           )}
         </div>
-        <div className="flex items-center gap-2 ml-2">
-          <TopicStatusBadge status={status} />
-          <button
-            onClick={() => onSelect(topic)}
-            className="opacity-0 group-hover:opacity-100 flex-shrink-0 text-xs font-bold uppercase tracking-widest text-red-600 border border-red-600 px-2 py-0.5 hover:bg-red-600 hover:text-white transition-colors"
-          >
-            학습
-          </button>
-        </div>
+        <button
+          onClick={() => onSelect(topic)}
+          className={`opacity-0 group-hover:opacity-100 flex-shrink-0 text-xs font-bold uppercase tracking-widest px-2 py-0.5 transition-colors ${
+            status === "completed"
+              ? "text-white border border-white hover:bg-white hover:text-gray-700"
+              : "text-red-600 border border-red-600 hover:bg-red-600 hover:text-white"
+          }`}
+        >
+          학습
+        </button>
       </div>
       {expanded && hasSubs && (
         <div>
@@ -155,12 +160,33 @@ function wrapText(text: string, maxCharsPerLine: number): string[] {
   return lines.slice(0, 3); // 최대 3줄
 }
 
+// 개념맵 노드 레이블로 목차 토픽 완성도 역매핑
+function getNodeProgress(
+  nodeLabel: string,
+  structure: DocumentStructure,
+  topicProgress: Record<string, "completed" | "active">
+): TopicStatus {
+  const allTopics = structure.chapters.flatMap((ch) => [
+    ...ch.topics,
+    ...(ch.topics.flatMap((t) => t.subtopics ?? [])),
+  ]);
+  const matched = allTopics.find(
+    (t) =>
+      t.title.toLowerCase().includes(nodeLabel.toLowerCase()) ||
+      nodeLabel.toLowerCase().includes(t.title.toLowerCase())
+  );
+  if (matched) return topicProgress[matched.id] ?? "none";
+  // concept- 형태 ID로도 조회
+  const conceptId = `concept-${nodeLabel.replace(/\s+/g, '-').toLowerCase()}`;
+  return topicProgress[conceptId] ?? "none";
+}
+
 function ConceptMapView({
   nodes,
   structure,
   onSelectTopic,
   onStartFromNode,
-  topicProgress: _topicProgress,
+  topicProgress,
 }: {
   nodes: ConceptNode[];
   structure: DocumentStructure;
@@ -272,6 +298,12 @@ function ConceptMapView({
               : false;
             const r = RADIUS[n.type] ?? 36;
             const color = nodeColor[n.type];
+            // 노드 완성도 (topicProgress 역매핑)
+            const nodeStatus = getNodeProgress(n.label, structure, topicProgress);
+            // 완성도별 노드 배경색: 미진행=흰색, 진행중=연회색, 완료=dark gray
+            const nodeFillDefault = nodeStatus === "completed" ? "#6b7280" : nodeStatus === "active" ? "#e5e7eb" : "white";
+            const nodeStrokeDefault = nodeStatus === "completed" ? "#374151" : color;
+            const nodeTextDefault = nodeStatus === "completed" ? "white" : nodeStatus === "active" ? "#374151" : color;
             // 텍스트 래핑: 노드 지름에 따라 한 줄 최대 글자 수 조정
             const charsPerLine = n.type === "core" ? 6 : n.type === "sub" ? 5 : 4;
             const lines = wrapText(n.label, charsPerLine);
@@ -279,7 +311,6 @@ function ConceptMapView({
             const fontSize = n.type === "core" ? 12 : n.type === "sub" ? 11 : 10;
             const totalTextH = lines.length * lineHeight;
             const startY = -totalTextH / 2 + lineHeight / 2;
-
             return (
               <g
                 key={n.id}
@@ -293,8 +324,8 @@ function ConceptMapView({
                 )}
                 <circle
                   r={r}
-                  fill={isSel || isConnected ? color : "white"}
-                  stroke={color}
+                  fill={isSel || isConnected ? color : nodeFillDefault}
+                  stroke={isSel ? color : nodeStrokeDefault}
                   strokeWidth={isSel ? 3 : 1.5}
                 />
                 {/* 래핑된 텍스트 */}
@@ -307,7 +338,7 @@ function ConceptMapView({
                     dominantBaseline="middle"
                     fontSize={fontSize}
                     fontWeight="bold"
-                    fill={isSel || isConnected ? "white" : color}
+                    fill={isSel || isConnected ? "white" : nodeTextDefault}
                     style={{ userSelect: "none", fontFamily: "Helvetica Neue, Inter, Arial, sans-serif" }}
                   >
                     {line}

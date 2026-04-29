@@ -959,6 +959,49 @@ export const appRouter = router({
             console.warn("[Socratic] 평가 연결 오류:", e);
           }
         }
+        // AI 질문인 경우 questions 테이블에도 저장하여 평가 연결
+        let newSocraticQuestionId: number | undefined;
+        if (!input.isUserQuestion && aiResponse.messageType === "question" && !aiResponse.isTopicComplete) {
+          try {
+            const db = await getDb();
+            if (db) {
+              // 활성 정책 조회 (global default)
+              const [defaultPolicy] = await db
+                .select()
+                .from(socraticEvaluationPolicies)
+                .where(eq(socraticEvaluationPolicies.courseType, "global"))
+                .limit(1);
+              if (defaultPolicy) {
+                // 질문유형 조회 (이름으로)
+                let qtId: number | undefined;
+                if (questionTypeName) {
+                  const [qt] = await db.select().from(questionTypes).where(eq(questionTypes.name, questionTypeName)).limit(1);
+                  qtId = qt?.id;
+                }
+                if (!qtId) {
+                  // 기본 질문유형 (definition)
+                  const [qt] = await db.select().from(questionTypes).where(eq(questionTypes.name, "definition")).limit(1);
+                  qtId = qt?.id;
+                }
+                if (qtId) {
+                  const [qResult] = await db.insert(questions).values({
+                    sessionId: input.sessionId,
+                    learnerId: ctx.user.id,
+                    questionTypeId: qtId,
+                    questionText: aiResponse.content,
+                    intent: "",
+                    expectedKeyPointsJson: [],
+                    difficultyLevel: "basic",
+                    policySnapshotJson: { policyId: defaultPolicy.id, policyName: defaultPolicy.name },
+                  });
+                  newSocraticQuestionId = (qResult as any).insertId;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("[Socratic] 질문 저장 오류:", e);
+          }
+        }
         await createSessionMessage({
           sessionId: input.sessionId,
           role: "ai",
@@ -968,6 +1011,7 @@ export const appRouter = router({
           topicTitle: session.startTopicTitle ?? undefined,
           questionIndex: aiResponse.isTopicComplete ? undefined : msgCount + 1,
           questionTypeName: questionTypeName,
+          socraticQuestionId: newSocraticQuestionId,
         });
 
         // 진행 상황 업데이트
