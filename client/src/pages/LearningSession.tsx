@@ -16,13 +16,31 @@ interface Message {
   topicId?: string | null;
   topicTitle?: string | null;
   questionIndex?: number | null;
+  questionTypeName?: string | null;
+  socraticQuestionId?: number | null;
   createdAt: Date;
 }
 
-function MessageBubble({ msg, questionNumber }: { msg: Message; questionNumber?: number }) {
+const QUESTION_TYPE_LABELS: Record<string, string> = {
+  definition: "정의",
+  clarification: "명료화",
+  justification: "근거",
+  assumption: "전제",
+  counterexample: "반례",
+  consistency: "일관성",
+  perspective: "관점",
+  implication: "함의",
+  value: "가치",
+  synthesis: "종합",
+  application: "적용",
+  reflection: "성찰",
+};
+
+function MessageBubble({ msg, questionNumber }: { msg: Message & { questionTypeName?: string | null }; questionNumber?: number }) {
   const isAI = msg.role === "ai";
   const isQuestion = msg.messageType === "question";
   const isUserQuestion = msg.messageType === "user_question";
+  const questionTypeLabel = msg.questionTypeName ? (QUESTION_TYPE_LABELS[msg.questionTypeName] ?? msg.questionTypeName) : null;
 
   return (
     <div className={`flex ${isAI ? "justify-start" : "justify-end"} mb-6`}>
@@ -33,9 +51,14 @@ function MessageBubble({ msg, questionNumber }: { msg: Message; questionNumber?:
             <>
               <div className="w-3 h-3 swiss-red-bg flex-shrink-0" />
               <span className="swiss-label">
-                {isQuestion ? "AI Tutor 질문" : "AI Tutor 질문"}
+                {isQuestion ? "Neural Tutor 질문" : "Neural Tutor"}
                 {questionNumber ? ` #${questionNumber}` : ""}
               </span>
+              {isQuestion && questionTypeLabel && (
+                <span className="text-xs px-2 py-0.5 border border-gray-300 text-gray-500 font-medium">
+                  [{questionTypeLabel}]
+                </span>
+              )}
             </>
           ) : (
             <>

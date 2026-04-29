@@ -19,6 +19,8 @@ import {
   Plus,
   X,
   FileType,
+  Brain,
+  Settings,
 } from "lucide-react";
 
 const ALLOWED_TYPES: Record<string, string> = {
@@ -270,6 +272,20 @@ export default function Dashboard() {
             >
               <BarChart2 size={12} /> 학습 히스토리
             </button>
+            <button
+              onClick={() => navigate("/profile/socratic")}
+              className="swiss-label hover:text-black transition-colors flex items-center gap-1"
+            >
+              <Brain size={12} /> Socratic Profile
+            </button>
+            {user?.role === "admin" && (
+              <button
+                onClick={() => navigate("/admin/socratic")}
+                className="swiss-label hover:text-black transition-colors flex items-center gap-1 text-red-600"
+              >
+                <Settings size={12} /> Socratic 관리
+              </button>
+            )}
             <div className="flex items-center gap-3 border-l border-black pl-6">
               <span className="text-sm font-medium">{user?.name}</span>
               <button

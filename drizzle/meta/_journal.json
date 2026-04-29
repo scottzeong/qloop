@@ -29,6 +29,13 @@
       "when": 1777276771866,
       "tag": "0003_right_supernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1777464241735,
+      "tag": "0004_brown_wrecker",
+      "breakpoints": true
     }
   ]
 }

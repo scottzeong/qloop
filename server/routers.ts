@@ -6,6 +6,17 @@ import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { invokeLLM, type Message } from "./_core/llm";
 import { storagePut, storageGetSignedUrl } from "./storage";
 import { notifyOwner } from "./_core/notification";
+import { socraticRouter } from "./routers/socratic";
+import { getDb } from "./db";
+import {
+  questions,
+  questionEvaluations,
+  questionTypes,
+  evaluationDimensions,
+  questionTypeDimensionWeights,
+  socraticEvaluationPolicies,
+} from "../drizzle/schema";
+import { eq, and, desc } from "drizzle-orm";
 import {
   createDocument,
   getDocumentById,
@@ -399,6 +410,70 @@ Return only the question text, nothing else.`,
 /**
  * 다음 AI 메시지 생성 — 문서 직접 참조 없이 순수 문답으로 학습 진행
  */
+// ─── Socratic 백그라운드 평가 헬퍼 ──────────────────────────────────────────────
+async function runSocraticEvaluation(opts: {
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>;
+  learnerId: number;
+  sessionId: number;
+  questionId: number;
+  questionTypeId: number;
+  responseText: string;
+  sourceContext: string;
+}) {
+  try {
+    const { db, learnerId, sessionId, questionId, questionTypeId, responseText, sourceContext } = opts;
+    const [question] = await db.select().from(questions).where(eq(questions.id, questionId)).limit(1);
+    if (!question) return;
+    const [questionType] = await db.select().from(questionTypes).where(eq(questionTypes.id, questionTypeId)).limit(1);
+    const weights = await db.select().from(questionTypeDimensionWeights).where(eq(questionTypeDimensionWeights.questionTypeId, questionTypeId));
+    const dims = await db.select().from(evaluationDimensions).where(eq(evaluationDimensions.enabled, 1));
+    const dimensionDescriptions = dims.map((d) => {
+      const w = weights.find((ww) => ww.evaluationDimensionId === d.id);
+      return `- ${d.displayName} (가중치: ${w?.weight ?? 0}%): ${d.description}`;
+    }).join("\n");
+    const prompt = `답변 평가\n질문유형: ${questionType?.displayName ?? ""}\n질문: ${question.questionText}\n학습자 답변: ${responseText}\n평가 요소:\n${dimensionDescriptions}\n\n각 요소 0-5점 평가. JSON만 출력:\n{"dimension_scores":{"accuracy":0,"reasoning":0,"evidence":0,"clarity":0,"depth":0,"application":0},"level":"Developing","strengths":[],"weaknesses":[],"detected_gaps":[],"misconceptions":[],"recommended_followup_question":"","short_feedback":"","evaluation_comment":"","confidence":0.8}`;
+    const response = await invokeLLM({
+      messages: [
+        { role: "system" as const, content: "You are a Socratic evaluation engine. Always respond with valid JSON only." },
+        { role: "user" as const, content: prompt },
+      ] as Message[],
+      response_format: { type: "json_object" as const },
+    });
+    let evalResult: Record<string, unknown> = {};
+    try { evalResult = JSON.parse(response.choices[0].message.content as string); } catch { return; }
+    let weightedScore = 0;
+    let totalWeight = 0;
+    for (const dim of dims) {
+      const w = weights.find((ww) => ww.evaluationDimensionId === dim.id);
+      const score = (evalResult.dimension_scores as Record<string, number>)?.[dim.name] ?? 0;
+      const weight = w?.weight ?? 0;
+      weightedScore += (score / 5) * 100 * (weight / 100);
+      totalWeight += weight;
+    }
+    if (totalWeight > 0) weightedScore = Math.round(weightedScore);
+    await db.insert(questionEvaluations).values({
+      learnerId,
+      sessionId,
+      questionId,
+      questionTypeId,
+      responseText,
+      dimensionScoresJson: evalResult.dimension_scores ?? {},
+      weightedScore,
+      level: (evalResult.level as string) ?? "Developing",
+      strengthsJson: (evalResult.strengths as unknown[]) ?? [],
+      weaknessesJson: (evalResult.weaknesses as unknown[]) ?? [],
+      detectedGapsJson: (evalResult.detected_gaps as unknown[]) ?? [],
+      misconceptionsJson: (evalResult.misconceptions as unknown[]) ?? [],
+      recommendedFollowupQuestion: (evalResult.recommended_followup_question as string) ?? "",
+      evaluationComment: (evalResult.evaluation_comment as string) ?? "",
+      confidence: (evalResult.confidence as number) ?? 0.8,
+      questionTypeSnapshotJson: { id: questionType?.id, name: questionType?.name, displayName: questionType?.displayName },
+    });
+  } catch (err) {
+    console.warn("[Socratic] 평가 실행 오류:", err);
+  }
+}
+
 async function generateNextMessage(
   docTitle: string,
   topicTitle: string,
@@ -542,6 +617,7 @@ Format the summary with:
 
 export const appRouter = router({
   system: systemRouter,
+  socratic: socraticRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -848,6 +924,41 @@ export const appRouter = router({
 
         // AI 메시지 저장
         const msgCount = messages.filter((m) => m.messageType === "question").length;
+        // Socratic 평가: 학습자 답변인 경우 이전 질문 ID 조회 후 백그라운드 평가
+        let socraticQuestionId: number | undefined;
+        let questionTypeName: string | undefined;
+        if (!input.isUserQuestion) {
+          try {
+            const db = await getDb();
+            if (db) {
+              // 이전 AI 질문 메시지에서 socraticQuestionId 조회
+              const prevAiMsg = [...messages].reverse().find(
+                (m) => m.role === "ai" && m.socraticQuestionId
+              );
+              if (prevAiMsg?.socraticQuestionId) {
+                // 백그라운드 평가 실행 (await 없이 fire-and-forget)
+                const prevQId = prevAiMsg.socraticQuestionId;
+                const [prevQ] = await db.select().from(questions).where(eq(questions.id, prevQId)).limit(1);
+                if (prevQ) {
+                  const [qt] = await db.select().from(questionTypes).where(eq(questionTypes.id, prevQ.questionTypeId)).limit(1);
+                  questionTypeName = qt?.name;
+                  // 비동기 평가 (응답 지연 방지)
+                  runSocraticEvaluation({
+                    db,
+                    learnerId: ctx.user.id,
+                    sessionId: input.sessionId,
+                    questionId: prevQId,
+                    questionTypeId: prevQ.questionTypeId,
+                    responseText: input.content,
+                    sourceContext: `${doc.title} > ${session.startTopicTitle}`,
+                  }).catch(console.warn);
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("[Socratic] 평가 연결 오류:", e);
+          }
+        }
         await createSessionMessage({
           sessionId: input.sessionId,
           role: "ai",
@@ -856,6 +967,7 @@ export const appRouter = router({
           topicId: session.currentTopicId ?? undefined,
           topicTitle: session.startTopicTitle ?? undefined,
           questionIndex: aiResponse.isTopicComplete ? undefined : msgCount + 1,
+          questionTypeName: questionTypeName,
         });
 
         // 진행 상황 업데이트
