@@ -77,7 +77,7 @@ function TopicItem({
         </div>
         <button
           onClick={() => onSelect(topic)}
-          className={`opacity-0 group-hover:opacity-100 flex-shrink-0 text-xs font-bold uppercase tracking-widest px-2 py-0.5 transition-colors ${
+          className={`flex-shrink-0 text-xs font-bold uppercase tracking-widest px-2 py-0.5 transition-colors ${
             status === "completed"
               ? "text-white border border-white hover:bg-white hover:text-gray-700"
               : "text-red-600 border border-red-600 hover:bg-red-600 hover:text-white"
