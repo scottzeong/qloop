@@ -1086,6 +1086,35 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         return getSessionsByDocumentId(input.documentId, ctx.user.id);
       }),
+    // 문서별 토픽 완성도 조회 (topicId → status 맵)
+    // 완료: 해당 topicId로 completed 세션 존재
+    // 진행중: 해당 topicId로 active 세션 존재 (completed 없음)
+    // 미진행: 세션 없음
+    getTopicProgress: protectedProcedure
+      .input(z.object({ documentId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const sessions = await getSessionsByDocumentId(input.documentId, ctx.user.id);
+        const progressMap: Record<string, "completed" | "active"> = {};
+        for (const s of sessions) {
+          // startTopicId 기준 완성도 기록
+          if (s.startTopicId) {
+            const tid = s.startTopicId;
+            if (s.status === "completed") {
+              progressMap[tid] = "completed";
+            } else if (s.status === "active" && progressMap[tid] !== "completed") {
+              progressMap[tid] = "active";
+            }
+          }
+          // completedTopics 배열에 있는 모든 토픽도 완료로 표시
+          // (학습 중 여러 토픽을 다룸는 세션에서도 일관성 유지)
+          if (Array.isArray(s.completedTopics)) {
+            for (const ctid of s.completedTopics as string[]) {
+              progressMap[ctid] = "completed";
+            }
+          }
+        }
+        return progressMap;
+      }),
   }),
 });
 

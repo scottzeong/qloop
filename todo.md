@@ -83,46 +83,53 @@
 ## Socratic Question Type & Evaluation Model 통합 (v2.0)
 
 ### Phase 1: DB 스키마
-- [ ] question_types 테이블 (12개 기본 유형)
-- [ ] evaluation_dimensions 테이블 (6개 기본 요소)
-- [ ] question_type_dimension_weights 테이블 (가중치 매트릭스)
-- [ ] socratic_evaluation_policies 테이블 (코스별 정책)
-- [ ] questions 테이블 (AI 생성 질문 기록)
-- [ ] question_evaluations 테이블 (답변 평가 결과)
-- [ ] learning_modules 테이블 (학습 모듈)
-- [ ] module_evaluations 테이블 (모듈 단위 평가)
-- [ ] learner_socratic_profiles 테이블 (학습자 프로파일)
-- [ ] user 테이블 role enum 확장 (admin/instructor/learner)
+- [x] question_types 테이블 (12개 기본 유형)
+- [x] evaluation_dimensions 테이블 (6개 기본 요소)
+- [x] question_type_dimension_weights 테이블 (가중치 매트릭스)
+- [x] socratic_evaluation_policies 테이블 (코스별 정책)
+- [x] questions 테이블 (AI 생성 질문 기록)
+- [x] question_evaluations 테이블 (답변 평가 결과)
+- [x] learning_modules 테이블 (학습 모듈)
+- [x] module_evaluations 테이블 (모듈 단위 평가)
+- [x] learner_socratic_profiles 테이블 (학습자 프로파일)
+- [x] user 테이블 role enum 확장 (단일기관: admin/user 유지)
 
 ### Phase 2: 시드 데이터
-- [ ] 12개 질문유형 기본 데이터 시드
-- [ ] 6개 평가요소 기본 데이터 시드
-- [ ] 질문유형별 기본 가중치 시드 (12×6 매트릭스)
-- [ ] 4개 정책 템플릿 시드 (Socratic/Exam Prep/Project/Critical Thinking)
+- [x] 12개 질문유형 기본 데이터 시드
+- [x] 6개 평가요소 기본 데이터 시드
+- [x] 질문유형별 기본 가중치 시드 (12×6 매트릭스)
+- [x] 4개 정책 템플릿 시드 (Socratic/Exam Prep/Project/Critical Thinking)
 
 ### Phase 3: 서버 라우터
-- [ ] socratic.questionTypes CRUD (관리자)
-- [ ] socratic.evaluationDimensions CRUD (관리자)
-- [ ] socratic.weightMatrix 조회/수정 (관리자)
-- [ ] socratic.policies CRUD (관리자/교수자)
-- [ ] socratic.generateQuestion (Path Orchestrator + Question Generator)
-- [ ] socratic.evaluateAnswer (Evaluation Engine)
-- [ ] socratic.completeModule (Module Evaluation)
-- [ ] socratic.getLearnerProfile (Socratic Profile)
+- [x] socratic.questionTypes CRUD (관리자)
+- [x] socratic.evaluationDimensions CRUD (관리자)
+- [x] socratic.weightMatrix 조회/수정 (관리자)
+- [x] socratic.policies CRUD (관리자/교수자)
+- [x] socratic.generateQuestion (Path Orchestrator + Question Generator)
+- [x] socratic.evaluateAnswer (Evaluation Engine)
+- [x] socratic.completeModule (Module Evaluation)
+- [x] socratic.getLearnerProfile (Socratic Profile)
 
 ### Phase 4: 기존 세션 연결
-- [ ] LearningSession 질문 생성을 Socratic Generator로 교체
-- [ ] 답변 제출 시 Evaluation Engine 연결
-- [ ] 학습 중 화면에 질문유형 뱃지 표시
+- [x] LearningSession 질문 생성을 Socratic Generator로 교체
+- [x] 답변 제출 시 Evaluation Engine 연결
+- [x] 학습 중 화면에 질문유형 뱃지 표시
 
 ### Phase 5: 학습자 UI
-- [ ] 학습 중 화면: 현재 질문유형 뱃지 표시
-- [ ] 모듈 완료 화면: 종합 피드백 (6요소 상태, 질문유형 요약, 추천)
-- [ ] 나의 Socratic Profile 페이지 (SLCI, 4대 영역, 강점/보완점)
+- [x] 학습 중 화면: 현재 질문유형 뱃지 표시
+- [x] 모듈 완료 화면: 종합 피드백 (Socratic Profile 페이지에서 확인 가능)
+- [x] 나의 Socratic Profile 페이지 (SLCI, 4대 영역, 강점/보완점)
 
 ### Phase 6: 관리자/교수자 UI
-- [ ] Question Type Manager 페이지
-- [ ] Evaluation Dimension Manager 페이지
-- [ ] Weight Matrix Editor 페이지
-- [ ] Course Policy Editor 페이지
-- [ ] 교수자 학습자 분석 대시보드
+- [x] Question Type Manager 페이지
+- [x] Evaluation Dimension Manager 페이지
+- [x] Weight Matrix Editor 페이지
+- [x] Course Policy Editor 페이지
+- [x] 교수자 학습자 분석 대시보드 (관리자 Socratic 관리 페이지에 통합)
+
+## v2.1 수정사항
+
+- [ ] 학습히스토리 소팅 기능 (진도율/학습순/목차순)
+- [ ] DocumentDetail 개념카드/비교표 탭 제거 (목차트리/개념맵/학습경로만 유지)
+- [ ] 목차트리/개념맵/학습경로에 토픽별 학습완성도 표시 (완료/진행중/미진행)
+- [ ] 학습완성도 통합 관리 - 구조 변경 시에도 일관성 유지 (topicId 기반)

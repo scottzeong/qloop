@@ -1,14 +1,23 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
-import { ArrowLeft, BookOpen, CheckCircle, Clock, Play } from "lucide-react";
+import { ArrowLeft, BookOpen, CheckCircle, Clock, Play, ArrowUpDown } from "lucide-react";
 import { Streamdown } from "streamdown";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+
+type SortMode = "time" | "progress" | "toc";
+
+const SORT_LABELS: Record<SortMode, string> = {
+  time: "학습순",
+  progress: "진도율",
+  toc: "목차순",
+};
 
 export default function SessionHistory() {
   const [, navigate] = useLocation();
   const { isAuthenticated } = useAuth();
   const [selectedSession, setSelectedSession] = useState<number | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>("time");
 
   const { data: sessions, isLoading } = trpc.session.list.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -26,6 +35,27 @@ export default function SessionHistory() {
 
   const completedSessions = sessions?.filter((s) => s.status === "completed") ?? [];
   const activeSessions = sessions?.filter((s) => s.status === "active") ?? [];
+
+  const sortedSessions = useMemo(() => {
+    if (!sessions) return [];
+    const arr = [...sessions];
+    if (sortMode === "time") {
+      return arr.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } else if (sortMode === "progress") {
+      return arr.sort((a, b) => {
+        const pa = a.totalQuestions ? Math.round(((a.answeredQuestions ?? 0) / a.totalQuestions) * 100) : 0;
+        const pb = b.totalQuestions ? Math.round(((b.answeredQuestions ?? 0) / b.totalQuestions) * 100) : 0;
+        return pb - pa;
+      });
+    } else {
+      // 목차순: startTopicId 기준 알파벳/숫자 정렬 (토픽 ID에 순서 정보 포함)
+      return arr.sort((a, b) => {
+        const ta = a.startTopicId ?? "";
+        const tb = b.startTopicId ?? "";
+        return ta.localeCompare(tb, undefined, { numeric: true });
+      });
+    }
+  }, [sessions, sortMode]);
 
   if (isLoading) {
     return (
@@ -105,9 +135,29 @@ export default function SessionHistory() {
               </div>
             ) : (
               <div>
-                <div className="swiss-label mb-4">전체 학습 세션</div>
+                {/* 소팅 컨트롤 */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="swiss-label">전체 학습 세션</div>
+                  <div className="flex items-center gap-1 border border-gray-200">
+                    <ArrowUpDown size={11} className="text-gray-400 ml-2" />
+                    {(["time", "progress", "toc"] as SortMode[]).map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => setSortMode(mode)}
+                        className={`px-3 py-1.5 text-xs font-bold transition-colors ${
+                          sortMode === mode
+                            ? "bg-black text-white"
+                            : "text-gray-500 hover:text-black hover:bg-gray-50"
+                        }`}
+                      >
+                        {SORT_LABELS[mode]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="space-y-0">
-                  {sessions.map((s, i) => {
+                  {sortedSessions.map((s, i) => {
                     const isSelected = selectedSession === s.id;
                     const progress = s.totalQuestions
                       ? Math.round(((s.answeredQuestions ?? 0) / s.totalQuestions) * 100)
@@ -137,6 +187,11 @@ export default function SessionHistory() {
                                 <span className="text-xs text-gray-400">
                                   답변 {s.answeredQuestions ?? 0}개
                                 </span>
+                                {sortMode === "progress" && (
+                                  <span className="text-xs font-bold" style={{ color: "var(--swiss-red)" }}>
+                                    {progress}%
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>

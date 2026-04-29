@@ -17,30 +17,38 @@ import type {
 
 // ─── Tab types ────────────────────────────────────────────────────────────────
 
-type ViewTab = "tree" | "concepts" | "cards" | "timeline" | "comparison" | "path";
+type ViewTab = "tree" | "concepts" | "path";
 
 const TAB_LABELS: Record<ViewTab, string> = {
   tree: "목차 트리",
   concepts: "개념 맵",
-  cards: "개념 카드",
-  timeline: "타임라인",
-  comparison: "비교표",
   path: "학습 경로",
 };
 
 // ─── Tree View ────────────────────────────────────────────────────────────────
 
+type TopicStatus = "completed" | "active" | "none";
+
+function TopicStatusBadge({ status }: { status: TopicStatus }) {
+  if (status === "completed") return <span className="flex-shrink-0 text-xs font-bold px-1.5 py-0.5 bg-red-600 text-white">완료</span>;
+  if (status === "active") return <span className="flex-shrink-0 text-xs font-bold px-1.5 py-0.5 bg-yellow-400 text-black">진행중</span>;
+  return <span className="flex-shrink-0 text-xs font-bold px-1.5 py-0.5 bg-gray-100 text-gray-400">미진행</span>;
+}
+
 function TopicItem({
   topic,
   depth,
   onSelect,
+  topicProgress,
 }: {
   topic: TopicNode;
   depth: number;
   onSelect: (t: TopicNode) => void;
+  topicProgress: Record<string, "completed" | "active">;
 }) {
   const [expanded, setExpanded] = useState(depth < 1);
   const hasSubs = topic.subtopics && topic.subtopics.length > 0;
+  const status: TopicStatus = topicProgress[topic.id] ?? "none";
 
   return (
     <div className={`border-l-2 border-black/10 ${depth > 0 ? "ml-5" : ""}`}>
@@ -63,17 +71,20 @@ function TopicItem({
             <p className="text-xs text-black/50 mt-0.5 leading-relaxed">{topic.description}</p>
           )}
         </div>
-        <button
-          onClick={() => onSelect(topic)}
-          className="opacity-0 group-hover:opacity-100 flex-shrink-0 text-xs font-bold uppercase tracking-widest text-red-600 border border-red-600 px-2 py-0.5 hover:bg-red-600 hover:text-white transition-colors"
-        >
-          학습
-        </button>
+        <div className="flex items-center gap-2 ml-2">
+          <TopicStatusBadge status={status} />
+          <button
+            onClick={() => onSelect(topic)}
+            className="opacity-0 group-hover:opacity-100 flex-shrink-0 text-xs font-bold uppercase tracking-widest text-red-600 border border-red-600 px-2 py-0.5 hover:bg-red-600 hover:text-white transition-colors"
+          >
+            학습
+          </button>
+        </div>
       </div>
       {expanded && hasSubs && (
         <div>
           {topic.subtopics!.map((s) => (
-            <TopicItem key={s.id} topic={s} depth={depth + 1} onSelect={onSelect} />
+            <TopicItem key={s.id} topic={s} depth={depth + 1} onSelect={onSelect} topicProgress={topicProgress} />
           ))}
         </div>
       )}
@@ -84,9 +95,11 @@ function TopicItem({
 function TreeView({
   structure,
   onSelectTopic,
+  topicProgress,
 }: {
   structure: DocumentStructure;
   onSelectTopic: (topic: TopicNode) => void;
+  topicProgress: Record<string, "completed" | "active">;
 }) {
   const totalTopics = structure.chapters.reduce(
     (acc, ch) => acc + ch.topics.length + ch.topics.reduce((a, t) => a + (t.subtopics?.length ?? 0), 0),
@@ -107,7 +120,7 @@ function TreeView({
           </div>
           <div className="divide-y divide-black/10">
             {ch.topics.map((t) => (
-              <TopicItem key={t.id} topic={t} depth={0} onSelect={onSelectTopic} />
+              <TopicItem key={t.id} topic={t} depth={0} onSelect={onSelectTopic} topicProgress={topicProgress} />
             ))}
           </div>
         </div>
@@ -147,11 +160,13 @@ function ConceptMapView({
   structure,
   onSelectTopic,
   onStartFromNode,
+  topicProgress: _topicProgress,
 }: {
   nodes: ConceptNode[];
   structure: DocumentStructure;
   onSelectTopic: (topic: TopicNode) => void;
   onStartFromNode: (nodeLabel: string, nodeDescription: string) => void;
+  topicProgress: Record<string, "completed" | "active">;
 }) {
   // 클릭 선택 고정 (호버 아님)
   const [selected, setSelected] = useState<string | null>(null);
@@ -623,9 +638,11 @@ function ComparisonView({
 function LearningPathView({
   steps,
   onStartStep,
+  topicProgress,
 }: {
   steps: LearningPathStep[];
   onStartStep: (step: LearningPathStep) => void;
+  topicProgress: Record<string, "completed" | "active">;
 }) {
   if (!steps || steps.length === 0) {
     return <EmptyState message="이 문서에서 학습 경로를 추출하지 못했습니다." />;
@@ -648,7 +665,13 @@ function LearningPathView({
                   <div>
                     <p className="font-bold text-sm">{step.title}</p>
                     <p className="text-xs text-black/60 mt-1 leading-relaxed">{step.description}</p>
-                    <p className="text-xs text-black/30 mt-2">예상 {step.estimatedMinutes}분</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      {(() => {
+                        const stepStatus: TopicStatus = step.topicIds.some(tid => topicProgress[tid] === "completed") ? "completed"
+                          : step.topicIds.some(tid => topicProgress[tid] === "active") ? "active" : "none";
+                        return <TopicStatusBadge status={stepStatus} />;
+                      })()}
+                    </div>
                   </div>
                   <button
                     onClick={() => onStartStep(step)}
@@ -702,8 +725,12 @@ export default function DocumentDetail() {
   });
 
   const startSession = trpc.session.start.useMutation();
-
-  const structure = doc?.structure as DocumentStructure | null;
+  const { data: topicProgressData } = trpc.session.getTopicProgress.useQuery(
+    { documentId: docId },
+    { enabled: isAuthenticated && !!docId }
+  );
+  const topicProgress: Record<string, "completed" | "active"> = (topicProgressData as Record<string, "completed" | "active">) ?? {};
+  const structure = doc?.structure as DocumentStructure | null;;
   const isAnalyzing = doc?.analysisStatus === "analyzing" || analyzeMutation.isPending;
 
   const handleSelectTopic = async (topic: TopicNode) => {
@@ -763,7 +790,8 @@ export default function DocumentDetail() {
     if (!doc || starting) return;
     setStarting(true);
     try {
-      const nodeId = `concept-${nodeLabel.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}`;
+      // 노드 레이블을 일관된 ID로 변환 (타임스탬프 제거 → 동일 노드는 항상 동일 ID)
+      const nodeId = `concept-${nodeLabel.replace(/\s+/g, '-').toLowerCase()}`;
       const { sessionId } = await startSession.mutateAsync({
         documentId: docId,
         topicId: nodeId,
@@ -809,9 +837,6 @@ export default function DocumentDetail() {
   // 사용 가능한 탭 (분석 완료 후 데이터가 있는 것만)
   const availableTabs: ViewTab[] = ["tree"];
   if (structure?.conceptMap && structure.conceptMap.length > 0) availableTabs.push("concepts");
-  if (structure?.keyConceptCards && structure.keyConceptCards.length > 0) availableTabs.push("cards");
-  if (structure?.timeline && structure.timeline.length > 0) availableTabs.push("timeline");
-  if (structure?.comparisonTables && structure.comparisonTables.length > 0) availableTabs.push("comparison");
   if (structure?.learningPath && structure.learningPath.length > 0) availableTabs.push("path");
 
   return (
@@ -954,12 +979,9 @@ export default function DocumentDetail() {
 
             {/* 탭 콘텐츠 */}
             <div>
-              {activeTab === "tree" && <TreeView structure={structure} onSelectTopic={handleSelectTopic} />}
-              {activeTab === "concepts" && <ConceptMapView nodes={structure.conceptMap ?? []} structure={structure} onSelectTopic={handleSelectTopic} onStartFromNode={handleStartFromNode} />}
-              {activeTab === "cards" && <ConceptCardsView cards={structure.keyConceptCards ?? []} structure={structure} onSelectTopic={handleSelectTopic} onStartFromNode={handleStartFromNode} />}
-              {activeTab === "timeline" && <TimelineView items={structure.timeline ?? []} structure={structure} onSelectTopic={handleSelectTopic} />}
-              {activeTab === "comparison" && <ComparisonView tables={structure.comparisonTables ?? []} structure={structure} onSelectTopic={handleSelectTopic} />}
-              {activeTab === "path" && <LearningPathView steps={structure.learningPath ?? []} onStartStep={handleStartPathStep} />}
+              {activeTab === "tree" && <TreeView structure={structure} onSelectTopic={handleSelectTopic} topicProgress={topicProgress} />}
+              {activeTab === "concepts" && <ConceptMapView nodes={structure.conceptMap ?? []} structure={structure} onSelectTopic={handleSelectTopic} onStartFromNode={handleStartFromNode} topicProgress={topicProgress} />}
+              {activeTab === "path" && <LearningPathView steps={structure.learningPath ?? []} onStartStep={handleStartPathStep} topicProgress={topicProgress} />}
             </div>
           </div>
         )}
