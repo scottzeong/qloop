@@ -139,3 +139,16 @@
 - [x] 목차트리 완성도를 배경색으로 표시 (미진행=흰색, 진행중=회색, 완료=dark gray)
 - [x] Socratic 평가 표시 버그 수정
 - [x] 3개 뷰 간 완성도 일관성 통합 (목차 topicId 기반으로 개념맵/학습경로 완성도 역매핑)
+
+## v3.0 Knowledge Library & Open QLoop
+
+- [x] DB: knowledgeLibrary 테이블 추가 (docId, addedBy, isPublic, tags, description)
+- [x] DB: documents 테이블에 openQloopEnabled 필드 추가
+- [x] DB: learningSessions에 openQloopMode 필드 추가
+- [x] 백엔드: Knowledge Library CRUD 라우터 (관리자 등록/제거, 학습자 조회)
+- [x] 백엔드: 문서 가져오기 프로시저 (복사본 생성)
+- [x] 백엔드: sendMessage에서 openQloopMode 시 LLM 프롬프트 확장
+- [x] UI: KnowledgeLibrary 페이지 (학습자 조회/가져오기)
+- [x] UI: 관리자 Knowledge Library 관리 탭
+- [x] UI: DocumentDetail에 Open QLoop 토글
+- [x] UI: Dashboard에 Knowledge Library 메뉴 추가

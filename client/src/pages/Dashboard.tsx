@@ -21,6 +21,7 @@ import {
   FileType,
   Brain,
   Settings,
+  Library,
 } from "lucide-react";
 
 const ALLOWED_TYPES: Record<string, string> = {
@@ -271,6 +272,12 @@ export default function Dashboard() {
               className="swiss-label hover:text-black transition-colors flex items-center gap-1"
             >
               <BarChart2 size={12} /> 학습 히스토리
+            </button>
+            <button
+              onClick={() => navigate("/library")}
+              className="swiss-label hover:text-black transition-colors flex items-center gap-1"
+            >
+              <Library size={12} /> Knowledge Library
             </button>
             <button
               onClick={() => navigate("/profile/socratic")}

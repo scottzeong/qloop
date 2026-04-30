@@ -12,6 +12,7 @@ import SessionHistory from "./pages/SessionHistory";
 import GroupDetail from "./pages/GroupDetail";
 import SocraticProfile from "./pages/SocraticProfile";
 import AdminSocratic from "./pages/AdminSocratic";
+import KnowledgeLibrary from "./pages/KnowledgeLibrary";
 
 function Router() {
   return (
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/groups/:id" component={GroupDetail} />
       <Route path="/profile/socratic" component={SocraticProfile} />
       <Route path="/admin/socratic" component={AdminSocratic} />
+      <Route path="/library" component={KnowledgeLibrary} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

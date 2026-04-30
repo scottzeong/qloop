@@ -36,6 +36,13 @@
       "when": 1777464241735,
       "tag": "0004_brown_wrecker",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1777516340288,
+      "tag": "0005_public_shinko_yamashiro",
+      "breakpoints": true
     }
   ]
 }

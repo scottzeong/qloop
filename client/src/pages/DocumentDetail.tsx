@@ -731,6 +731,33 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
+// ─── Open QLoop Toggle ───────────────────────────────────────────────────────
+
+function OpenQloopToggle({ documentId }: { documentId: number }) {
+  const utils = trpc.useUtils();
+  const { data: settings } = trpc.library.getDocumentSettings.useQuery({ documentId });
+  const setOpenQloop = trpc.library.setOpenQloop.useMutation({
+    onSuccess: () => {
+      utils.library.getDocumentSettings.invalidate({ documentId });
+    },
+  });
+  const enabled = settings?.openQloopEnabled ?? false;
+  return (
+    <button
+      onClick={() => setOpenQloop.mutate({ documentId, enabled: !enabled })}
+      disabled={setOpenQloop.isPending}
+      title={enabled ? "Open QLoop 비활성화: LLM 자체 지식 활용 모드 끄기" : "Open QLoop 활성화: LLM 자체 지식 활용 모드 켜기"}
+      className={`text-xs font-bold uppercase tracking-widest px-3 py-1.5 border transition-colors ${
+        enabled
+          ? "bg-black text-white border-black hover:bg-black/80"
+          : "border-black/30 text-black/50 hover:border-black hover:text-black"
+      }`}
+    >
+      Open QLoop {enabled ? "ON" : "OFF"}
+    </button>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function DocumentDetail() {
@@ -891,6 +918,8 @@ export default function DocumentDetail() {
               </span>
             )}
           </div>
+          {/* Open QLoop 토글 */}
+          <OpenQloopToggle documentId={docId} />
           {doc.analysisStatus === "done" && !isAnalyzing && (
             <button
               onClick={() => analyzeMutation.mutate({ documentId: docId })}

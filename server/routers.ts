@@ -7,6 +7,7 @@ import { invokeLLM, type Message } from "./_core/llm";
 import { storagePut, storageGetSignedUrl } from "./storage";
 import { notifyOwner } from "./_core/notification";
 import { socraticRouter } from "./routers/socratic";
+import { libraryRouter } from "./routers/library";
 import { getDb } from "./db";
 import {
   questions,
@@ -376,8 +377,12 @@ Return ONLY valid JSON matching the schema exactly.`;
 async function generateFirstQuestion(
   topicTitle: string,
   topicDescription: string,
-  docTitle: string
+  docTitle: string,
+  openQloopMode = false
 ): Promise<string> {
+  const openQloopInstruction = openQloopMode
+    ? `\nOPEN QLOOP MODE: You have access to all your knowledge beyond the provided document. Feel free to draw connections to related fields, current events, real-world applications, cutting-edge research, and interdisciplinary perspectives. Enrich the learning experience with broader context and diverse examples from the wider world.`
+    : "";
   const response = await invokeLLM({
     messages: [
       {
@@ -385,7 +390,6 @@ async function generateFirstQuestion(
         content: `You are an expert educational tutor using the Socratic method.
 You are helping a learner study a specific topic.
 Generate an engaging first question to start the learning session.
-
 CRITICAL RULES:
 - Do NOT ask the learner to read, look at, or refer to any document, book, or material.
 - Do NOT say things like "according to the document", "as described in the text", "what does the document say about...".
@@ -393,8 +397,7 @@ CRITICAL RULES:
 - The question should be open-ended and thought-provoking.
 - Assess the learner's baseline understanding of the topic concept itself.
 - Be directly related to the topic.
-- Use the same language as the topic title (Korean if Korean).
-
+- Use the same language as the topic title (Korean if Korean).${openQloopInstruction}
 Return only the question text, nothing else.`,
       },
       {
@@ -479,8 +482,12 @@ async function generateNextMessage(
   topicTitle: string,
   conversationHistory: Array<{ role: string; content: string; messageType: string }>,
   userMessage: string,
-  isUserQuestion: boolean
+  isUserQuestion: boolean,
+  openQloopMode = false
 ): Promise<{ content: string; messageType: string; isTopicComplete: boolean }> {
+  const openQloopInstruction = openQloopMode
+    ? `\nOPEN QLOOP MODE: You have access to all your knowledge beyond the provided document. Draw connections to related fields, current events, real-world applications, cutting-edge research, and interdisciplinary perspectives. Enrich the learning experience with broader context and diverse examples from the wider world.`
+    : "";
   const historyText = conversationHistory
     .map((m) => `[${m.role === "ai" ? "AI 튜터" : "학습자"}]: ${m.content}`)
     .join("\n");
@@ -499,8 +506,7 @@ async function generateNextMessage(
           content: `You are an expert educational tutor. The learner has asked you a question.
 Answer their question clearly and thoroughly based on your knowledge of the topic.
 After answering, naturally transition back to the learning session with a follow-up question.
-
-${baseRules}`,
+${baseRules}${openQloopInstruction}`,
         },
         {
           role: "user" as const,
@@ -535,8 +541,7 @@ The learner has answered your question. Follow these strict rules:
    Do NOT always ask open-ended "what do you think" style questions.
 
 3. COMPLETION: If the topic has been thoroughly covered (after 4-6 exchanges), provide a summary and indicate completion.
-
-${baseRules}
+${baseRules}${openQloopInstruction}
 Return a JSON with:
 {
   "feedback": "1-2 sentence feedback only",
@@ -618,6 +623,7 @@ Format the summary with:
 export const appRouter = router({
   system: systemRouter,
   socratic: socraticRouter,
+  library: libraryRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -841,9 +847,9 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const doc = await getDocumentById(input.documentId);
+         const doc = await getDocumentById(input.documentId);
         if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
-
+        const openQloopMode = (doc as any).openQloopEnabled === 1;
         const sessionId = await createLearningSession({
           userId: ctx.user.id,
           documentId: input.documentId,
@@ -854,13 +860,14 @@ export const appRouter = router({
           currentTopicId: input.topicId,
           totalQuestions: 0,
           answeredQuestions: 0,
+          openQloopMode: openQloopMode ? 1 : 0,
         });
-
         // 첫 번째 질문 생성 — 문서 직접 참조 없이 토픽 정보만 사용
         const firstQuestion = await generateFirstQuestion(
           input.topicTitle,
           input.topicDescription,
-          doc.title
+          doc.title,
+          openQloopMode
         );
 
         await createSessionMessage({
@@ -914,12 +921,14 @@ export const appRouter = router({
         }));
 
         // AI 응답 생성 — 문서 직접 참조 없이 순수 문답
+        const sessionOpenQloop = (session as any).openQloopMode === 1;
         const aiResponse = await generateNextMessage(
           doc.title,
           session.startTopicTitle || "",
           history,
           input.content,
-          input.isUserQuestion
+          input.isUserQuestion,
+          sessionOpenQloop
         );
 
         // AI 메시지 저장

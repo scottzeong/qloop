@@ -61,8 +61,9 @@ export const documents = mysqlTable("documents", {
   structure: json("structure"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  // Open QLoop 모드 활성화 여부
+  openQloopEnabled: int("openQloopEnabled").default(0).notNull(),
 });
-
 export type Document = typeof documents.$inferSelect;
 export type InsertDocument = typeof documents.$inferInsert;
 
@@ -83,11 +84,12 @@ export const learningSessions = mysqlTable("learningSessions", {
   reportSent: int("reportSent").default(0),
   // 연결된 학습 모듈 ID
   moduleId: int("moduleId"),
+  // Open QLoop 모드 (학습 세션 시작 시 문서의 설정을 복사)
+  openQloopMode: int("openQloopMode").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   completedAt: timestamp("completedAt"),
 });
-
 export type LearningSession = typeof learningSessions.$inferSelect;
 export type InsertLearningSession = typeof learningSessions.$inferInsert;
 
@@ -320,3 +322,19 @@ export const learnerSocraticProfiles = mysqlTable("learnerSocraticProfiles", {
 });
 
 export type LearnerSocraticProfile = typeof learnerSocraticProfiles.$inferSelect;
+
+// Knowledge Library - 관리자가 선별한 공유 자료
+export const knowledgeLibrary = mysqlTable("knowledgeLibrary", {
+  id: int("id").autoincrement().primaryKey(),
+  documentId: int("documentId").notNull(), // 원본 문서 ID (관리자 소유)
+  addedBy: int("addedBy").notNull(),        // 등록한 관리자 userId
+  title: varchar("title", { length: 512 }).notNull(),
+  description: text("description"),
+  tags: varchar("tags", { length: 512 }),   // 쉼표 구분 태그
+  isPublic: int("isPublic").default(1).notNull(), // 1=공개, 0=비공개
+  downloadCount: int("downloadCount").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type KnowledgeLibraryItem = typeof knowledgeLibrary.$inferSelect;
+export type InsertKnowledgeLibraryItem = typeof knowledgeLibrary.$inferInsert;
