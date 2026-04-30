@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -8,14 +8,42 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BookOpen, Plus, Download, Search, Tag, ArrowLeft, Library, Trash2, Eye, EyeOff } from "lucide-react";
+import {
+  BookOpen, Plus, Download, Search, Tag, ArrowLeft, Library,
+  Trash2, Eye, EyeOff, Upload, CheckSquare, Square, FileText,
+  Loader2, CheckCircle2,
+} from "lucide-react";
 import { toast } from "sonner";
 
-// ─── 학습자 뷰 ────────────────────────────────────────────────────────────────
+// ─── 파일 타입 뱃지 ──────────────────────────────────────────────────────────
+
+function FileTypeBadge({ fileType }: { fileType?: string | null }) {
+  const colors: Record<string, string> = {
+    pdf: "bg-red-100 text-red-700",
+    doc: "bg-blue-100 text-blue-700",
+    docx: "bg-blue-100 text-blue-700",
+    ppt: "bg-orange-100 text-orange-700",
+    pptx: "bg-orange-100 text-orange-700",
+  };
+  if (!fileType) return null;
+  const label = fileType.toUpperCase();
+  const cls = colors[fileType] ?? "bg-gray-100 text-gray-700";
+  return <span className={`text-xs font-bold px-2 py-0.5 rounded ${cls}`}>{label}</span>;
+}
+
+// ─── 태그 파싱 헬퍼 ──────────────────────────────────────────────────────────
+
+function parseTags(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  return raw.split(",").map((t) => t.trim()).filter(Boolean);
+}
+
+// ─── 학습자 뷰 ───────────────────────────────────────────────────────────────
 
 function LearnerView() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTag, setSelectedTag] = useState<string>("all");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const { data: libraryData, refetch: refetchLibrary } = trpc.library.listLibrary.useQuery({
     search: searchQuery || undefined,
@@ -31,14 +59,36 @@ function LearnerView() {
     onError: (err) => toast.error(err.message),
   });
 
-  // 태그 목록 추출
   const allTags = Array.from(
-    new Set(libraryItems.flatMap((item) => {
-      const raw = item.tags;
-      if (!raw) return [];
-      return (raw as string).split(",").map((t: string) => t.trim()).filter(Boolean);
-    }))
+    new Set(libraryItems.flatMap((item) => parseTags(item.tags as string | null)))
   );
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleImportSelected = async () => {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    let success = 0;
+    for (const id of ids) {
+      try {
+        await importMutation.mutateAsync({ libraryItemId: id });
+        success++;
+      } catch {
+        // 개별 오류는 mutation onError에서 처리
+      }
+    }
+    if (success > 0) {
+      toast.success(`${success}개 자료를 내 문서로 가져왔습니다.`);
+      setSelectedIds(new Set());
+    }
+  };
 
   return (
     <>
@@ -66,6 +116,27 @@ function LearnerView() {
         </Select>
       </div>
 
+      {/* 선택 일괄 가져오기 툴바 */}
+      {selectedIds.size > 0 && (
+        <div className="mb-4 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
+          <span className="text-sm text-blue-800 font-medium">{selectedIds.size}개 선택됨</span>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setSelectedIds(new Set())}>
+              선택 해제
+            </Button>
+            <Button
+              size="sm"
+              className="bg-red-600 hover:bg-red-700 text-white gap-2"
+              onClick={handleImportSelected}
+              disabled={importMutation.isPending}
+            >
+              <Download className="w-4 h-4" />
+              선택 자료 가져오기
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* 자료 목록 */}
       {libraryItems.length === 0 ? (
         <div className="text-center py-20 text-muted-foreground">
@@ -76,16 +147,33 @@ function LearnerView() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {libraryItems.map((item) => {
-            const tags = item.tags
-              ? (item.tags as string).split(",").map((t: string) => t.trim()).filter(Boolean)
-              : [];
+            const tags = parseTags(item.tags as string | null);
+            const isSelected = selectedIds.has(item.id);
             return (
-              <Card key={item.id} className="border border-border hover:shadow-md transition-shadow">
+              <Card
+                key={item.id}
+                className={`border transition-all cursor-pointer ${
+                  isSelected
+                    ? "border-red-500 bg-red-50 shadow-md"
+                    : "border-border hover:shadow-md"
+                }`}
+                onClick={() => toggleSelect(item.id)}
+              >
                 <CardHeader className="pb-2">
                   <div className="flex items-start gap-3">
+                    {/* 선택 체크박스 */}
+                    <div className="mt-0.5 flex-shrink-0">
+                      {isSelected
+                        ? <CheckSquare className="w-5 h-5 text-red-600" />
+                        : <Square className="w-5 h-5 text-muted-foreground" />
+                      }
+                    </div>
                     <BookOpen className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <CardTitle className="text-base leading-tight">{item.title}</CardTitle>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <CardTitle className="text-base leading-tight">{item.title}</CardTitle>
+                        <FileTypeBadge fileType={item.fileType} />
+                      </div>
                       {item.description && (
                         <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.description}</p>
                       )}
@@ -99,7 +187,7 @@ function LearnerView() {
                 <CardContent>
                   {tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mb-3">
-                      {tags.map((tag: string) => (
+                      {tags.map((tag) => (
                         <Badge key={tag} variant="secondary" className="text-xs gap-1">
                           <Tag className="w-2.5 h-2.5" />
                           {tag}
@@ -109,9 +197,12 @@ function LearnerView() {
                   )}
                   <Button
                     size="sm"
-                    variant="outline"
-                    className="w-full gap-2 mt-1"
-                    onClick={() => importMutation.mutate({ libraryItemId: item.id })}
+                    variant={isSelected ? "default" : "outline"}
+                    className={`w-full gap-2 mt-1 ${isSelected ? "bg-red-600 hover:bg-red-700 text-white" : ""}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      importMutation.mutate({ libraryItemId: item.id });
+                    }}
                     disabled={importMutation.isPending}
                   >
                     <Download className="w-4 h-4" />
@@ -127,9 +218,30 @@ function LearnerView() {
   );
 }
 
-// ─── 관리자 뷰 ────────────────────────────────────────────────────────────────
+// ─── 관리자 뷰 ───────────────────────────────────────────────────────────────
+
+const ALLOWED_TYPES: Record<string, string> = {
+  "application/pdf": "PDF",
+  "application/msword": "DOC",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",
+  "application/vnd.ms-powerpoint": "PPT",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "PPTX",
+};
+const FILE_ACCEPT = ".pdf,.doc,.docx,.ppt,.pptx";
 
 function AdminView() {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  // 업로드 폼 상태
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [uploadTagInput, setUploadTagInput] = useState("");
+  const [uploadDescInput, setUploadDescInput] = useState("");
+  const [uploadIsPublic, setUploadIsPublic] = useState(true);
+
+  // 기존 문서 추가 다이얼로그
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [selectedDocId, setSelectedDocId] = useState<string>("");
   const [tagInput, setTagInput] = useState("");
@@ -139,6 +251,21 @@ function AdminView() {
   const adminItems = adminData?.items ?? [];
 
   const { data: myDocs } = trpc.document.list.useQuery();
+
+  const uploadAndRegisterMutation = trpc.library.uploadAndRegister.useMutation({
+    onSuccess: (data) => {
+      if (data.analysisStatus === "done") {
+        toast.success("파일이 Library에 등록되었습니다! AI 분석이 완료되었습니다.");
+      } else {
+        toast.warning("파일이 등록되었으나 AI 분석이 완료되지 않았습니다. 잠시 후 다시 확인하세요.");
+      }
+      setPendingFile(null);
+      setUploadTagInput("");
+      setUploadDescInput("");
+      refetchAdmin();
+    },
+    onError: (err) => toast.error(`업로드 실패: ${err.message}`),
+  });
 
   const addMutation = trpc.library.addToLibrary.useMutation({
     onSuccess: () => {
@@ -153,22 +280,66 @@ function AdminView() {
   });
 
   const removeMutation = trpc.library.removeFromLibrary.useMutation({
-    onSuccess: () => {
-      toast.success("라이브러리에서 제거되었습니다.");
-      refetchAdmin();
-    },
+    onSuccess: () => { toast.success("라이브러리에서 제거되었습니다."); refetchAdmin(); },
     onError: (err) => toast.error(err.message),
   });
 
   const toggleVisibilityMutation = trpc.library.toggleLibraryVisibility.useMutation({
-    onSuccess: () => {
-      toast.success("공개 상태가 변경되었습니다.");
-      refetchAdmin();
-    },
+    onSuccess: () => { toast.success("공개 상태가 변경되었습니다."); refetchAdmin(); },
     onError: (err) => toast.error(err.message),
   });
 
-  const handleAdd = () => {
+  const handleFileSelect = useCallback((file: File) => {
+    if (!ALLOWED_TYPES[file.type]) {
+      toast.error("PDF, DOC, DOCX, PPT, PPTX 파일만 업로드할 수 있습니다.");
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error("파일 크기는 20MB 이하여야 합니다.");
+      return;
+    }
+    setPendingFile(file);
+  }, []);
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileSelect(file);
+  }, [handleFileSelect]);
+
+  const handleUploadAndRegister = async () => {
+    if (!pendingFile) return;
+    setUploading(true);
+    setUploadProgress(20);
+    try {
+      const reader = new FileReader();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve((reader.result as string).split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(pendingFile);
+      });
+      setUploadProgress(50);
+      toast.info("AI 분석 중... 잠시 기다려주세요.", { duration: 10000 });
+      await uploadAndRegisterMutation.mutateAsync({
+        fileName: pendingFile.name,
+        fileData: base64,
+        fileSize: pendingFile.size,
+        mimeType: pendingFile.type,
+        description: uploadDescInput.trim() || undefined,
+        tags: uploadTagInput.split(",").map((t) => t.trim()).filter(Boolean).join(",") || undefined,
+        isPublic: uploadIsPublic,
+      });
+      setUploadProgress(100);
+    } catch {
+      // onError에서 처리
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleAddExisting = () => {
     if (!selectedDocId) return toast.error("문서를 선택해주세요.");
     const tags = tagInput.split(",").map((t) => t.trim()).filter(Boolean).join(",");
     addMutation.mutate({
@@ -180,78 +351,209 @@ function AdminView() {
 
   return (
     <>
-      <div className="flex justify-between items-center mb-6">
-        <p className="text-sm text-muted-foreground">총 {adminItems.length}개 자료 등록됨</p>
-        <Button onClick={() => setAddDialogOpen(true)} size="sm" className="bg-red-600 hover:bg-red-700 text-white gap-2">
-          <Plus className="w-4 h-4" />
-          자료 추가
-        </Button>
+      {/* 파일 직접 업로드 영역 */}
+      <div className="mb-8">
+        <h2 className="text-sm font-bold uppercase tracking-widest mb-3 text-muted-foreground">새 자료 직접 업로드</h2>
+
+        {!pendingFile ? (
+          <div
+            className={`border-2 border-dashed rounded-lg p-10 text-center transition-colors cursor-pointer ${
+              dragging ? "border-red-500 bg-red-50" : "border-border hover:border-red-400 hover:bg-gray-50"
+            }`}
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
+            <p className="font-medium text-sm">파일을 드래그하거나 클릭하여 업로드</p>
+            <p className="text-xs text-muted-foreground mt-1">PDF, DOC, DOCX, PPT, PPTX · 최대 20MB</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={FILE_ACCEPT}
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
+            />
+          </div>
+        ) : (
+          <div className="border border-border rounded-lg p-5 space-y-4">
+            {/* 선택된 파일 표시 */}
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <FileText className="w-8 h-8 text-red-600 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm truncate">{pendingFile.name}</p>
+                <p className="text-xs text-muted-foreground">{(pendingFile.size / 1024 / 1024).toFixed(1)} MB</p>
+              </div>
+              <button
+                onClick={() => setPendingFile(null)}
+                className="text-muted-foreground hover:text-red-600 transition-colors text-xs"
+              >
+                변경
+              </button>
+            </div>
+
+            {/* 메타데이터 입력 */}
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <label className="text-xs font-medium mb-1 block">설명 (선택)</label>
+                <Input
+                  placeholder="학습자에게 보여줄 자료 설명"
+                  value={uploadDescInput}
+                  onChange={(e) => setUploadDescInput(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium mb-1 block">태그 (쉼표로 구분)</label>
+                <Input
+                  placeholder="예: 수학, 미적분, 기초"
+                  value={uploadTagInput}
+                  onChange={(e) => setUploadTagInput(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="text-xs font-medium">공개 여부</label>
+                <button
+                  onClick={() => setUploadIsPublic((v) => !v)}
+                  className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                    uploadIsPublic
+                      ? "bg-green-50 border-green-400 text-green-700"
+                      : "bg-gray-50 border-gray-300 text-gray-600"
+                  }`}
+                >
+                  {uploadIsPublic ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                  {uploadIsPublic ? "공개" : "비공개"}
+                </button>
+              </div>
+            </div>
+
+            {/* 업로드 진행 바 */}
+            {uploading && (
+              <div className="w-full bg-gray-200 rounded-full h-1.5">
+                <div
+                  className="bg-red-600 h-1.5 rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            )}
+
+            {/* 액션 버튼 */}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPendingFile(null)}
+                disabled={uploading}
+              >
+                취소
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white gap-2"
+                onClick={handleUploadAndRegister}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> AI 분석 중...</>
+                ) : (
+                  <><CheckCircle2 className="w-4 h-4" /> Library에 등록</>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {adminItems.length === 0 ? (
-        <div className="text-center py-20 text-muted-foreground">
-          <Library className="w-12 h-12 mx-auto mb-4 opacity-30" />
-          <p className="text-lg font-medium">등록된 자료가 없습니다.</p>
-          <p className="text-sm mt-2">'자료 추가' 버튼으로 첫 번째 자료를 등록하세요.</p>
+      {/* 기존 문서에서 추가 */}
+      <div className="mb-8">
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">기존 문서에서 추가</h2>
+          <Button onClick={() => setAddDialogOpen(true)} size="sm" variant="outline" className="gap-2">
+            <Plus className="w-4 h-4" />
+            내 문서에서 선택
+          </Button>
         </div>
-      ) : (
-        <div className="space-y-3">
-          {adminItems.map((item) => {
-            const tags = item.tags
-              ? (item.tags as string).split(",").map((t: string) => t.trim()).filter(Boolean)
-              : [];
-            const isPublic = item.isPublic === 1;
-            return (
-              <div key={item.id} className="border border-border rounded-lg p-4 flex items-start gap-4">
-                <BookOpen className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-sm">{item.title}</span>
-                    <Badge variant={isPublic ? "default" : "secondary"} className="text-xs">
-                      {isPublic ? "공개" : "비공개"}
-                    </Badge>
-                    {tags.map((tag: string) => (
-                      <Badge key={tag} variant="outline" className="text-xs gap-1">
-                        <Tag className="w-2.5 h-2.5" />
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    등록일: {new Date(item.createdAt as unknown as string).toLocaleDateString("ko-KR")}
-                    {item.downloadCount ? ` · 다운로드 ${item.downloadCount}회` : ""}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <button
-                    onClick={() => toggleVisibilityMutation.mutate({ libraryItemId: item.id, isPublic: !isPublic })}
-                    className="text-muted-foreground hover:text-foreground transition-colors"
-                    title={isPublic ? "비공개로 전환" : "공개로 전환"}
-                  >
-                    {isPublic ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (!window.confirm("라이브러리에서 제거하시겠습니까?")) return;
-                      removeMutation.mutate({ libraryItemId: item.id });
-                    }}
-                    className="text-muted-foreground hover:text-red-600 transition-colors"
-                    title="라이브러리에서 제거"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      </div>
 
-      {/* 자료 추가 다이얼로그 */}
+      {/* 등록된 자료 목록 */}
+      <div>
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">
+            등록된 자료 ({adminItems.length}개)
+          </h2>
+        </div>
+
+        {adminItems.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground border border-dashed rounded-lg">
+            <Library className="w-10 h-10 mx-auto mb-3 opacity-30" />
+            <p className="text-sm">등록된 자료가 없습니다.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {adminItems.map((item) => {
+              const tags = parseTags(item.tags as string | null);
+              const isPublic = item.isPublic === 1;
+              return (
+                <div key={item.id} className="border border-border rounded-lg p-4 flex items-start gap-4">
+                  <BookOpen className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm">{item.title}</span>
+                      <FileTypeBadge fileType={item.fileType} />
+                      <Badge variant={isPublic ? "default" : "secondary"} className="text-xs">
+                        {isPublic ? "공개" : "비공개"}
+                      </Badge>
+                      {item.analysisStatus === "done" && (
+                        <Badge variant="outline" className="text-xs text-green-700 border-green-400">
+                          분석완료
+                        </Badge>
+                      )}
+                      {tags.map((tag) => (
+                        <Badge key={tag} variant="outline" className="text-xs gap-1">
+                          <Tag className="w-2.5 h-2.5" />
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                    {item.description && (
+                      <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-1">
+                      등록일: {new Date(item.createdAt as unknown as string).toLocaleDateString("ko-KR")}
+                      {item.downloadCount ? ` · 다운로드 ${item.downloadCount}회` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => toggleVisibilityMutation.mutate({ libraryItemId: item.id, isPublic: !isPublic })}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                      title={isPublic ? "비공개로 전환" : "공개로 전환"}
+                    >
+                      {isPublic ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!window.confirm("라이브러리에서 제거하시겠습니까?")) return;
+                        removeMutation.mutate({ libraryItemId: item.id });
+                      }}
+                      className="text-muted-foreground hover:text-red-600 transition-colors"
+                      title="라이브러리에서 제거"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* 기존 문서 추가 다이얼로그 */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Knowledge Library에 자료 추가</DialogTitle>
+            <DialogTitle>내 문서에서 Library에 추가</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
@@ -289,7 +591,7 @@ function AdminView() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddDialogOpen(false)}>취소</Button>
             <Button
-              onClick={handleAdd}
+              onClick={handleAddExisting}
               disabled={addMutation.isPending}
               className="bg-red-600 hover:bg-red-700 text-white"
             >
@@ -302,13 +604,13 @@ function AdminView() {
   );
 }
 
-// ─── 메인 페이지 ──────────────────────────────────────────────────────────────
+// ─── 메인 페이지 ─────────────────────────────────────────────────────────────
 
 export default function KnowledgeLibrary() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
-  const [activeTab, setActiveTab] = useState<"browse" | "manage">("browse");
+  const [activeTab, setActiveTab] = useState<"browse" | "manage">(isAdmin ? "manage" : "browse");
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -329,13 +631,23 @@ export default function KnowledgeLibrary() {
         <div className="mb-6 p-4 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-sm">
           <strong>Knowledge Library</strong>는 관리자가 선별한 학습 자료 모음입니다.
           {isAdmin
-            ? " 자료를 추가하거나 제거하여 학습자들이 활용할 수 있도록 관리하세요."
-            : " 원하는 자료를 내 문서로 가져와 학습을 시작하세요."}
+            ? " 파일을 직접 업로드하거나 기존 문서를 추가하여 학습자들이 활용할 수 있도록 관리하세요."
+            : " 카드를 클릭하여 선택하거나, 바로 가져오기 버튼을 눌러 내 문서로 복사할 수 있습니다."}
         </div>
 
-        {/* 관리자 탭 */}
+        {/* 탭 (관리자만) */}
         {isAdmin && (
           <div className="flex gap-0 border-b border-border mb-6">
+            <button
+              onClick={() => setActiveTab("manage")}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                activeTab === "manage"
+                  ? "border-red-600 text-red-600"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              자료 관리
+            </button>
             <button
               onClick={() => setActiveTab("browse")}
               className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
@@ -345,16 +657,6 @@ export default function KnowledgeLibrary() {
               }`}
             >
               학습자 뷰 미리보기
-            </button>
-            <button
-              onClick={() => setActiveTab("manage")}
-              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                activeTab === "manage"
-                  ? "border-red-600 text-red-600"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              관리자 관리
             </button>
           </div>
         )}

@@ -152,3 +152,8 @@
 - [x] UI: 관리자 Knowledge Library 관리 탭
 - [x] UI: DocumentDetail에 Open QLoop 토글
 - [x] UI: Dashboard에 Knowledge Library 메뉴 추가
+
+## v3.1 Knowledge Library 관리자 직접 업로드
+- [x] 백엔드: library.uploadAndRegister 프로시저 (파일 업로드 → 분석 → Library 등록 원스텝)
+- [x] UI: 관리자 뷰에 파일 드래그앤드롭 업로드 영역 추가 (기존 문서 선택 방식과 병행)
+- [x] UI: 학습자 뷰 카드에 "가져오기" 버튼 → 선택 체크박스 + 일괄 가져오기 UX 개선
