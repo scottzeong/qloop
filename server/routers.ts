@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
+import mammoth from "mammoth";
+import { parseOffice } from "officeparser";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -146,6 +148,34 @@ const MIME_TO_LLM_TYPE: Record<AllowedMime, "application/pdf"> = {
 
 // ─── AI Helpers ───────────────────────────────────────────────────────────────
 
+/**
+ * Word/PPT 파일에서 텍스트를 추출하는 헬퍼
+ * - docx: mammoth 사용
+ * - doc/ppt/pptx: officeparser 사용
+ */
+async function extractTextFromOfficeFile(fileUrl: string, mimeType: string): Promise<string | null> {
+  try {
+    // S3 signed URL에서 파일 다운로드
+    const res = await fetch(fileUrl);
+    if (!res.ok) throw new Error(`파일 다운로드 실패: ${res.status}`);
+    const arrayBuffer = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+      // DOCX → mammoth으로 텍스트 추출 (가장 안정적)
+      const result = await mammoth.extractRawText({ buffer });
+      return result.value || null;
+    } else {
+      // DOC / PPT / PPTX → officeparser 사용 (새 async API)
+      const ast = await parseOffice(buffer);
+      return ast.toText() || null;
+    }
+  } catch (e) {
+    console.error("[extractTextFromOfficeFile] 텍스트 추출 실패:", e);
+    return null;
+  }
+}
+
 async function analyzeDocumentStructure(
   fileUrl: string,
   docTitle: string,
@@ -178,23 +208,38 @@ For learningPath:
 Be thorough. Use the same language as the document (Korean if Korean).
 Return ONLY valid JSON matching the schema exactly.`;
 
-  const llmMime = (MIME_TO_LLM_TYPE[mimeType as AllowedMime]) ?? "application/pdf";
+  // PDF는 file_url로 직접 전달, Word/PPT는 텍스트 추출 후 텍스트로 전달
+  const isPdf = mimeType === "application/pdf";
+  let userContent: Message["content"];
+
+  if (isPdf) {
+    userContent = [
+      {
+        type: "file_url" as const,
+        file_url: { url: fileUrl, mime_type: "application/pdf" },
+      },
+      {
+        type: "text" as const,
+        text: `Please analyze this document titled "${docTitle}" and return the hierarchical structure as JSON.`,
+      },
+    ];
+  } else {
+    // Word/PPT: 텍스트 추출 후 텍스트로 분석
+    const extractedText = await extractTextFromOfficeFile(fileUrl, mimeType);
+    if (!extractedText || extractedText.trim().length < 50) {
+      throw new Error("파일에서 텍스트를 추출할 수 없습니다. 파일이 손상되었거나 내용이 없습니다.");
+    }
+    // 너무 긴 텍스트는 앞부분 50,000자로 제한 (LLM 토큰 한도)
+    const truncated = extractedText.length > 50000 ? extractedText.slice(0, 50000) + "\n...[truncated]" : extractedText;
+    userContent = `Please analyze this document titled "${docTitle}".\n\nDocument content:\n${truncated}\n\nReturn the hierarchical structure as JSON.`;
+  }
 
   const response = await invokeLLM({
     messages: [
       { role: "system", content: systemPrompt },
       {
         role: "user" as const,
-        content: [
-          {
-            type: "file_url" as const,
-            file_url: { url: fileUrl, mime_type: llmMime },
-          },
-          {
-            type: "text" as const,
-            text: `Please analyze this document titled "${docTitle}" and return the hierarchical structure as JSON.`,
-          },
-        ],
+        content: userContent,
       },
     ] satisfies Message[],
     response_format: {

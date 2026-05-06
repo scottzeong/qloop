@@ -9,6 +9,8 @@ import {
 import { eq, and, desc, like, or } from "drizzle-orm";
 import { storagePut, storageGetSignedUrl } from "../storage";
 import { invokeLLM, type Message } from "../_core/llm";
+import mammoth from "mammoth";
+import { parseOffice } from "officeparser";
 
 // ─── 허용 MIME 타입 ────────────────────────────────────────────────────────────
 
@@ -40,6 +42,21 @@ const MIME_TO_LLM_TYPE: Record<AllowedMime, "application/pdf"> = {
   "application/vnd.openxmlformats-officedocument.presentationml.presentation": "application/pdf",
 };
 
+async function extractTextForLibrary(fileUrl: string, mimeType: string): Promise<string | null> {
+  try {
+    const res = await fetch(fileUrl);
+    if (!res.ok) return null;
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+      const result = await mammoth.extractRawText({ buffer });
+      return result.value || null;
+    } else {
+      const ast = await parseOffice(buffer);
+      return ast.toText() || null;
+    }
+  } catch { return null; }
+}
+
 async function analyzeDocForLibrary(fileUrl: string, docTitle: string, mimeType: string = "application/pdf") {
   const systemPrompt = `You are an expert educational content analyzer.
 Analyze the provided document comprehensively and extract its structure in MULTIPLE formats simultaneously.
@@ -57,16 +74,27 @@ For learningPath: estimatedMinutes per step.
 Be thorough. Use the same language as the document (Korean if Korean).
 Return ONLY valid JSON matching the schema exactly.`;
 
+  // PDF는 file_url로 직접, Word/PPT는 텍스트 추출 후 텍스트로 전달
+  const isPdf = mimeType === "application/pdf";
+  let userContent: Message["content"];
+  if (isPdf) {
+    userContent = [
+      { type: "file_url" as const, file_url: { url: fileUrl, mime_type: "application/pdf" } },
+      { type: "text" as const, text: `Please analyze this document titled "${docTitle}" and return the hierarchical structure as JSON.` },
+    ];
+  } else {
+    const extractedText = await extractTextForLibrary(fileUrl, mimeType);
+    if (!extractedText || extractedText.trim().length < 50) {
+      throw new Error("파일에서 텍스트를 추출할 수 없습니다.");
+    }
+    const truncated = extractedText.length > 50000 ? extractedText.slice(0, 50000) + "\n...[truncated]" : extractedText;
+    userContent = `Please analyze this document titled "${docTitle}".\n\nDocument content:\n${truncated}\n\nReturn the hierarchical structure as JSON.`;
+  }
+
   const response = await invokeLLM({
     messages: [
       { role: "system", content: systemPrompt },
-      {
-        role: "user" as const,
-        content: [
-          { type: "file_url" as const, file_url: { url: fileUrl, mime_type: (MIME_TO_LLM_TYPE[mimeType as AllowedMime] ?? "application/pdf") as "application/pdf" } },
-          { type: "text" as const, text: `Please analyze this document titled "${docTitle}" and return the hierarchical structure as JSON.` },
-        ],
-      },
+      { role: "user" as const, content: userContent },
     ] satisfies Message[],
     response_format: {
       type: "json_schema",
