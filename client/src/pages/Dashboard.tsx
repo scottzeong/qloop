@@ -96,7 +96,13 @@ export default function Dashboard() {
         return;
       }
       if (file.size > 20 * 1024 * 1024) {
-        toast.error("파일 크기는 20MB 이하여야 합니다.");
+        const fileMB = (file.size / 1024 / 1024).toFixed(1);
+        const hint = file.type.includes("word") || file.name.endsWith(".docx") || file.name.endsWith(".doc")
+          ? " Word 파일은 [구성요소] → [그림 압축]으로 이미지를 줄이세요."
+          : file.type.includes("presentation") || file.name.endsWith(".pptx") || file.name.endsWith(".ppt")
+          ? " PPT 파일은 슬라이드 이미지를 150dpi 이하로 줄이세요."
+          : " 파일을 압축하거나 분할하여 업로드하세요.";
+        toast.error(`파일 크기 초과 (${fileMB}MB / 제한 20MB).${hint}`, { duration: 6000 });
         return;
       }
 

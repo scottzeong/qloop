@@ -67,6 +67,8 @@ export const documents = mysqlTable("documents", {
   selectedStructure: mysqlEnum("selectedStructure", ["tree", "conceptMap", "learningPath"]),
   // 구조 선택 후 잠금 여부 (재분석 시 초기화)
   structureLocked: int("structureLocked").default(0).notNull(),
+  // 분석 단계 상세 상태 (실시간 진행 표시용)
+  analysisStep: mysqlEnum("analysisStep", ["uploading", "extracting", "structuring", "done", "error"]),
 });
 export type Document = typeof documents.$inferSelect;
 export type InsertDocument = typeof documents.$inferInsert;

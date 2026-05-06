@@ -779,33 +779,33 @@ export const appRouter = router({
           storageUrl: url,
           fileSize: input.fileSize,
           analysisStatus: "pending",
+          analysisStep: "uploading",
         });
-
         return { documentId: docId, storageUrl: url };
       }),
 
     // AI 구조 분석 시작
-    analyze: protectedProcedure
+     analyze: protectedProcedure
       .input(z.object({ documentId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const doc = await getDocumentById(input.documentId);
         if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
-
-        await updateDocumentAnalysis(input.documentId, "analyzing");
-
+        // 단계 1: extracting (파일 접근 중)
+        await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "extracting");
         try {
           const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, "");
           const signedUrl = await storageGetSignedUrl(actualKey);
           const mimeForAnalysis = doc.fileType === "pdf" ? "application/pdf" : doc.fileType === "doc" ? "application/msword" : doc.fileType === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : doc.fileType === "ppt" ? "application/vnd.ms-powerpoint" : doc.fileType === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/pdf";
+          // 단계 2: structuring (AI 구조 분석 중)
+          await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "structuring");
           const structure = await analyzeDocumentStructure(signedUrl, doc.title, mimeForAnalysis);
-          await updateDocumentAnalysis(input.documentId, "done", structure);
+          await updateDocumentAnalysis(input.documentId, "done", structure, undefined, "done");
           return { success: true, structure };
         } catch (e) {
-          await updateDocumentAnalysis(input.documentId, "error");
+          await updateDocumentAnalysis(input.documentId, "error", undefined, undefined, "error");
           throw e;
         }
       }),
-
     // 문서 목록 조회 (단독 문서만)
     list: protectedProcedure.query(async ({ ctx }) => {
       return getStandaloneDocumentsByUserId(ctx.user.id);
@@ -866,17 +866,19 @@ export const appRouter = router({
           selectedStructure: null,
           structureLocked: 0,
           analysisStatus: "analyzing",
+          analysisStep: "extracting",
           structure: null,
         }).where(eq(documents.id, input.documentId));
         try {
           const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, "");
           const signedUrl = await storageGetSignedUrl(actualKey);
           const mimeForAnalysis = doc.fileType === "pdf" ? "application/pdf" : doc.fileType === "doc" ? "application/msword" : doc.fileType === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : doc.fileType === "ppt" ? "application/vnd.ms-powerpoint" : doc.fileType === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/pdf";
+          await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "structuring");
           const structure = await analyzeDocumentStructure(signedUrl, doc.title, mimeForAnalysis);
-          await updateDocumentAnalysis(input.documentId, "done", structure);
+          await updateDocumentAnalysis(input.documentId, "done", structure, undefined, "done");
           return { success: true, structure };
         } catch (e) {
-          await updateDocumentAnalysis(input.documentId, "error");
+          await updateDocumentAnalysis(input.documentId, "error", undefined, undefined, "error");
           throw e;
         }
       }),

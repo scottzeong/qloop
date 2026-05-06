@@ -771,7 +771,14 @@ export default function DocumentDetail() {
 
   const { data: doc, isLoading, refetch } = trpc.document.get.useQuery(
     { documentId: docId },
-    { enabled: isAuthenticated && !!docId }
+    {
+      enabled: isAuthenticated && !!docId,
+      // 분석 중일 때 2초마다 폴링하여 단계 업데이트 반영
+      refetchInterval: (query) => {
+        const d = query.state.data as any;
+        return d?.analysisStatus === "analyzing" ? 2000 : false;
+      },
+    }
   );
 
   // 구조 선택 state
@@ -1009,24 +1016,78 @@ export default function DocumentDetail() {
           </div>
         )}
 
-        {/* 분석 중 */}
-        {isAnalyzing && (
-          <div className="border border-black p-12 text-center space-y-4">
-            <div className="w-8 h-8 border-2 border-black border-t-transparent animate-spin mx-auto" />
-            <p className="font-bold">AI가 문서를 분석하고 있습니다…</p>
-            <p className="text-sm text-black/50">목차 트리, 개념 맵, 핵심 카드, 타임라인, 비교표, 학습 경로를 동시에 추출 중입니다.</p>
-          </div>
-        )}
+        {/* 분석 중 - 단계별 진행 표시 */}
+        {isAnalyzing && (() => {
+          const step = (doc as any)?.analysisStep as string | undefined;
+          type StepInfo = { key: string; label: string; desc: string };
+          const steps: StepInfo[] = [
+            { key: "uploading", label: "업로드 완료", desc: "파일이 서버에 저장되었습니다" },
+            { key: "extracting", label: "파일 접근 중", desc: "AI가 파일을 읽고 있습니다" },
+            { key: "structuring", label: "AI 구조 분석 중", desc: "목차 트리, 개념 맵, 학습 경로를 추출하고 있습니다" },
+            { key: "done", label: "분석 완료", desc: "모든 구조 추출이 완료되었습니다" },
+          ];
+          const currentIdx = steps.findIndex(s => s.key === step);
+          const activeIdx = currentIdx >= 0 ? currentIdx : 1;
+          return (
+            <div className="border border-black p-12 text-center space-y-6">
+              <div className="w-8 h-8 border-2 border-black border-t-transparent animate-spin mx-auto" />
+              <p className="font-bold text-lg">AI가 문서를 분석하고 있습니다</p>
+              {/* 단계 표시바 - 4단계 전체 */}
+              <div className="flex items-center justify-center gap-0 max-w-2xl mx-auto">
+                {steps.map((s, i) => (
+                  <div key={s.key} className="flex items-center">
+                    <div className="flex flex-col items-center gap-1">
+                      <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-all ${
+                        i < activeIdx ? "bg-black border-black text-white" :
+                        i === activeIdx ? "bg-red-600 border-red-600 text-white animate-pulse" :
+                        "bg-white border-gray-300 text-gray-400"
+                      }`}>
+                        {i < activeIdx ? "✓" : i + 1}
+                      </div>
+                      <span className={`text-xs font-bold uppercase tracking-wider whitespace-nowrap ${
+                        i === activeIdx ? "text-red-600" : i < activeIdx ? "text-black" : "text-gray-400"
+                      }`}>{s.label}</span>
+                    </div>
+                    {i < steps.length - 1 && (
+                      <div className={`w-12 h-0.5 mx-1 mb-5 ${
+                        i < activeIdx ? "bg-black" : "bg-gray-200"
+                      }`} />
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="text-sm text-black/60">{steps[activeIdx]?.desc}</p>
+            </div>
+          );
+        })()}
 
         {/* 분석 오류 */}
         {doc.analysisStatus === "error" && !isAnalyzing && (
-          <div className="border border-red-600 p-6 space-y-3">
-            <p className="font-bold text-red-600">분석 중 오류가 발생했습니다.</p>
+          <div className="border border-red-600 p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-bold text-red-600">분석 중 오류가 발생했습니다.</p>
+                <p className="text-sm text-black/60">아래 안내를 확인하고 분석 재시도해 주세요.</p>
+              </div>
+            </div>
+            {/* 파일 형식별 압축 안내 */}
+            <div className="bg-red-50 border border-red-200 p-4 rounded space-y-2 text-sm">
+              <p className="font-bold text-red-700">파일 크기 또는 형식 문제일 수 있습니다:</p>
+              <ul className="space-y-1 text-red-600">
+                <li>• <strong>Word (.docx)</strong>: 문서 내 이미지를 압축하세요. [구성요소] → [그림 압축]</li>
+                <li>• <strong>PPT (.pptx)</strong>: 슬라이드 이미지를 150dpi 이하로 줄이세요.</li>
+                <li>• <strong>PDF</strong>: 스캔 PDF는 텍스트 추출이 안 될 수 있습니다. 원본 파일로 저장하세요.</li>
+                <li>• 파일 크기가 <strong>20MB</strong>를 초과하지 않는지 확인하세요.</li>
+              </ul>
+            </div>
             <button
               onClick={() => analyzeMutation.mutate({ documentId: docId })}
-              className="bg-red-600 text-white text-xs font-bold uppercase tracking-widest px-4 py-2 hover:bg-red-700 transition-colors"
+              disabled={analyzeMutation.isPending}
+              className="flex items-center gap-2 bg-red-600 text-white text-xs font-bold uppercase tracking-widest px-4 py-2 hover:bg-red-700 transition-colors disabled:opacity-50"
             >
-              다시 시도
+              <RotateCcw className="w-3.5 h-3.5" />
+              분석 재시도
             </button>
           </div>
         )}

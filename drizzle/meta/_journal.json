@@ -50,6 +50,13 @@
       "when": 1778067249443,
       "tag": "0006_strange_quicksilver",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1778078059939,
+      "tag": "0007_living_doomsday",
+      "breakpoints": true
     }
   ]
 }

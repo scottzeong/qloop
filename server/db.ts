@@ -187,7 +187,8 @@ export async function updateDocumentAnalysis(
   id: number,
   status: "pending" | "analyzing" | "done" | "error",
   structure?: unknown,
-  pageCount?: number
+  pageCount?: number,
+  analysisStep?: "uploading" | "extracting" | "structuring" | "done" | "error"
 ) {
   const db = await getDb();
   if (!db) return;
@@ -197,6 +198,7 @@ export async function updateDocumentAnalysis(
       analysisStatus: status,
       ...(structure !== undefined ? { structure } : {}),
       ...(pageCount !== undefined ? { pageCount } : {}),
+      ...(analysisStep !== undefined ? { analysisStep } : {}),
     })
     .where(eq(documents.id, id));
 }
