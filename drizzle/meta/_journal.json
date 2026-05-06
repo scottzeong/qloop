@@ -43,6 +43,13 @@
       "when": 1777516340288,
       "tag": "0005_public_shinko_yamashiro",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1778067249443,
+      "tag": "0006_strange_quicksilver",
+      "breakpoints": true
     }
   ]
 }

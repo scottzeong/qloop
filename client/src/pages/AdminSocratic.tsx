@@ -54,17 +54,17 @@ function QuestionTypeManager() {
                   <span className="text-xs text-gray-500 truncate max-w-xs">{t.description}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className={`text-xs px-2 py-0.5 border ${t.defaultEnabled ? "border-green-300 text-green-700 bg-green-50" : "border-gray-200 text-gray-400"}`}>
-                    {t.defaultEnabled ? "활성" : "비활성"}
+                  <span className="text-xs px-2 py-0.5 border border-black text-black hover:bg-black hover:text-white transition-colors cursor-pointer">
+                    Edit
                   </span>
                   {isEditing ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </div>
               </button>
               {isEditing && (
-                <div className="border-t border-gray-100 p-4 bg-gray-50 space-y-3">
+                <div className="border-t border-gray-100 p-4 bg-gray-50 space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="swiss-label mb-1">표시 이름</label>
+                      <label className="swiss-label mb-1 block">표시 이름</label>
                       <input
                         className="w-full border border-gray-300 px-3 py-2 text-sm"
                         value={form.displayName}
@@ -72,7 +72,7 @@ function QuestionTypeManager() {
                       />
                     </div>
                     <div>
-                      <label className="swiss-label mb-1">목적</label>
+                      <label className="swiss-label mb-1 block">목적</label>
                       <input
                         className="w-full border border-gray-300 px-3 py-2 text-sm"
                         value={form.purpose}
@@ -81,17 +81,20 @@ function QuestionTypeManager() {
                     </div>
                   </div>
                   <div>
-                    <label className="swiss-label mb-1">설명</label>
+                    <label className="swiss-label mb-1 block">설명</label>
                     <textarea
-                      className="w-full border border-gray-300 px-3 py-2 text-sm h-16 resize-none"
+                      className="w-full border border-gray-300 px-3 py-2 text-sm resize-y"
+                      style={{ minHeight: '80px' }}
                       value={form.description}
                       onChange={(e) => setForm({ ...form, description: e.target.value })}
                     />
                   </div>
                   <div>
-                    <label className="swiss-label mb-1">프롬프트 지시문</label>
+                    <label className="swiss-label mb-1 block">프롬프트 지시문</label>
+                    <p className="text-xs text-gray-400 mb-1">AI가 이 질문 유형을 생성할 때 사용하는 지시문입니다.</p>
                     <textarea
-                      className="w-full border border-gray-300 px-3 py-2 text-sm h-24 resize-none font-mono text-xs"
+                      className="w-full border border-gray-300 px-3 py-2 text-sm resize-y"
+                      style={{ minHeight: '120px' }}
                       value={form.promptInstruction}
                       onChange={(e) => setForm({ ...form, promptInstruction: e.target.value })}
                     />
@@ -162,8 +165,8 @@ function DimensionManager() {
                   <span className="text-xs text-gray-500 truncate max-w-sm">{d.description}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className={`text-xs px-2 py-0.5 border ${d.enabled ? "border-green-300 text-green-700 bg-green-50" : "border-gray-200 text-gray-400"}`}>
-                    {d.enabled ? "활성" : "비활성"}
+                  <span className="text-xs px-2 py-0.5 border border-black text-black hover:bg-black hover:text-white transition-colors cursor-pointer">
+                    Edit
                   </span>
                   {isEditing ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </div>
@@ -331,7 +334,7 @@ function PolicyEditor() {
     enabledDimensionIds: [] as number[],
     isDefault: 0,
     maxQuestionsPerSession: 15,
-    minQuestionsPerSession: 5,
+    minQuestionsPerSession: 10,
   });
 
   const startNew = () => {
@@ -343,7 +346,7 @@ function PolicyEditor() {
       enabledDimensionIds: (dims ?? []).map((d) => d.id),
       isDefault: 0,
       maxQuestionsPerSession: 15,
-      minQuestionsPerSession: 5,
+      minQuestionsPerSession: 10,
     });
     setEditing("new");
   };
@@ -357,7 +360,7 @@ function PolicyEditor() {
       enabledDimensionIds: (p.enabledDimensionIdsJson as number[]) ?? [],
       isDefault: p.isDefault ?? 0,
       maxQuestionsPerSession: ((p.constraintsJson as { maxQuestionsPerSession?: number }) ?? {}).maxQuestionsPerSession ?? 15,
-      minQuestionsPerSession: ((p.constraintsJson as { minQuestionsPerSession?: number }) ?? {}).minQuestionsPerSession ?? 5,
+      minQuestionsPerSession: ((p.constraintsJson as { minQuestionsPerSession?: number }) ?? {}).minQuestionsPerSession ?? 10,
     });
     setEditing(p.id);
   };
@@ -465,9 +468,10 @@ function PolicyEditor() {
               <label className="swiss-label mb-1">최소 질문 수</label>
               <input
                 type="number"
+                min={10}
                 className="w-full border border-gray-300 px-3 py-2 text-sm"
                 value={form.minQuestionsPerSession}
-                onChange={(e) => setForm({ ...form, minQuestionsPerSession: Number(e.target.value) })}
+                onChange={(e) => setForm({ ...form, minQuestionsPerSession: Math.max(10, Number(e.target.value)) })}
               />
             </div>
             <div>
@@ -574,7 +578,7 @@ export default function AdminSocratic() {
               <ArrowLeft size={12} /> 대시보드
             </button>
             <div className="w-px h-4 bg-black" />
-            <span className="text-sm font-bold">Socratic 시스템 관리</span>
+            <span className="text-sm font-bold">뉴럴시스템 관리</span>
           </div>
           <span className="text-xs text-gray-400">Admin</span>
         </div>

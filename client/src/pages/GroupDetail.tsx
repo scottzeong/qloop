@@ -4,7 +4,8 @@ import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Folder, FileText, BookOpen, ChevronRight, BarChart2, LogOut } from "lucide-react";
+import { ArrowLeft, Folder, FileText, BookOpen, ChevronRight, BarChart2, LogOut, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function GroupDetail() {
   const { user, loading, isAuthenticated, logout } = useAuth();
@@ -18,22 +19,47 @@ export default function GroupDetail() {
   );
 
   const startSessionMutation = trpc.session.start.useMutation();
-  const [startingTopicId, setStartingTopicId] = useState<string | null>(null);
+  const { data: policies } = trpc.socratic.getPolicies.useQuery(undefined, { enabled: isAuthenticated });
 
-  const handleStartLearning = async (topicId: string, topicTitle: string, documentId: number) => {
-    setStartingTopicId(topicId);
+  // 평가 선택 모달 state
+  const [showEvalModal, setShowEvalModal] = useState(false);
+  const [pendingTopic, setPendingTopic] = useState<{ id: string; title: string; documentId: number } | null>(null);
+  const [evalEnabled, setEvalEnabled] = useState<boolean | null>(null);
+  const [selectedPolicyId, setSelectedPolicyId] = useState<number | null>(null);
+  const [starting, setStarting] = useState(false);
+
+  const handleStartLearning = (topicId: string, topicTitle: string, documentId: number) => {
+    setPendingTopic({ id: topicId, title: topicTitle, documentId });
+    setEvalEnabled(null);
+    setSelectedPolicyId(null);
+    setShowEvalModal(true);
+  };
+
+  const handleConfirmStart = async () => {
+    if (!pendingTopic || starting) return;
+    if (evalEnabled === null) {
+      toast.error("평가 여부를 선택해주세요.");
+      return;
+    }
+    if (evalEnabled && !selectedPolicyId) {
+      toast.error("평가 정책을 선택해주세요.");
+      return;
+    }
+    setShowEvalModal(false);
+    setStarting(true);
     try {
       const { sessionId } = await startSessionMutation.mutateAsync({
-        documentId,
-        topicId,
-        topicTitle,
+        documentId: pendingTopic.documentId,
+        topicId: pendingTopic.id,
+        topicTitle: pendingTopic.title,
         topicDescription: "",
+        evaluationEnabled: evalEnabled,
+        evaluationPolicyId: evalEnabled ? (selectedPolicyId ?? undefined) : undefined,
       });
       navigate(`/sessions/${sessionId}`);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "학습 시작 실패");
-    } finally {
-      setStartingTopicId(null);
+      setStarting(false);
     }
   };
 
@@ -69,7 +95,7 @@ export default function GroupDetail() {
           </div>
           <nav className="flex items-center gap-6">
             <button onClick={() => navigate("/history")} className="swiss-label hover:text-black transition-colors flex items-center gap-1">
-              <BarChart2 size={12} /> 학습 히스토리
+              <BarChart2 size={12} /> LEARNING HISTORY
             </button>
             <div className="flex items-center gap-3 border-l border-black pl-6">
               <span className="text-sm font-medium">{user?.name}</span>
@@ -185,7 +211,7 @@ export default function GroupDetail() {
                                     <button
                                       key={topic.id}
                                       onClick={() => handleStartLearning(topic.id, topic.title, doc.id)}
-                                      disabled={startingTopicId === topic.id}
+                                      disabled={starting}
                                       className="text-left p-4 border border-black hover:bg-black hover:text-white transition-colors group disabled:opacity-50"
                                     >
                                       <div className="flex items-start gap-2">
@@ -199,9 +225,6 @@ export default function GroupDetail() {
                                           )}
                                         </div>
                                       </div>
-                                      {startingTopicId === topic.id && (
-                                        <div className="mt-2 text-xs opacity-70">시작 중...</div>
-                                      )}
                                     </button>
                                   ))
                                 )}
@@ -222,6 +245,106 @@ export default function GroupDetail() {
           </>
         )}
       </main>
+
+      {/* 평가 선택 모달 */}
+      <Dialog open={showEvalModal} onOpenChange={(open) => { if (!open) { setShowEvalModal(false); setPendingTopic(null); } }}>
+        <DialogContent className="max-w-lg border-2 border-black rounded-none p-0">
+          <DialogHeader className="px-6 py-4 border-b border-black">
+            <DialogTitle className="text-sm font-black uppercase tracking-widest">평가 설정</DialogTitle>
+          </DialogHeader>
+          <div className="px-6 py-5 space-y-5">
+            {pendingTopic && (
+              <div className="bg-black/5 px-4 py-3">
+                <p className="text-xs text-black/40 font-bold uppercase tracking-widest mb-1">선택된 토픽</p>
+                <p className="text-sm font-bold">{pendingTopic.title}</p>
+              </div>
+            )}
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-black/50 mb-3">평가 여부 선택 <span className="text-red-600">*필수</span></p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => { setEvalEnabled(false); setSelectedPolicyId(null); }}
+                  className={`border-2 p-4 text-left transition-colors ${
+                    evalEnabled === false ? "border-black bg-black text-white" : "border-black/30 hover:border-black"
+                  }`}
+                >
+                  <div className="text-sm font-bold mb-1">평가 없이 학습</div>
+                  <div className="text-xs opacity-60">평가 없이 자유롭게 학습합니다</div>
+                </button>
+                <button
+                  onClick={() => setEvalEnabled(true)}
+                  className={`border-2 p-4 text-left transition-colors ${
+                    evalEnabled === true ? "border-red-600 bg-red-600 text-white" : "border-black/30 hover:border-black"
+                  }`}
+                >
+                  <div className="text-sm font-bold mb-1">평가 포함 학습</div>
+                  <div className="text-xs opacity-60">학습 중 평가가 진행됩니다</div>
+                </button>
+              </div>
+            </div>
+            {evalEnabled === true && (
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-black/50 mb-3">평가 정책 선택 <span className="text-red-600">*필수</span></p>
+                {!policies || policies.length === 0 ? (
+                  <div className="flex items-center gap-2 text-sm text-black/50 border border-black/20 p-3">
+                    <AlertCircle size={14} />
+                    <span>등록된 평가 정책이 없습니다. 관리자에게 평가 정책 설정을 요청하세요.</span>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {policies.map((policy) => (
+                      <button
+                        key={policy.id}
+                        onClick={() => setSelectedPolicyId(policy.id)}
+                        className={`w-full border-2 p-3 text-left transition-colors ${
+                          selectedPolicyId === policy.id ? "border-red-600 bg-red-50" : "border-black/20 hover:border-black"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          {selectedPolicyId === policy.id && <CheckCircle2 size={14} className="text-red-600 flex-shrink-0" />}
+                          <div>
+                            <div className="text-sm font-bold">{policy.name}</div>
+                            {policy.description && <div className="text-xs text-black/50 mt-0.5">{policy.description}</div>}
+                            <div className="text-xs text-black/30 mt-0.5">모드: {policy.mode}</div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => { setShowEvalModal(false); setPendingTopic(null); }}
+                className="flex-1 border border-black/30 py-2.5 text-xs font-bold uppercase tracking-widest hover:border-black transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleConfirmStart}
+                disabled={evalEnabled === null || (evalEnabled === true && !selectedPolicyId)}
+                className="flex-1 bg-red-600 text-white py-2.5 text-xs font-bold uppercase tracking-widest hover:bg-red-700 transition-colors disabled:opacity-40"
+              >
+                학습 시작
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 세션 시작 로딩 오버레이 */}
+      {starting && (
+        <div className="fixed inset-0 bg-white/80 flex items-center justify-center z-50">
+          <div className="flex items-center gap-4 border-2 border-black px-8 py-6 bg-white">
+            <div className="w-4 h-4 bg-red-600 animate-pulse" />
+            <div>
+              <p className="font-bold text-sm uppercase tracking-widest">학습 세션 준비 중</p>
+              <p className="text-xs text-black/50 mt-1">AI가 첫 번째 질문을 생성하고 있습니다…</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

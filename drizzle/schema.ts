@@ -63,6 +63,10 @@ export const documents = mysqlTable("documents", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   // Open QLoop 모드 활성화 여부
   openQloopEnabled: int("openQloopEnabled").default(0).notNull(),
+  // 선택된 학습 구조 (tree/conceptMap/learningPath) - 한번 선택하면 고정
+  selectedStructure: mysqlEnum("selectedStructure", ["tree", "conceptMap", "learningPath"]),
+  // 구조 선택 후 잠금 여부 (재분석 시 초기화)
+  structureLocked: int("structureLocked").default(0).notNull(),
 });
 export type Document = typeof documents.$inferSelect;
 export type InsertDocument = typeof documents.$inferInsert;
@@ -86,6 +90,12 @@ export const learningSessions = mysqlTable("learningSessions", {
   moduleId: int("moduleId"),
   // Open QLoop 모드 (학습 세션 시작 시 문서의 설정을 복사)
   openQloopMode: int("openQloopMode").default(0).notNull(),
+  // 평가 활성화 여부 (학습 시작 시 선택)
+  evaluationEnabled: int("evaluationEnabled").default(0).notNull(),
+  // 연결된 평가 정책 ID
+  evaluationPolicyId: int("evaluationPolicyId"),
+  // 선택된 학습 구조 (문서에서 복사)
+  selectedStructure: mysqlEnum("selectedStructure", ["tree", "conceptMap", "learningPath"]),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   completedAt: timestamp("completedAt"),

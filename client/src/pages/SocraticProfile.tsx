@@ -143,14 +143,14 @@ export default function SocraticProfile() {
   const realTotalEvals = profileData?.totalQuestionsAnswered ?? 0;
   const isSampleMode = realTotalEvals === 0;
 
-  // 실제 데이터 또는 샘플 데이터 선택
-  const stats = isSampleMode ? SAMPLE_STATS : ((profileData?.questionTypeScoresJson as Record<string, number>) ?? {});
-  const dimStats = isSampleMode ? SAMPLE_DIM_STATS : ((profileData?.dimensionScoresJson as Record<string, number>) ?? {});
-  const strengths = isSampleMode ? SAMPLE_STRENGTHS : ((profileData?.dominantStrengthsJson as string[]) ?? []);
-  const weaknesses = isSampleMode ? SAMPLE_WEAKNESSES : ((profileData?.recurringWeaknessesJson as string[]) ?? []);
-  const totalEvals = isSampleMode ? 12 : realTotalEvals;
-  const avgScore = isSampleMode ? 72 : (profileData?.slciScore ?? 0);
-  const dominantLevel = isSampleMode ? "Developing" : (profileData?.slciLevel ?? "Beginning");
+  // 실제 데이터만 사용 (샘플 데이터 제거)
+  const stats = (profileData?.questionTypeScoresJson as Record<string, number>) ?? {};
+  const dimStats = (profileData?.dimensionScoresJson as Record<string, number>) ?? {};
+  const strengths = (profileData?.dominantStrengthsJson as string[]) ?? [];
+  const weaknesses = (profileData?.recurringWeaknessesJson as string[]) ?? [];
+  const totalEvals = realTotalEvals;
+  const avgScore = profileData?.slciScore ?? 0;
+  const dominantLevel = profileData?.slciLevel ?? "Beginning";
 
   // 질문유형별 통계를 점수 맵으로 변환
   const typeStatsMap: Record<string, { count: number; avgScore: number }> = {};
@@ -158,8 +158,8 @@ export default function SocraticProfile() {
     typeStatsMap[k] = { count: 1, avgScore: typeof v === "number" ? v : 0 };
   }
 
-  // 평가 이력: 실제 또는 샘플
-  const displayEvals = isSampleMode ? SAMPLE_EVALS : (evaluations ?? []);
+  // 평가 이력: 실제 데이터만
+  const displayEvals = evaluations ?? [];
 
   return (
     <div className="min-h-screen bg-white">
@@ -176,7 +176,7 @@ export default function SocraticProfile() {
             <div className="w-px h-4 bg-black" />
             <div className="flex items-center gap-2">
               <Brain size={14} className="text-red-600" />
-              <span className="text-sm font-bold">Socratic Profile</span>
+              <span className="text-sm font-bold">QLOOP PROFILE</span>
             </div>
           </div>
         </div>

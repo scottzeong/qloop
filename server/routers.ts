@@ -16,6 +16,7 @@ import {
   evaluationDimensions,
   questionTypeDimensionWeights,
   socraticEvaluationPolicies,
+  documents,
 } from "../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import {
@@ -831,6 +832,51 @@ export const appRouter = router({
         await deleteDocument(input.documentId);
         return { success: true };
       }),
+    // 학습 구조 선택 고정 (한번만 선택 가능)
+    setStructure: protectedProcedure
+      .input(z.object({
+        documentId: z.number(),
+        structure: z.enum(["tree", "conceptMap", "learningPath"]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const doc = await getDocumentById(input.documentId);
+        if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
+        // 이미 잠긴 경우 변경 불가
+        if ((doc as any).structureLocked === 1) throw new Error("이미 학습 구조가 확정되었습니다. 재분석을 실행하면 초기화됩니다.");
+        const db = await getDb();
+        if (!db) throw new Error("DB 연결 실패");
+        await db.update(documents).set({
+          selectedStructure: input.structure,
+          structureLocked: 1,
+        }).where(eq(documents.id, input.documentId));
+        return { success: true };
+      }),
+    // 재분석 (학습 구조 잠금 초기화 포함)
+    reanalyze: protectedProcedure
+      .input(z.object({ documentId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const doc = await getDocumentById(input.documentId);
+        if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
+        // 학습 구조 잠금 해제 + 구조 선택 초기화
+        const db2 = await getDb();
+        if (!db2) throw new Error("DB 연결 실패");
+        await db2.update(documents).set({
+          selectedStructure: null,
+          structureLocked: 0,
+          analysisStatus: "analyzing",
+          structure: null,
+        }).where(eq(documents.id, input.documentId));
+        try {
+          const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, "");
+          const signedUrl = await storageGetSignedUrl(actualKey);
+          const structure = await analyzeDocumentStructure(signedUrl, doc.title, doc.fileType === "pdf" ? "application/pdf" : "application/pdf");
+          await updateDocumentAnalysis(input.documentId, "done", structure);
+          return { success: true, structure };
+        } catch (e) {
+          await updateDocumentAnalysis(input.documentId, "error");
+          throw e;
+        }
+      }),
   }),
 
   // ─── Learning Sessions ───────────────────────────────────────────────────────
@@ -844,6 +890,9 @@ export const appRouter = router({
           topicTitle: z.string(),
           topicDescription: z.string(),
           groupId: z.number().optional(),
+          evaluationEnabled: z.boolean().optional(),
+          evaluationPolicyId: z.number().optional(),
+          selectedStructure: z.enum(["tree", "conceptMap", "learningPath"]).optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -861,6 +910,9 @@ export const appRouter = router({
           totalQuestions: 0,
           answeredQuestions: 0,
           openQloopMode: openQloopMode ? 1 : 0,
+          evaluationEnabled: input.evaluationEnabled ? 1 : 0,
+          evaluationPolicyId: input.evaluationPolicyId ?? null,
+          selectedStructure: input.selectedStructure ?? null,
         });
         // 첫 번째 질문 생성 — 문서 직접 참조 없이 토픽 정보만 사용
         const firstQuestion = await generateFirstQuestion(

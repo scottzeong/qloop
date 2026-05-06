@@ -3,7 +3,8 @@ import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft, Trash2, Lock, RotateCcw, CheckCircle2, AlertCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type {
   DocumentStructure,
   TopicNode,
@@ -773,6 +774,14 @@ export default function DocumentDetail() {
     { enabled: isAuthenticated && !!docId }
   );
 
+  // 구조 선택 state
+  const [showStructureSelect, setShowStructureSelect] = useState(false);
+  // 평가 선택 모달 state
+  const [showEvalModal, setShowEvalModal] = useState(false);
+  const [pendingTopic, setPendingTopic] = useState<{ id: string; title: string; description: string } | null>(null);
+  const [selectedPolicyId, setSelectedPolicyId] = useState<number | null>(null);
+  const [evalEnabled, setEvalEnabled] = useState<boolean | null>(null);
+
   const deleteDocMutation = trpc.document.delete.useMutation();
   const analyzeMutation = trpc.document.analyze.useMutation({
     onSuccess: () => {
@@ -781,6 +790,22 @@ export default function DocumentDetail() {
     },
     onError: (e) => toast.error(`분석 실패: ${e.message}`),
   });
+  const setStructureMutation = trpc.document.setStructure.useMutation({
+    onSuccess: () => {
+      toast.success("학습 구조가 확정되었습니다.");
+      setShowStructureSelect(false);
+      refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const reanalyzeMutation = trpc.document.reanalyze.useMutation({
+    onSuccess: () => {
+      toast.success("재분석이 완료되었습니다.");
+      refetch();
+    },
+    onError: (e) => toast.error(`재분석 실패: ${e.message}`),
+  });
+  const { data: policies } = trpc.socratic.getPolicies.useQuery();
 
   const startSession = trpc.session.start.useMutation();
   const { data: topicProgressData } = trpc.session.getTopicProgress.useQuery(
@@ -791,15 +816,38 @@ export default function DocumentDetail() {
   const structure = doc?.structure as DocumentStructure | null;;
   const isAnalyzing = doc?.analysisStatus === "analyzing" || analyzeMutation.isPending;
 
-  const handleSelectTopic = async (topic: TopicNode) => {
+  // 학습 시작 전 평가 선택 모달 표시
+  const handleSelectTopic = (topic: TopicNode) => {
     if (!doc || starting) return;
+    setPendingTopic({ id: topic.id, title: topic.title, description: topic.description });
+    setEvalEnabled(null);
+    setSelectedPolicyId(null);
+    setShowEvalModal(true);
+  };
+
+  // 평가 선택 후 실제 세션 시작
+  const handleConfirmStart = async () => {
+    if (!pendingTopic || !doc || starting) return;
+    if (evalEnabled === null) {
+      toast.error("평가 여부를 선택해주세요.");
+      return;
+    }
+    if (evalEnabled && !selectedPolicyId) {
+      toast.error("평가 정책을 선택해주세요.");
+      return;
+    }
+    setShowEvalModal(false);
     setStarting(true);
     try {
+      const selectedStructure = (doc as any).selectedStructure as "tree" | "conceptMap" | "learningPath" | null;
       const { sessionId } = await startSession.mutateAsync({
         documentId: docId,
-        topicId: topic.id,
-        topicTitle: topic.title,
-        topicDescription: topic.description,
+        topicId: pendingTopic.id,
+        topicTitle: pendingTopic.title,
+        topicDescription: pendingTopic.description,
+        evaluationEnabled: evalEnabled,
+        evaluationPolicyId: evalEnabled ? (selectedPolicyId ?? undefined) : undefined,
+        selectedStructure: selectedStructure ?? undefined,
       });
       navigate(`/sessions/${sessionId}`);
     } catch (e: unknown) {
@@ -808,7 +856,7 @@ export default function DocumentDetail() {
     }
   };
 
-  const handleStartPathStep = async (step: LearningPathStep) => {
+  const handleStartPathStep = (step: LearningPathStep) => {
     if (!structure) return;
     const firstTopicId = step.topicIds[0];
     let foundTopic: TopicNode | null = null;
@@ -823,44 +871,23 @@ export default function DocumentDetail() {
       }
     }
     if (foundTopic) {
-      await handleSelectTopic(foundTopic);
+      handleSelectTopic(foundTopic);
     } else {
       // 토픽을 못 찾으면 단계 자체를 토픽으로 사용
-      if (!doc || starting) return;
-      setStarting(true);
-      try {
-        const { sessionId } = await startSession.mutateAsync({
-          documentId: docId,
-          topicId: step.id,
-          topicTitle: step.title,
-          topicDescription: step.description,
-        });
-        navigate(`/sessions/${sessionId}`);
-      } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "세션 시작 실패");
-        setStarting(false);
-      }
+      setPendingTopic({ id: step.id, title: step.title, description: step.description });
+      setEvalEnabled(null);
+      setSelectedPolicyId(null);
+      setShowEvalModal(true);
     }
   };
 
-  // 개념 맵 노드에서 직접 학습 시작 (토픽 매핑 없이 노드 자체를 토픽으로 사용)
-  const handleStartFromNode = async (nodeLabel: string, nodeDescription: string) => {
-    if (!doc || starting) return;
-    setStarting(true);
-    try {
-      // 노드 레이블을 일관된 ID로 변환 (타임스탬프 제거 → 동일 노드는 항상 동일 ID)
-      const nodeId = `concept-${nodeLabel.replace(/\s+/g, '-').toLowerCase()}`;
-      const { sessionId } = await startSession.mutateAsync({
-        documentId: docId,
-        topicId: nodeId,
-        topicTitle: nodeLabel,
-        topicDescription: nodeDescription || nodeLabel,
-      });
-      navigate(`/sessions/${sessionId}`);
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "세션 시작 실패");
-      setStarting(false);
-    }
+  // 개념 맵 노드에서 직접 학습 시작
+  const handleStartFromNode = (nodeLabel: string, nodeDescription: string) => {
+    const nodeId = `concept-${nodeLabel.replace(/\s+/g, '-').toLowerCase()}`;
+    setPendingTopic({ id: nodeId, title: nodeLabel, description: nodeDescription || nodeLabel });
+    setEvalEnabled(null);
+    setSelectedPolicyId(null);
+    setShowEvalModal(true);
   };
 
   if (isLoading) {
@@ -920,12 +947,27 @@ export default function DocumentDetail() {
           </div>
           {/* Open QLoop 토글 */}
           <OpenQloopToggle documentId={docId} />
+          {/* 학습 구조 상태 표시 */}
+          {(doc as any).structureLocked === 1 && (
+            <div className="flex items-center gap-1.5 text-xs font-bold text-black/50 border border-black/20 px-2 py-1">
+              <Lock size={10} />
+              <span>{(doc as any).selectedStructure === 'tree' ? '목차 트리' : (doc as any).selectedStructure === 'conceptMap' ? '개념 맵' : '학습 경로'} 고정됨</span>
+            </div>
+          )}
           {doc.analysisStatus === "done" && !isAnalyzing && (
             <button
-              onClick={() => analyzeMutation.mutate({ documentId: docId })}
-              className="text-xs font-bold uppercase tracking-widest border border-black/30 px-3 py-1.5 hover:border-black transition-colors"
+              onClick={() => {
+                if ((doc as any).structureLocked === 1) {
+                  if (!window.confirm("재분석하면 학습 구조 선택이 초기화됩니다.\n계속하시겠습니까?")) return;
+                  reanalyzeMutation.mutate({ documentId: docId });
+                } else {
+                  analyzeMutation.mutate({ documentId: docId });
+                }
+              }}
+              disabled={reanalyzeMutation.isPending}
+              className="flex items-center gap-1 text-xs font-bold uppercase tracking-widest border border-black/30 px-3 py-1.5 hover:border-black transition-colors disabled:opacity-50"
             >
-              재분석
+              <RotateCcw size={10} /> 재분석
             </button>
           )}
           <button
@@ -989,8 +1031,72 @@ export default function DocumentDetail() {
           </div>
         )}
 
-        {/* 분석 완료 */}
-        {doc.analysisStatus === "done" && structure && !isAnalyzing && (
+        {/* 구조 선택 화면 - 분석 완료 후 구조 미선택 시 */}
+        {doc.analysisStatus === "done" && structure && !isAnalyzing && (doc as any).structureLocked !== 1 && (
+          <div className="border-2 border-red-600 p-8 space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="w-4 h-4 bg-red-600" />
+              <div>
+                <p className="font-black text-lg uppercase tracking-widest">학습 구조 선택</p>
+                <p className="text-sm text-black/50 mt-0.5">한 번 선택하면 해당 구조로만 학습이 진행됩니다. 재분석 시 선택이 초기화됩니다.</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              {/* 목차 트리 */}
+              <button
+                onClick={() => setStructureMutation.mutate({ documentId: docId, structure: "tree" })}
+                disabled={setStructureMutation.isPending}
+                className="border-2 border-black p-6 text-left hover:bg-black hover:text-white transition-colors group disabled:opacity-50"
+              >
+                <div className="text-2xl font-black mb-2">트리</div>
+                <div className="text-sm font-bold uppercase tracking-widest mb-2">목차 트리</div>
+                <div className="text-xs text-black/50 group-hover:text-white/60 leading-relaxed">체계적인 챕터와 토픽 구조로 순서대로 학습. 대부분의 학습자에게 가장 적합합니다.</div>
+                <div className="mt-3 text-xs font-bold text-red-600 group-hover:text-red-300">{structure.chapters.length}개 챕터 · {structure.chapters.reduce((a,c)=>a+c.topics.length,0)}개 토픽</div>
+              </button>
+              {/* 개념 맵 */}
+              {structure.conceptMap && structure.conceptMap.length > 0 ? (
+                <button
+                  onClick={() => setStructureMutation.mutate({ documentId: docId, structure: "conceptMap" })}
+                  disabled={setStructureMutation.isPending}
+                  className="border-2 border-black p-6 text-left hover:bg-black hover:text-white transition-colors group disabled:opacity-50"
+                >
+                  <div className="text-2xl font-black mb-2">맵</div>
+                  <div className="text-sm font-bold uppercase tracking-widest mb-2">개념 맵</div>
+                  <div className="text-xs text-black/50 group-hover:text-white/60 leading-relaxed">개념 간 연결 관계를 시각적으로 학습. 전체 연관성을 파악하고 싶을 때 적합합니다.</div>
+                  <div className="mt-3 text-xs font-bold text-red-600 group-hover:text-red-300">{structure.conceptMap.length}개 개념 노드</div>
+                </button>
+              ) : (
+                <div className="border-2 border-black/20 p-6 text-left opacity-40">
+                  <div className="text-2xl font-black mb-2">맵</div>
+                  <div className="text-sm font-bold uppercase tracking-widest mb-2">개념 맵</div>
+                  <div className="text-xs text-black/40">이 문서에서 개념 맵 데이터가 추출되지 않았습니다.</div>
+                </div>
+              )}
+              {/* 학습 경로 */}
+              {structure.learningPath && structure.learningPath.length > 0 ? (
+                <button
+                  onClick={() => setStructureMutation.mutate({ documentId: docId, structure: "learningPath" })}
+                  disabled={setStructureMutation.isPending}
+                  className="border-2 border-black p-6 text-left hover:bg-black hover:text-white transition-colors group disabled:opacity-50"
+                >
+                  <div className="text-2xl font-black mb-2">경로</div>
+                  <div className="text-sm font-bold uppercase tracking-widest mb-2">학습 경로</div>
+                  <div className="text-xs text-black/50 group-hover:text-white/60 leading-relaxed">AI가 추천하는 단계별 학습 순서. 처음 학습하는 분야에 적합합니다.</div>
+                  <div className="mt-3 text-xs font-bold text-red-600 group-hover:text-red-300">{structure.learningPath.length}단계</div>
+                </button>
+              ) : (
+                <div className="border-2 border-black/20 p-6 text-left opacity-40">
+                  <div className="text-2xl font-black mb-2">경로</div>
+                  <div className="text-sm font-bold uppercase tracking-widest mb-2">학습 경로</div>
+                  <div className="text-xs text-black/40">이 문서에서 학습 경로 데이터가 추출되지 않았습니다.</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 분석 완료 - 구조 선택 후 */}
+        {doc.analysisStatus === "done" && structure && !isAnalyzing && (doc as any).structureLocked === 1 && (
           <div className="space-y-6">
             {/* 요약 + 통계 */}
             <div className="grid grid-cols-12 gap-0 border border-black">
@@ -1018,34 +1124,102 @@ export default function DocumentDetail() {
               </div>
             </div>
 
-            {/* 탭 네비게이션 */}
-            <div className="border-b-2 border-black">
-              <div className="flex gap-0 overflow-x-auto">
-                {availableTabs.map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`px-5 py-3 text-xs font-bold uppercase tracking-widest whitespace-nowrap border-b-2 -mb-0.5 transition-colors ${
-                      activeTab === tab
-                        ? "border-red-600 text-red-600"
-                        : "border-transparent text-black/40 hover:text-black"
-                    }`}
-                  >
-                    {TAB_LABELS[tab]}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 탭 콘텐츠 */}
+            {/* 선택된 구조만 표시 */}
             <div>
-              {activeTab === "tree" && <TreeView structure={structure} onSelectTopic={handleSelectTopic} topicProgress={topicProgress} />}
-              {activeTab === "concepts" && <ConceptMapView nodes={structure.conceptMap ?? []} structure={structure} onSelectTopic={handleSelectTopic} onStartFromNode={handleStartFromNode} topicProgress={topicProgress} />}
-              {activeTab === "path" && <LearningPathView steps={structure.learningPath ?? []} onStartStep={handleStartPathStep} topicProgress={topicProgress} />}
+              {(doc as any).selectedStructure === "tree" && <TreeView structure={structure} onSelectTopic={handleSelectTopic} topicProgress={topicProgress} />}
+              {(doc as any).selectedStructure === "conceptMap" && <ConceptMapView nodes={structure.conceptMap ?? []} structure={structure} onSelectTopic={handleSelectTopic} onStartFromNode={handleStartFromNode} topicProgress={topicProgress} />}
+              {(doc as any).selectedStructure === "learningPath" && <LearningPathView steps={structure.learningPath ?? []} onStartStep={handleStartPathStep} topicProgress={topicProgress} />}
             </div>
           </div>
         )}
       </main>
+
+      {/* 평가 선택 모달 */}
+      <Dialog open={showEvalModal} onOpenChange={(open) => { if (!open) { setShowEvalModal(false); setPendingTopic(null); } }}>
+        <DialogContent className="max-w-lg border-2 border-black rounded-none p-0">
+          <DialogHeader className="px-6 py-4 border-b border-black">
+            <DialogTitle className="text-sm font-black uppercase tracking-widest">평가 설정</DialogTitle>
+          </DialogHeader>
+          <div className="px-6 py-5 space-y-5">
+            {pendingTopic && (
+              <div className="bg-black/5 px-4 py-3">
+                <p className="text-xs text-black/40 font-bold uppercase tracking-widest mb-1">선택된 토픽</p>
+                <p className="text-sm font-bold">{pendingTopic.title}</p>
+              </div>
+            )}
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-black/50 mb-3">평가 여부 선택 <span className="text-red-600">*필수</span></p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => { setEvalEnabled(false); setSelectedPolicyId(null); }}
+                  className={`border-2 p-4 text-left transition-colors ${
+                    evalEnabled === false ? "border-black bg-black text-white" : "border-black/30 hover:border-black"
+                  }`}
+                >
+                  <div className="text-sm font-bold mb-1">평가 없이 학습</div>
+                  <div className="text-xs opacity-60">평가 없이 자유롭게 학습합니다</div>
+                </button>
+                <button
+                  onClick={() => setEvalEnabled(true)}
+                  className={`border-2 p-4 text-left transition-colors ${
+                    evalEnabled === true ? "border-red-600 bg-red-600 text-white" : "border-black/30 hover:border-black"
+                  }`}
+                >
+                  <div className="text-sm font-bold mb-1">평가 포함 학습</div>
+                  <div className="text-xs opacity-60">학습 중 평가가 진행됩니다</div>
+                </button>
+              </div>
+            </div>
+            {evalEnabled === true && (
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-black/50 mb-3">평가 정책 선택 <span className="text-red-600">*필수</span></p>
+                {!policies || policies.length === 0 ? (
+                  <div className="flex items-center gap-2 text-sm text-black/50 border border-black/20 p-3">
+                    <AlertCircle size={14} />
+                    <span>등록된 평가 정책이 없습니다. 관리자에게 평가 정책 설정을 요청하세요.</span>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {policies.map((policy) => (
+                      <button
+                        key={policy.id}
+                        onClick={() => setSelectedPolicyId(policy.id)}
+                        className={`w-full border-2 p-3 text-left transition-colors ${
+                          selectedPolicyId === policy.id ? "border-red-600 bg-red-50" : "border-black/20 hover:border-black"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          {selectedPolicyId === policy.id && <CheckCircle2 size={14} className="text-red-600 flex-shrink-0" />}
+                          <div>
+                            <div className="text-sm font-bold">{policy.name}</div>
+                            {policy.description && <div className="text-xs text-black/50 mt-0.5">{policy.description}</div>}
+                            <div className="text-xs text-black/30 mt-0.5">모드: {policy.mode}</div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => { setShowEvalModal(false); setPendingTopic(null); }}
+                className="flex-1 border border-black/30 py-2.5 text-xs font-bold uppercase tracking-widest hover:border-black transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleConfirmStart}
+                disabled={evalEnabled === null || (evalEnabled === true && !selectedPolicyId)}
+                className="flex-1 bg-red-600 text-white py-2.5 text-xs font-bold uppercase tracking-widest hover:bg-red-700 transition-colors disabled:opacity-40"
+              >
+                학습 시작
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* 세션 시작 로딩 오버레이 */}
       {starting && (

@@ -271,7 +271,7 @@ export default function Dashboard() {
               onClick={() => navigate("/history")}
               className="swiss-label hover:text-black transition-colors flex items-center gap-1"
             >
-              <BarChart2 size={12} /> 학습 히스토리
+              <BarChart2 size={12} /> LEARNING HISTORY
             </button>
             <button
               onClick={() => navigate("/library")}
@@ -283,14 +283,14 @@ export default function Dashboard() {
               onClick={() => navigate("/profile/socratic")}
               className="swiss-label hover:text-black transition-colors flex items-center gap-1"
             >
-              <Brain size={12} /> Socratic Profile
+              <Brain size={12} /> QLOOP PROFILE
             </button>
             {user?.role === "admin" && (
               <button
                 onClick={() => navigate("/admin/socratic")}
                 className="swiss-label hover:text-black transition-colors flex items-center gap-1 text-red-600"
               >
-                <Settings size={12} /> Socratic 관리
+                <Settings size={12} /> NEURAL SYSTEM SET
               </button>
             )}
             <div className="flex items-center gap-3 border-l border-black pl-6">
@@ -313,7 +313,7 @@ export default function Dashboard() {
 
             {/* Upload area */}
             <div className="mb-12">
-              <div className="swiss-label mb-4">새 문서 업로드</div>
+              <div className="swiss-label mb-4">학습자료 업로드</div>
               <div
                 className={`border-2 ${dragging ? "border-[var(--swiss-red)] bg-red-50" : "border-black"} border-dashed p-12 text-center cursor-pointer transition-colors relative`}
                 onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -357,7 +357,7 @@ export default function Dashboard() {
             {/* Document Groups */}
             <div className="mb-12">
               <div className="flex items-center justify-between mb-4">
-                <div className="swiss-label">문서 그룹</div>
+                <div className="swiss-label">학습그룹</div>
                 <button
                   onClick={() => setShowCreateGroup(!showCreateGroup)}
                   className="flex items-center gap-1 text-xs font-bold border border-black px-3 py-1.5 hover:bg-black hover:text-white transition-colors"
@@ -451,7 +451,7 @@ export default function Dashboard() {
             {/* Standalone Documents list */}
             <div>
               <div className="flex items-center justify-between mb-6">
-                <div className="swiss-label">단독 문서</div>
+                <div className="swiss-label">학습자료</div>
                 <span className="text-xs text-gray-400">{documents?.length ?? 0}개</span>
               </div>
               {!documents || documents.length === 0 ? (

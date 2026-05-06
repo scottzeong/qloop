@@ -53,7 +53,7 @@ function LearnerView() {
 
   const importMutation = trpc.library.importFromLibrary.useMutation({
     onSuccess: () => {
-      toast.success("내 문서로 가져왔습니다. 대시보드에서 확인하세요.");
+      toast.success("학습자료로 가져왔습니다. 대시보드에서 확인하세요.");
       refetchLibrary();
     },
     onError: (err) => toast.error(err.message),
@@ -85,7 +85,7 @@ function LearnerView() {
       }
     }
     if (success > 0) {
-      toast.success(`${success}개 자료를 내 문서로 가져왔습니다.`);
+      toast.success(`${success}개 자료를 학습자료로 가져왔습니다.`);
       setSelectedIds(new Set());
     }
   };
@@ -141,7 +141,7 @@ function LearnerView() {
       {libraryItems.length === 0 ? (
         <div className="text-center py-20 text-muted-foreground">
           <Library className="w-12 h-12 mx-auto mb-4 opacity-30" />
-          <p className="text-lg font-medium">아직 등록된 자료가 없습니다.</p>
+          <p className="text-lg font-medium">아직 등록된 지식이 없습니다.</p>
           <p className="text-sm mt-2">관리자가 자료를 등록하면 여기에 표시됩니다.</p>
         </div>
       ) : (
@@ -206,7 +206,7 @@ function LearnerView() {
                     disabled={importMutation.isPending}
                   >
                     <Download className="w-4 h-4" />
-                    내 문서로 가져오기
+                    학습자료로 가져오기
                   </Button>
                 </CardContent>
               </Card>
@@ -353,7 +353,7 @@ function AdminView() {
     <>
       {/* 파일 직접 업로드 영역 */}
       <div className="mb-8">
-        <h2 className="text-sm font-bold uppercase tracking-widest mb-3 text-muted-foreground">새 자료 직접 업로드</h2>
+        <h2 className="text-sm font-bold uppercase tracking-widest mb-3 text-muted-foreground">지식 업로드</h2>
 
         {!pendingFile ? (
           <div
@@ -464,13 +464,13 @@ function AdminView() {
         )}
       </div>
 
-      {/* 기존 문서에서 추가 */}
+      {/* 학습자료에서 추가 */}
       <div className="mb-8">
         <div className="flex justify-between items-center mb-3">
-          <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">기존 문서에서 추가</h2>
+          <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">학습자료에서 추가</h2>
           <Button onClick={() => setAddDialogOpen(true)} size="sm" variant="outline" className="gap-2">
             <Plus className="w-4 h-4" />
-            내 문서에서 선택
+            학습자료에서 선택
           </Button>
         </div>
       </div>
@@ -479,14 +479,14 @@ function AdminView() {
       <div>
         <div className="flex justify-between items-center mb-3">
           <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">
-            등록된 자료 ({adminItems.length}개)
+            등록된 지식 ({adminItems.length}개)
           </h2>
         </div>
 
         {adminItems.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground border border-dashed rounded-lg">
             <Library className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">등록된 자료가 없습니다.</p>
+            <p className="text-sm">등록된 지식이 없습니다.</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -553,7 +553,7 @@ function AdminView() {
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>내 문서에서 Library에 추가</DialogTitle>
+            <DialogTitle>학습자료에서 Library에 추가</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
@@ -629,10 +629,10 @@ export default function KnowledgeLibrary() {
       <div className="max-w-5xl mx-auto px-6 py-8">
         {/* 안내 배너 */}
         <div className="mb-6 p-4 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-sm">
-          <strong>Knowledge Library</strong>는 관리자가 선별한 학습 자료 모음입니다.
+          <strong>Knowledge Library</strong>는 학습자가 자신의 지식데이터로 활용하고 싶은 자료를 관리하는 것으로 OPEN QLOOP가 활성화되면 자신의 학습자료나 학습그룹에 추가하여 학습이 이루어지게 됩니다.
           {isAdmin
-            ? " 파일을 직접 업로드하거나 기존 문서를 추가하여 학습자들이 활용할 수 있도록 관리하세요."
-            : " 카드를 클릭하여 선택하거나, 바로 가져오기 버튼을 눌러 내 문서로 복사할 수 있습니다."}
+            ? ""
+            : ""}
         </div>
 
         {/* 탭 (관리자만) */}
@@ -646,7 +646,7 @@ export default function KnowledgeLibrary() {
                   : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
-              자료 관리
+              지식 관리
             </button>
             <button
               onClick={() => setActiveTab("browse")}
