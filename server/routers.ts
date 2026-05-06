@@ -719,7 +719,29 @@ export const appRouter = router({
         const group = await getDocumentGroupById(input.groupId);
         if (!group || group.userId !== ctx.user.id) throw new Error("그룹을 찾을 수 없습니다.");
         const docs = await getDocumentsByGroupId(input.groupId);
-        return { ...group, documents: docs };
+        // 각 문서별 topicProgress 계산
+        const topicProgressByDoc: Record<number, Record<string, "completed" | "active">> = {};
+        for (const doc of docs) {
+          const sessions = await getSessionsByDocumentId(doc.id, ctx.user.id);
+          const progressMap: Record<string, "completed" | "active"> = {};
+          for (const s of sessions) {
+            if (s.startTopicId) {
+              const tid = s.startTopicId;
+              if (s.status === "completed") {
+                progressMap[tid] = "completed";
+              } else if (s.status === "active" && progressMap[tid] !== "completed") {
+                progressMap[tid] = "active";
+              }
+            }
+            if (Array.isArray(s.completedTopics)) {
+              for (const ctid of s.completedTopics as string[]) {
+                progressMap[ctid] = "completed";
+              }
+            }
+          }
+          topicProgressByDoc[doc.id] = progressMap;
+        }
+        return { ...group, documents: docs, topicProgressByDoc };
       }),
 
     // 그룹 이름/설명 수정

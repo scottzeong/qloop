@@ -76,16 +76,22 @@ function TopicItem({
             <p className={`text-xs mt-0.5 leading-relaxed ${subTextClass}`}>{topic.description}</p>
           )}
         </div>
-        <button
-          onClick={() => onSelect(topic)}
-          className={`flex-shrink-0 text-xs font-bold uppercase tracking-widest px-2 py-0.5 transition-colors ${
-            status === "completed"
-              ? "text-white border border-white hover:bg-white hover:text-gray-700"
-              : "text-red-600 border border-red-600 hover:bg-red-600 hover:text-white"
-          }`}
-        >
-          학습
-        </button>
+        {status === "active" ? (
+          <span className="flex-shrink-0 text-xs font-bold uppercase tracking-widest px-2 py-0.5 text-gray-500 border border-gray-400">
+            진행 중
+          </span>
+        ) : (
+          <button
+            onClick={() => onSelect(topic)}
+            className={`flex-shrink-0 text-xs font-bold uppercase tracking-widest px-2 py-0.5 transition-colors ${
+              status === "completed"
+                ? "text-white border border-white hover:bg-white hover:text-gray-700"
+                : "text-red-600 border border-red-600 hover:bg-red-600 hover:text-white"
+            }`}
+          >
+            {status === "completed" ? "다시 학습" : "학습 시작"}
+          </button>
+        )}
       </div>
       {expanded && hasSubs && (
         <div>
@@ -388,19 +394,28 @@ function ConceptMapView({
                     t.title.toLowerCase().includes(selectedNode.label.toLowerCase()) ||
                     selectedNode.label.toLowerCase().includes(t.title.toLowerCase())
                 );
+                const nodeStatus = getNodeProgress(selectedNode.label, structure, topicProgress);
+                if (nodeStatus === "active") {
+                  return (
+                    <span className="text-xs font-bold uppercase tracking-widest text-gray-500 border border-gray-400 px-4 py-2 whitespace-nowrap text-center">
+                      진행 중
+                    </span>
+                  );
+                }
+                const btnLabel = nodeStatus === "completed" ? "다시 학습" : "학습 시작";
                 return relatedTopic ? (
                   <button
                     onClick={() => onSelectTopic(relatedTopic)}
                     className="text-xs font-bold uppercase tracking-widest text-white bg-red-600 border border-red-600 px-4 py-2 hover:bg-red-700 transition-colors whitespace-nowrap"
                   >
-                    학습 시작
+                    {btnLabel}
                   </button>
                 ) : (
                   <button
                     onClick={() => onStartFromNode(selectedNode.label, selectedNode.description)}
                     className="text-xs font-bold uppercase tracking-widest text-white bg-red-600 border border-red-600 px-4 py-2 hover:bg-red-700 transition-colors whitespace-nowrap"
                   >
-                    학습 시작
+                    {btnLabel}
                   </button>
                 );
               })()}
@@ -693,25 +708,33 @@ function LearningPathView({
                 <span className="font-bold text-lg">{String(step.order).padStart(2, "0")}</span>
               </div>
               <div className="flex-1 p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-bold text-sm">{step.title}</p>
-                    <p className="text-xs text-black/60 mt-1 leading-relaxed">{step.description}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      {(() => {
-                        const stepStatus: TopicStatus = step.topicIds.some(tid => topicProgress[tid] === "completed") ? "completed"
-                          : step.topicIds.some(tid => topicProgress[tid] === "active") ? "active" : "none";
-                        return <TopicStatusBadge status={stepStatus} />;
-                      })()}
+                {(() => {
+                  const stepStatus: TopicStatus = step.topicIds.some(tid => topicProgress[tid] === "completed") ? "completed"
+                    : step.topicIds.some(tid => topicProgress[tid] === "active") ? "active" : "none";
+                  return (
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="font-bold text-sm">{step.title}</p>
+                        <p className="text-xs text-black/60 mt-1 leading-relaxed">{step.description}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <TopicStatusBadge status={stepStatus} />
+                        </div>
+                      </div>
+                      {stepStatus === "active" ? (
+                        <span className="flex-shrink-0 text-xs font-bold uppercase tracking-widest text-gray-500 border border-gray-400 px-3 py-1.5 whitespace-nowrap">
+                          진행 중
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => onStartStep(step)}
+                          className="flex-shrink-0 text-xs font-bold uppercase tracking-widest text-red-600 border border-red-600 px-3 py-1.5 hover:bg-red-600 hover:text-white transition-colors whitespace-nowrap"
+                        >
+                          {stepStatus === "completed" ? "다시 학습" : "학습 시작"}
+                        </button>
+                      )}
                     </div>
-                  </div>
-                  <button
-                    onClick={() => onStartStep(step)}
-                    className="flex-shrink-0 text-xs font-bold uppercase tracking-widest text-red-600 border border-red-600 px-3 py-1.5 hover:bg-red-600 hover:text-white transition-colors whitespace-nowrap"
-                  >
-                    시작
-                  </button>
-                </div>
+                  );
+                })()}
               </div>
             </div>
             {idx < steps.length - 1 && (

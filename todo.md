@@ -190,3 +190,9 @@
 - [x] library.ts: extractTextForLibrary에 .doc(application/msword) → word-extractor 처리 분기 추가
 - [x] word-extractor.d.ts: TypeScript 타입 선언 파일 생성
 - [x] TS 오류 0개, 테스트 26개 전원 통과 확인
+
+## v4.5 학습 진행 중 시작 버튼 제거
+- [x] 목차트리: 진행 중(in_progress) 토픽에서 "시작" 버튼 숨김 (완료=다시학습, 진행중=버튼없음, 미진행=시작)
+- [x] 개념맵: 진행 중 노드에서 "시작" 버튼 숨김
+- [x] 학습경로: 진행 중 단계에서 "시작" 버튼 숨김
+- [x] GroupDetail.tsx에도 동일 로직 적용

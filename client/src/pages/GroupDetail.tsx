@@ -209,6 +209,7 @@ export default function GroupDetail() {
                     const isLocked = doc.structureLocked === 1;
                     const selectedStructure = doc.selectedStructure as "tree" | "conceptMap" | "learningPath" | null;
                     const isDone = doc.analysisStatus === "done";
+                    const topicProgress: Record<string, "completed" | "active"> = (groupDetail as any).topicProgressByDoc?.[doc.id] ?? {};
 
                     return (
                       <div key={doc.id} className="border-2 border-black">
@@ -320,26 +321,45 @@ export default function GroupDetail() {
                                 <div className="swiss-label mb-4 text-xs">학습 토픽 선택 (목차 트리)</div>
                                 <div className="grid grid-cols-2 gap-3">
                                   {structure.chapters.flatMap((ch) =>
-                                    (ch.topics ?? []).map((topic) => (
-                                      <button
-                                        key={topic.id}
-                                        onClick={() => handleStartLearning(topic.id, topic.title, doc.id)}
-                                        disabled={starting}
-                                        className="text-left p-4 border border-black hover:bg-black hover:text-white transition-colors group disabled:opacity-50"
-                                      >
-                                        <div className="flex items-start gap-2">
-                                          <BookOpen size={12} className="mt-0.5 flex-shrink-0 group-hover:text-white text-[var(--swiss-red)]" />
-                                          <div>
-                                            <p className="text-xs font-bold">{topic.title}</p>
-                                            {topic.description && (
-                                              <p className="text-xs text-gray-400 group-hover:text-gray-300 mt-0.5 line-clamp-2">
-                                                {topic.description}
-                                              </p>
-                                            )}
+                                    (ch.topics ?? []).map((topic) => {
+                                      const tStatus = topicProgress[topic.id];
+                                      if (tStatus === "active") {
+                                        return (
+                                          <div key={topic.id} className="p-4 border border-gray-300 bg-gray-50">
+                                            <div className="flex items-start gap-2">
+                                              <BookOpen size={12} className="mt-0.5 flex-shrink-0 text-gray-400" />
+                                              <div className="flex-1 min-w-0">
+                                                <p className="text-xs font-bold text-gray-600">{topic.title}</p>
+                                                <span className="text-xs font-bold text-gray-500">진행 중</span>
+                                              </div>
+                                            </div>
                                           </div>
-                                        </div>
-                                      </button>
-                                    ))
+                                        );
+                                      }
+                                      return (
+                                        <button
+                                          key={topic.id}
+                                          onClick={() => handleStartLearning(topic.id, topic.title, doc.id)}
+                                          disabled={starting}
+                                          className="text-left p-4 border border-black hover:bg-black hover:text-white transition-colors group disabled:opacity-50"
+                                        >
+                                          <div className="flex items-start gap-2">
+                                            <BookOpen size={12} className="mt-0.5 flex-shrink-0 group-hover:text-white text-[var(--swiss-red)]" />
+                                            <div>
+                                              <p className="text-xs font-bold">{topic.title}</p>
+                                              {topic.description && (
+                                                <p className="text-xs text-gray-400 group-hover:text-gray-300 mt-0.5 line-clamp-2">
+                                                  {topic.description}
+                                                </p>
+                                              )}
+                                              {tStatus === "completed" && (
+                                                <span className="text-xs font-bold text-green-600">✓ 완료</span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </button>
+                                      );
+                                    })
                                   )}
                                 </div>
                               </>
@@ -349,26 +369,45 @@ export default function GroupDetail() {
                               <>
                                 <div className="swiss-label mb-4 text-xs">학습 토픽 선택 (개념 맵)</div>
                                 <div className="grid grid-cols-2 gap-3">
-                                  {structure.conceptMap.map((node: any) => (
-                                    <button
-                                      key={node.id}
-                                      onClick={() => handleStartLearning(node.id, node.concept, doc.id)}
-                                      disabled={starting}
-                                      className="text-left p-4 border border-black hover:bg-black hover:text-white transition-colors group disabled:opacity-50"
-                                    >
-                                      <div className="flex items-start gap-2">
-                                        <Map size={12} className="mt-0.5 flex-shrink-0 group-hover:text-white text-[var(--swiss-red)]" />
-                                        <div>
-                                          <p className="text-xs font-bold">{node.concept}</p>
-                                          {node.relatedConcepts && node.relatedConcepts.length > 0 && (
-                                            <p className="text-xs text-gray-400 group-hover:text-gray-300 mt-0.5 line-clamp-1">
-                                              연관: {node.relatedConcepts.slice(0, 2).join(", ")}
-                                            </p>
-                                          )}
+                                  {structure.conceptMap.map((node: any) => {
+                                    const nStatus = topicProgress[node.id];
+                                    if (nStatus === "active") {
+                                      return (
+                                        <div key={node.id} className="p-4 border border-gray-300 bg-gray-50">
+                                          <div className="flex items-start gap-2">
+                                            <Map size={12} className="mt-0.5 flex-shrink-0 text-gray-400" />
+                                            <div className="flex-1 min-w-0">
+                                              <p className="text-xs font-bold text-gray-600">{node.concept}</p>
+                                              <span className="text-xs font-bold text-gray-500">진행 중</span>
+                                            </div>
+                                          </div>
                                         </div>
-                                      </div>
-                                    </button>
-                                  ))}
+                                      );
+                                    }
+                                    return (
+                                      <button
+                                        key={node.id}
+                                        onClick={() => handleStartLearning(node.id, node.concept, doc.id)}
+                                        disabled={starting}
+                                        className="text-left p-4 border border-black hover:bg-black hover:text-white transition-colors group disabled:opacity-50"
+                                      >
+                                        <div className="flex items-start gap-2">
+                                          <Map size={12} className="mt-0.5 flex-shrink-0 group-hover:text-white text-[var(--swiss-red)]" />
+                                          <div>
+                                            <p className="text-xs font-bold">{node.concept}</p>
+                                            {node.relatedConcepts && node.relatedConcepts.length > 0 && (
+                                              <p className="text-xs text-gray-400 group-hover:text-gray-300 mt-0.5 line-clamp-1">
+                                                연관: {node.relatedConcepts.slice(0, 2).join(", ")}
+                                              </p>
+                                            )}
+                                            {nStatus === "completed" && (
+                                              <span className="text-xs font-bold text-green-600">✓ 완료</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
                                 </div>
                               </>
                             )}
@@ -385,19 +424,40 @@ export default function GroupDetail() {
                                         </span>
                                       </div>
                                       <div className="grid grid-cols-2 gap-2 p-3">
-                                        {(step.topics ?? []).map((topic: any) => (
-                                          <button
-                                            key={topic.id}
-                                            onClick={() => handleStartLearning(topic.id, topic.title, doc.id)}
-                                            disabled={starting}
-                                            className="text-left p-3 border border-black hover:bg-black hover:text-white transition-colors group disabled:opacity-50"
-                                          >
-                                            <div className="flex items-start gap-2">
-                                              <Route size={11} className="mt-0.5 flex-shrink-0 group-hover:text-white text-[var(--swiss-red)]" />
-                                              <p className="text-xs font-bold">{topic.title}</p>
-                                            </div>
-                                          </button>
-                                        ))}
+                                        {(step.topics ?? []).map((topic: any) => {
+                                          const tpStatus = topicProgress[topic.id];
+                                          if (tpStatus === "active") {
+                                            return (
+                                              <div key={topic.id} className="p-3 border border-gray-300 bg-gray-50">
+                                                <div className="flex items-start gap-2">
+                                                  <Route size={11} className="mt-0.5 flex-shrink-0 text-gray-400" />
+                                                  <div>
+                                                    <p className="text-xs font-bold text-gray-600">{topic.title}</p>
+                                                    <span className="text-xs font-bold text-gray-500">진행 중</span>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            );
+                                          }
+                                          return (
+                                            <button
+                                              key={topic.id}
+                                              onClick={() => handleStartLearning(topic.id, topic.title, doc.id)}
+                                              disabled={starting}
+                                              className="text-left p-3 border border-black hover:bg-black hover:text-white transition-colors group disabled:opacity-50"
+                                            >
+                                              <div className="flex items-start gap-2">
+                                                <Route size={11} className="mt-0.5 flex-shrink-0 group-hover:text-white text-[var(--swiss-red)]" />
+                                                <div>
+                                                  <p className="text-xs font-bold">{topic.title}</p>
+                                                  {tpStatus === "completed" && (
+                                                    <span className="text-xs font-bold text-green-600">✓ 완료</span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            </button>
+                                          );
+                                        })}
                                       </div>
                                     </div>
                                   ))}
