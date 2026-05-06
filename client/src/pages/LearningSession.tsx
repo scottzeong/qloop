@@ -141,6 +141,17 @@ export default function LearningSession() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // AI 메시지 수신 후 입력창 자동 포커스
+  useEffect(() => {
+    if (!messages || messages.length === 0 || sending) return;
+    const lastMsg = messages[messages.length - 1] as Message;
+    if (lastMsg.role === "ai") {
+      setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 150);
+    }
+  }, [messages, sending]);
+
   const handleSend = async () => {
     if (!input.trim() || sending) return;
     const content = input.trim();
