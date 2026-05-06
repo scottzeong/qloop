@@ -712,7 +712,8 @@ export const appRouter = router({
             } else {
               const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, "");
               const signedUrl = await storageGetSignedUrl(actualKey);
-              const structure = await analyzeDocumentStructure(signedUrl, doc.title, doc.fileType === "pdf" ? "application/pdf" : "application/pdf");
+              const mimeForAnalysis = doc.fileType === "pdf" ? "application/pdf" : doc.fileType === "doc" ? "application/msword" : doc.fileType === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : doc.fileType === "ppt" ? "application/vnd.ms-powerpoint" : doc.fileType === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/pdf";
+              const structure = await analyzeDocumentStructure(signedUrl, doc.title, mimeForAnalysis);
               await updateDocumentAnalysis(doc.id, "done", structure);
               structures.push(structure);
             }
@@ -795,7 +796,8 @@ export const appRouter = router({
         try {
           const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, "");
           const signedUrl = await storageGetSignedUrl(actualKey);
-          const structure = await analyzeDocumentStructure(signedUrl, doc.title, doc.fileType === "pdf" ? "application/pdf" : "application/pdf");
+          const mimeForAnalysis = doc.fileType === "pdf" ? "application/pdf" : doc.fileType === "doc" ? "application/msword" : doc.fileType === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : doc.fileType === "ppt" ? "application/vnd.ms-powerpoint" : doc.fileType === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/pdf";
+          const structure = await analyzeDocumentStructure(signedUrl, doc.title, mimeForAnalysis);
           await updateDocumentAnalysis(input.documentId, "done", structure);
           return { success: true, structure };
         } catch (e) {
@@ -869,7 +871,8 @@ export const appRouter = router({
         try {
           const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, "");
           const signedUrl = await storageGetSignedUrl(actualKey);
-          const structure = await analyzeDocumentStructure(signedUrl, doc.title, doc.fileType === "pdf" ? "application/pdf" : "application/pdf");
+          const mimeForAnalysis = doc.fileType === "pdf" ? "application/pdf" : doc.fileType === "doc" ? "application/msword" : doc.fileType === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : doc.fileType === "ppt" ? "application/vnd.ms-powerpoint" : doc.fileType === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/pdf";
+          const structure = await analyzeDocumentStructure(signedUrl, doc.title, mimeForAnalysis);
           await updateDocumentAnalysis(input.documentId, "done", structure);
           return { success: true, structure };
         } catch (e) {

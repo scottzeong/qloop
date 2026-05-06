@@ -32,7 +32,15 @@ const MIME_TO_FILE_TYPE: Record<AllowedMime, "pdf" | "doc" | "docx" | "ppt" | "p
 
 // ─── AI 문서 분석 (routers.ts의 analyzeDocumentStructure와 동일 로직) ──────────
 
-async function analyzeDocForLibrary(fileUrl: string, docTitle: string) {
+const MIME_TO_LLM_TYPE: Record<AllowedMime, "application/pdf"> = {
+  "application/pdf": "application/pdf",
+  "application/msword": "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "application/pdf",
+  "application/vnd.ms-powerpoint": "application/pdf",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "application/pdf",
+};
+
+async function analyzeDocForLibrary(fileUrl: string, docTitle: string, mimeType: string = "application/pdf") {
   const systemPrompt = `You are an expert educational content analyzer.
 Analyze the provided document comprehensively and extract its structure in MULTIPLE formats simultaneously.
 Return a single JSON object containing ALL of the following:
@@ -55,7 +63,7 @@ Return ONLY valid JSON matching the schema exactly.`;
       {
         role: "user" as const,
         content: [
-          { type: "file_url" as const, file_url: { url: fileUrl, mime_type: "application/pdf" as const } },
+          { type: "file_url" as const, file_url: { url: fileUrl, mime_type: (MIME_TO_LLM_TYPE[mimeType as AllowedMime] ?? "application/pdf") as "application/pdf" } },
           { type: "text" as const, text: `Please analyze this document titled "${docTitle}" and return the hierarchical structure as JSON.` },
         ],
       },
@@ -81,8 +89,23 @@ Return ONLY valid JSON matching the schema exactly.`;
     },
   });
 
-  const raw = response.choices?.[0]?.message?.content ?? "{}";
-  return typeof raw === "string" ? JSON.parse(raw) : raw;
+  const raw = response.choices?.[0]?.message?.content;
+  if (!raw || typeof raw !== "string") throw new Error("AI 분석 결과를 받지 못했습니다.");
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed.chapters)) parsed.chapters = [];
+    if (!Array.isArray(parsed.conceptMap)) parsed.conceptMap = [];
+    if (!Array.isArray(parsed.keyConceptCards)) parsed.keyConceptCards = [];
+    if (!Array.isArray(parsed.timeline)) parsed.timeline = [];
+    if (!Array.isArray(parsed.comparisonTables)) parsed.comparisonTables = [];
+    if (!Array.isArray(parsed.learningPath)) parsed.learningPath = [];
+    if (!parsed.documentType) parsed.documentType = "other";
+    if (!parsed.title) parsed.title = docTitle;
+    if (!parsed.summary) parsed.summary = "";
+    return parsed;
+  } catch {
+    throw new Error("AI 분석 결과를 파싱하지 못했습니다. 다시 시도해 주세요.");
+  }
 }
 
 // ─── Knowledge Library Router ─────────────────────────────────────────────────
@@ -228,7 +251,7 @@ export const libraryRouter = router({
       let analysisError: string | null = null;
       try {
         const signedUrl = await storageGetSignedUrl(key);
-        structure = await analyzeDocForLibrary(signedUrl, titleWithoutExt);
+        structure = await analyzeDocForLibrary(signedUrl, titleWithoutExt, input.mimeType);
         await updateDocumentAnalysis(docId, "done", structure);
       } catch (e) {
         analysisError = e instanceof Error ? e.message : "AI 분석 실패";
