@@ -1202,10 +1202,31 @@ export default function DocumentDetail() {
             <DialogTitle className="text-sm font-black uppercase tracking-widest">평가 설정</DialogTitle>
           </DialogHeader>
           <div className="px-6 py-5 space-y-5">
+            {/* 구조 미리보기 */}
             {pendingTopic && (
-              <div className="bg-black/5 px-4 py-3">
-                <p className="text-xs text-black/40 font-bold uppercase tracking-widest mb-1">선택된 토픽</p>
+              <div className="border border-black/10 bg-black/[0.02] px-4 py-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-black/40 font-bold uppercase tracking-widest">학습 구조 미리보기</p>
+                  {(doc as any)?.selectedStructure && (
+                    <span className="text-xs font-bold px-2 py-0.5 bg-black text-white">
+                      {(doc as any).selectedStructure === 'tree' ? '목차 트리' : (doc as any).selectedStructure === 'conceptMap' ? '개념 맵' : '학습 경로'}
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm font-bold">{pendingTopic.title}</p>
+                {pendingTopic.description && (
+                  <p className="text-xs text-black/50 leading-relaxed">{pendingTopic.description}</p>
+                )}
+                {/* 구조별 요약 정보 */}
+                {structure && (doc as any)?.selectedStructure === 'tree' && structure.chapters && (
+                  <p className="text-xs text-black/30">전체 {structure.chapters.length}개 챕터 · {structure.chapters.reduce((a: number, c: any) => a + (c.topics?.length ?? 0), 0)}개 토픽</p>
+                )}
+                {structure && (doc as any)?.selectedStructure === 'conceptMap' && structure.conceptMap && (
+                  <p className="text-xs text-black/30">전체 {structure.conceptMap.length}개 개념 노드</p>
+                )}
+                {structure && (doc as any)?.selectedStructure === 'learningPath' && structure.learningPath && (
+                  <p className="text-xs text-black/30">전체 {structure.learningPath.length}단계</p>
+                )}
               </div>
             )}
             <div>

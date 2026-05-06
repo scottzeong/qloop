@@ -155,22 +155,24 @@ function DimensionManager() {
           const isEditing = editing === d.id;
           return (
             <div key={d.id} className="border border-gray-200">
-              <button
-                className="w-full p-4 flex items-center justify-between text-left hover:bg-gray-50"
-                onClick={() => isEditing ? setEditing(null) : startEdit(d)}
-              >
-                <div className="flex items-center gap-4">
-                  <span className="text-xs font-mono text-gray-400 w-24">{d.name}</span>
-                  <span className="text-sm font-bold">{d.displayName ?? d.name}</span>
-                  <span className="text-xs text-gray-500 truncate max-w-sm">{d.description}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs px-2 py-0.5 border border-black text-black hover:bg-black hover:text-white transition-colors cursor-pointer">
+              <div className="p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-xs font-mono text-gray-400 w-24 flex-shrink-0">{d.name}</span>
+                      <span className="text-sm font-bold">{d.displayName ?? d.name}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed">{d.description}</p>
+                  </div>
+                  <button
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-black text-black hover:bg-black hover:text-white transition-colors flex-shrink-0"
+                    onClick={() => isEditing ? setEditing(null) : startEdit(d)}
+                  >
                     Edit
-                  </span>
-                  {isEditing ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    {isEditing ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  </button>
                 </div>
-              </button>
+              </div>
               {isEditing && (
                 <div className="border-t border-gray-100 p-4 bg-gray-50 space-y-3">
                   <div className="grid grid-cols-2 gap-4">
@@ -186,7 +188,8 @@ function DimensionManager() {
                   <div>
                     <label className="swiss-label mb-1">설명</label>
                     <textarea
-                      className="w-full border border-gray-300 px-3 py-2 text-sm h-16 resize-none"
+                      className="w-full border border-gray-300 px-3 py-2 text-sm resize-y"
+                      style={{ minHeight: '100px' }}
                       value={form.description}
                       onChange={(e) => setForm({ ...form, description: e.target.value })}
                     />
