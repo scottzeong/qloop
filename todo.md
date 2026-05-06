@@ -184,3 +184,9 @@
 - [x] 학습그룹 구조 선택 고정: GroupDetail.tsx에 DocumentDetail과 동일한 구조 선택 UI 추가 (개념맵/학습경로 포함)
 - [x] NEURAL SYSTEM SET 평가요소 인라인 편집: AdminSocratic.tsx에서 관리자가 UI에서 직접 설명 수정 후 즉시 저장 (기존 Edit 버튼에 이미 구현됨, 설명 전체 표시 및 편집 폼 개선)
 - [x] 학습 시작 전 구조 미리보기 모달: 평가 선택 모달에 선택한 구조의 간략한 미리보기 추가
+
+## v4.4 Word .doc 파일 분석 에러 근본 수정
+- [x] routers.ts: extractTextFromOfficeFile에 .doc(application/msword) → word-extractor 처리 분기 추가
+- [x] library.ts: extractTextForLibrary에 .doc(application/msword) → word-extractor 처리 분기 추가
+- [x] word-extractor.d.ts: TypeScript 타입 선언 파일 생성
+- [x] TS 오류 0개, 테스트 26개 전원 통과 확인

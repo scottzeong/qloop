@@ -2,6 +2,7 @@ import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import mammoth from "mammoth";
 import { parseOffice } from "officeparser";
+import WordExtractor from "word-extractor";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -151,24 +152,35 @@ const MIME_TO_LLM_TYPE: Record<AllowedMime, "application/pdf"> = {
 /**
  * Word/PPT 파일에서 텍스트를 추출하는 헬퍼
  * - docx: mammoth 사용
- * - doc/ppt/pptx: officeparser 사용
+ * - doc: word-extractor 사용 (CFB 포맷 지원)
+ * - ppt/pptx: officeparser 사용
  */
 async function extractTextFromOfficeFile(fileUrl: string, mimeType: string): Promise<string | null> {
   try {
     // S3 signed URL에서 파일 다운로드
     const res = await fetch(fileUrl);
-    if (!res.ok) throw new Error(`파일 다운로드 실패: ${res.status}`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`파일 다운로드 실패: ${res.status} ${res.statusText} - ${body.slice(0, 200)}`);
+    }
     const arrayBuffer = await res.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    if (buffer.length < 100) throw new Error(`다운로드된 파일이 너무 작습니다: ${buffer.length} bytes`);
 
     if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
       // DOCX → mammoth으로 텍스트 추출 (가장 안정적)
       const result = await mammoth.extractRawText({ buffer });
       return result.value || null;
+    } else if (mimeType === "application/msword") {
+      // DOC (Word 97-2003, CFB 포맷) → word-extractor 사용
+      const extractor = new WordExtractor();
+      const doc = await extractor.extract(buffer);
+      return doc.getBody() || null;
     } else {
-      // DOC / PPT / PPTX → officeparser 사용 (새 async API)
+      // PPT / PPTX → officeparser 사용
       const ast = await parseOffice(buffer);
-      return ast.toText() || null;
+      const text = ast.toText();
+      return text || null;
     }
   } catch (e) {
     console.error("[extractTextFromOfficeFile] 텍스트 추출 실패:", e);
