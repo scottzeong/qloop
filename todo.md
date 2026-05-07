@@ -199,3 +199,8 @@
 
 ## v4.6 AI 답변 후 입력창 자동 포커스
 - [x] 학습 세션 채팅: AI 질문/역질문 답변 표시 후 답변 입력창으로 커서 자동 이동
+
+## v4.7 세션 종료 시 QLOOP Profile 자동 업데이트
+- [x] LearningSession.tsx: handleComplete에서 session.complete 후 socratic.completeModule 자동 호출
+- [x] 평가 데이터 없을 때(질문 없이 종료) 예외 처리 (graceful fallback)
+- [x] 세션 종료 완료 후 "QLOOP Profile이 업데이트되었습니다" 토스트 표시

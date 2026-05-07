@@ -122,6 +122,7 @@ export default function LearningSession() {
 
   const sendMessage = trpc.session.sendMessage.useMutation();
   const completeSession = trpc.session.complete.useMutation();
+  const completeModule = trpc.socratic.completeModule.useMutation();
 
   // AI Tutor 질문 메시지에 순차 번호 부여
   const numberedMessages = useMemo(() => {
@@ -186,9 +187,27 @@ export default function LearningSession() {
     if (completing) return;
     setCompleting(true);
     try {
+      // 1단계: 세션 완료 처리 (요약 생성)
       const { summary } = await completeSession.mutateAsync({ sessionId });
+      // 2단계: Socratic 모듈 평가 및 QLOOP Profile 자동 업데이트
+      try {
+        await completeModule.mutateAsync({
+          sessionId,
+          moduleTitle: session?.startTopicTitle ?? undefined,
+        });
+        toast.success("학습 세션 완료! QLOOP Profile이 업데이트되었습니다.", { duration: 4000 });
+      } catch (moduleErr: unknown) {
+        const errMsg = moduleErr instanceof Error ? moduleErr.message : "";
+        if (errMsg.includes("평가할 답변이 없습니다")) {
+          // 질문 없이 종료한 경우 — 정상 케이스
+          toast.success("학습 세션이 완료되었습니다.");
+        } else {
+          // 실제 오류 — 세션은 종료됐지만 프로필 업데이트 실패
+          toast.success("학습 세션이 완료되었습니다.");
+          toast.error("QLOOP Profile 업데이트에 실패했습니다. 잠시 후 다시 시도해 주세요.", { duration: 5000 });
+        }
+      }
       await refetchSession();
-      toast.success("학습 세션이 완료되었습니다.");
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "세션 종료 실패";
       toast.error(msg);
