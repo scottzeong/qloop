@@ -245,3 +245,10 @@
 - [x] 세션 시작 화면: 언어 배지 표시 (예: "영어 자료 → 한국어 학습")
 - [x] DocumentDetail.tsx: 언어 배지 표시
 - [x] generateNextMessage, generateAnalysis 등 모든 AI 호출에 언어 지시 전파
+
+## v4.15 학습구조 미리보기 후 최종 선택 확정 UX
+
+- [x] DocumentDetail.tsx: 구조 선택 카드 클릭 시 즉시 고정 대신 "미리보기 + 확정" 2단계 플로우로 변경
+- [x] DocumentDetail.tsx: 구조 카드 클릭 → 해당 구조 전체 미리보기 펼쳐짘 (탭 전환 방식)
+- [x] DocumentDetail.tsx: 미리보기 상태에서 "이 구조로 학습하기" 확정 버튼 클릭 시에만 structureLocked 고정
+- [x] GroupDetail.tsx: 동일한 미리보기 + 확정 플로우 적용

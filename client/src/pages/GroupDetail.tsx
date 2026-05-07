@@ -2,7 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
-import { useState } from "react";
+import React, { useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft, Folder, FileText, BookOpen, ChevronRight,
@@ -40,14 +40,19 @@ export default function GroupDetail() {
   const [selectedPolicyId, setSelectedPolicyId] = useState<number | null>(null);
   const [starting, setStarting] = useState(false);
 
-  // 구조 선택 모달 state (문서별)
-  const [showStructureModal, setShowStructureModal] = useState(false);
-  const [pendingStructureDocId, setPendingStructureDocId] = useState<number | null>(null);
+  // 구조 미리보기 state (문서별): docId -> 선택된 구조 키
+  const [previewStructureByDoc, setPreviewStructureByDoc] = useState<Record<number, "tree" | "conceptMap" | "learningPath" | null>>({});
 
-  const handleSelectStructure = (docId: number, structure: "tree" | "conceptMap" | "learningPath") => {
+  const togglePreviewStructure = (docId: number, structure: "tree" | "conceptMap" | "learningPath") => {
+    setPreviewStructureByDoc(prev => ({
+      ...prev,
+      [docId]: prev[docId] === structure ? null : structure,
+    }));
+  };
+
+  const handleConfirmStructure = (docId: number, structure: "tree" | "conceptMap" | "learningPath") => {
     setStructureMutation.mutate({ documentId: docId, structure });
-    setShowStructureModal(false);
-    setPendingStructureDocId(null);
+    setPreviewStructureByDoc(prev => ({ ...prev, [docId]: null }));
   };
 
   const handleStartLearning = (topicId: string, topicTitle: string, documentId: number) => {
@@ -106,12 +111,6 @@ export default function GroupDetail() {
       </div>
     );
   }
-
-  // 구조 선택 모달에서 사용할 문서 구조 정보
-  const pendingDoc = pendingStructureDocId
-    ? groupDetail?.documents?.find((d: any) => d.id === pendingStructureDocId)
-    : null;
-  const pendingDocStructure = pendingDoc?.structure as any;
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
@@ -246,72 +245,131 @@ export default function GroupDetail() {
                           </div>
                         )}
 
-                        {/* 분석 완료 + 구조 미선택 */}
-                        {isDone && structure && !isLocked && (
-                          <div className="p-5">
-                            <div className="flex items-center justify-between mb-4">
-                              <p className="text-xs font-bold uppercase tracking-widest text-black/50">학습 구조 선택</p>
-                              <p className="text-xs text-black/40">한 번 선택하면 해당 구조로만 학습됩니다</p>
-                            </div>
-                            <div className="grid grid-cols-3 gap-3">
-                              {/* 목차 트리 */}
-                              <button
-                                onClick={() => handleSelectStructure(doc.id, "tree")}
-                                disabled={setStructureMutation.isPending}
-                                className="border-2 border-black p-4 text-left hover:bg-black hover:text-white transition-colors group disabled:opacity-50"
-                              >
-                                <GitBranch size={18} className="mb-2 text-red-600 group-hover:text-red-300" />
-                                <div className="text-sm font-bold uppercase tracking-widest mb-1">목차 트리</div>
-                                <div className="text-xs text-black/50 group-hover:text-white/60">체계적인 챕터·토픽 구조</div>
-                                <div className="mt-2 text-xs font-bold text-red-600 group-hover:text-red-300">
-                                  {structure.chapters?.length ?? 0}개 챕터
+                        {/* 분석 완료 + 구조 미선택: 미리보기 + 확정 2단계 */}
+                        {isDone && structure && !isLocked && (() => {
+                          type StructureKey = "tree" | "conceptMap" | "learningPath";
+                          const docPreview = previewStructureByDoc[doc.id] ?? null;
+                          const structureOptions: Array<{
+                            key: StructureKey;
+                            label: string;
+                            icon: React.ReactNode;
+                            stat: string;
+                            available: boolean;
+                          }> = [
+                            {
+                              key: "tree",
+                              label: "목차 트리",
+                              icon: <GitBranch size={16} />,
+                              stat: `${structure.chapters?.length ?? 0}개 챕터`,
+                              available: true,
+                            },
+                            {
+                              key: "conceptMap",
+                              label: "개념 맵",
+                              icon: <Map size={16} />,
+                              stat: `${structure.conceptMap?.length ?? 0}개 개념`,
+                              available: !!(structure.conceptMap && structure.conceptMap.length > 0),
+                            },
+                            {
+                              key: "learningPath",
+                              label: "학습 경로",
+                              icon: <Route size={16} />,
+                              stat: `${structure.learningPath?.length ?? 0}단계`,
+                              available: !!(structure.learningPath && structure.learningPath.length > 0),
+                            },
+                          ];
+                          return (
+                            <div>
+                              {/* 구조 선택 카드 */}
+                              <div className="px-5 pt-4 pb-3">
+                                <div className="flex items-center justify-between mb-3">
+                                  <p className="text-xs font-bold uppercase tracking-widest text-black/50">학습 구조 선택</p>
+                                  <p className="text-xs text-black/30">클릭해 미리본 후 확정하세요</p>
                                 </div>
-                              </button>
-                              {/* 개념 맵 */}
-                              {structure.conceptMap && structure.conceptMap.length > 0 ? (
-                                <button
-                                  onClick={() => handleSelectStructure(doc.id, "conceptMap")}
-                                  disabled={setStructureMutation.isPending}
-                                  className="border-2 border-black p-4 text-left hover:bg-black hover:text-white transition-colors group disabled:opacity-50"
-                                >
-                                  <Map size={18} className="mb-2 text-red-600 group-hover:text-red-300" />
-                                  <div className="text-sm font-bold uppercase tracking-widest mb-1">개념 맵</div>
-                                  <div className="text-xs text-black/50 group-hover:text-white/60">개념 간 연결 관계 학습</div>
-                                  <div className="mt-2 text-xs font-bold text-red-600 group-hover:text-red-300">
-                                    {structure.conceptMap.length}개 개념
+                                <div className="grid grid-cols-3 gap-2">
+                                  {structureOptions.map((s) => {
+                                    const isSelected = docPreview === s.key;
+                                    return (
+                                      <button
+                                        key={s.key}
+                                        onClick={() => s.available && togglePreviewStructure(doc.id, s.key)}
+                                        disabled={!s.available}
+                                        className={`p-3 text-left border-2 transition-all ${
+                                          !s.available
+                                            ? "opacity-40 cursor-not-allowed border-black/20 bg-white"
+                                            : isSelected
+                                            ? "border-black bg-black text-white"
+                                            : "border-black/30 bg-white hover:border-black"
+                                        }`}
+                                      >
+                                        <div className={`mb-1.5 ${isSelected ? "text-red-300" : "text-red-600"}`}>{s.icon}</div>
+                                        <div className={`text-xs font-bold uppercase tracking-widest mb-1 ${isSelected ? "text-white" : "text-black"}`}>{s.label}</div>
+                                        <div className={`text-xs ${isSelected ? "text-white/60" : "text-black/40"}`}>{s.stat}</div>
+                                        {isSelected && <div className="mt-1.5 text-xs text-white/50">미리보기 중</div>}
+                                        {!s.available && <div className="mt-1 text-xs text-black/30">데이터 없음</div>}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                              {/* 미리보기 영역 */}
+                              {docPreview && (
+                                <div className="border-t border-black/10">
+                                  <div className="px-5 py-3 bg-black/[0.02] flex items-center justify-between gap-3">
+                                    <span className="text-xs font-bold uppercase tracking-widest text-black/40">
+                                      미리보기 — {structureOptions.find(s => s.key === docPreview)?.label}
+                                    </span>
+                                    <button
+                                      onClick={() => handleConfirmStructure(doc.id, docPreview)}
+                                      disabled={setStructureMutation.isPending}
+                                      className="flex items-center gap-1.5 bg-red-600 text-white text-xs font-bold uppercase tracking-widest px-4 py-2 hover:bg-red-700 transition-colors disabled:opacity-50"
+                                    >
+                                      {setStructureMutation.isPending ? "확정 중…" : "이 구조로 학습하기 →"}
+                                    </button>
                                   </div>
-                                </button>
-                              ) : (
-                                <div className="border-2 border-black/20 p-4 opacity-40">
-                                  <Map size={18} className="mb-2 text-gray-400" />
-                                  <div className="text-sm font-bold uppercase tracking-widest mb-1">개념 맵</div>
-                                  <div className="text-xs text-black/40">데이터 없음</div>
+                                  <div className="px-5 py-4 max-h-80 overflow-y-auto text-sm">
+                                    {docPreview === "tree" && structure.chapters && (
+                                      <div className="space-y-2">
+                                        {structure.chapters.map((ch: any) => (
+                                          <div key={ch.id} className="border border-black/10">
+                                            <div className="bg-black/5 px-3 py-2 text-xs font-bold uppercase tracking-widest">{ch.title}</div>
+                                            <div className="divide-y divide-black/5">
+                                              {(ch.topics ?? []).map((t: any) => (
+                                                <div key={t.id} className="px-3 py-2 text-xs text-black/70">{t.title}</div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {docPreview === "conceptMap" && structure.conceptMap && (
+                                      <div className="flex flex-wrap gap-2">
+                                        {structure.conceptMap.map((n: any) => (
+                                          <span key={n.id} className="text-xs border border-black/20 px-2 py-1 font-medium">{n.concept}</span>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {docPreview === "learningPath" && structure.learningPath && (
+                                      <div className="space-y-2">
+                                        {structure.learningPath.map((step: any, idx: number) => (
+                                          <div key={step.step ?? idx} className="flex items-start gap-3 border border-black/10 px-3 py-2">
+                                            <span className="text-xs font-black text-black/40 w-5 flex-shrink-0">{String(step.step ?? idx+1).padStart(2,"0")}</span>
+                                            <span className="text-xs text-black/70">{step.title}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               )}
-                              {/* 학습 경로 */}
-                              {structure.learningPath && structure.learningPath.length > 0 ? (
-                                <button
-                                  onClick={() => handleSelectStructure(doc.id, "learningPath")}
-                                  disabled={setStructureMutation.isPending}
-                                  className="border-2 border-black p-4 text-left hover:bg-black hover:text-white transition-colors group disabled:opacity-50"
-                                >
-                                  <Route size={18} className="mb-2 text-red-600 group-hover:text-red-300" />
-                                  <div className="text-sm font-bold uppercase tracking-widest mb-1">학습 경로</div>
-                                  <div className="text-xs text-black/50 group-hover:text-white/60">AI 추천 단계별 순서</div>
-                                  <div className="mt-2 text-xs font-bold text-red-600 group-hover:text-red-300">
-                                    {structure.learningPath.length}단계
-                                  </div>
-                                </button>
-                              ) : (
-                                <div className="border-2 border-black/20 p-4 opacity-40">
-                                  <Route size={18} className="mb-2 text-gray-400" />
-                                  <div className="text-sm font-bold uppercase tracking-widest mb-1">학습 경로</div>
-                                  <div className="text-xs text-black/40">데이터 없음</div>
+                              {!docPreview && (
+                                <div className="px-5 pb-4 text-center">
+                                  <p className="text-xs text-black/30">위 카드를 클릭하면 구조를 미리볼 수 있습니다.</p>
                                 </div>
                               )}
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
 
                         {/* 분석 완료 + 구조 선택 완료 → 토픽 표시 */}
                         {isDone && structure && isLocked && selectedStructure && (

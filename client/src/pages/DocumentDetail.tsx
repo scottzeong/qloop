@@ -41,11 +41,13 @@ function TopicItem({
   depth,
   onSelect,
   topicProgress,
+  previewOnly = false,
 }: {
   topic: TopicNode;
   depth: number;
   onSelect: (t: TopicNode) => void;
   topicProgress: Record<string, "completed" | "active">;
+  previewOnly?: boolean;
 }) {
   const [expanded, setExpanded] = useState(depth < 1);
   const hasSubs = topic.subtopics && topic.subtopics.length > 0;
@@ -76,7 +78,7 @@ function TopicItem({
             <p className={`text-xs mt-0.5 leading-relaxed ${subTextClass}`}>{topic.description}</p>
           )}
         </div>
-        {status === "active" ? (
+        {!previewOnly && (status === "active" ? (
           <span className="flex-shrink-0 text-xs font-bold uppercase tracking-widest px-2 py-0.5 text-gray-500 border border-gray-400">
             진행 중
           </span>
@@ -91,12 +93,12 @@ function TopicItem({
           >
             {status === "completed" ? "다시 학습" : "학습 시작"}
           </button>
-        )}
+        ))}
       </div>
       {expanded && hasSubs && (
         <div>
           {topic.subtopics!.map((s) => (
-            <TopicItem key={s.id} topic={s} depth={depth + 1} onSelect={onSelect} topicProgress={topicProgress} />
+            <TopicItem key={s.id} topic={s} depth={depth + 1} onSelect={onSelect} topicProgress={topicProgress} previewOnly={previewOnly} />
           ))}
         </div>
       )}
@@ -108,10 +110,12 @@ function TreeView({
   structure,
   onSelectTopic,
   topicProgress,
+  previewOnly = false,
 }: {
   structure: DocumentStructure;
   onSelectTopic: (topic: TopicNode) => void;
   topicProgress: Record<string, "completed" | "active">;
+  previewOnly?: boolean;
 }) {
   const totalTopics = structure.chapters.reduce(
     (acc, ch) => acc + ch.topics.length + ch.topics.reduce((a, t) => a + (t.subtopics?.length ?? 0), 0),
@@ -132,7 +136,7 @@ function TreeView({
           </div>
           <div className="divide-y divide-black/10">
             {ch.topics.map((t) => (
-              <TopicItem key={t.id} topic={t} depth={0} onSelect={onSelectTopic} topicProgress={topicProgress} />
+              <TopicItem key={t.id} topic={t} depth={0} onSelect={onSelectTopic} topicProgress={topicProgress} previewOnly={previewOnly} />
             ))}
           </div>
         </div>
@@ -194,12 +198,14 @@ function ConceptMapView({
   onSelectTopic,
   onStartFromNode,
   topicProgress,
+  previewOnly = false,
 }: {
   nodes: ConceptNode[];
   structure: DocumentStructure;
   onSelectTopic: (topic: TopicNode) => void;
   onStartFromNode: (nodeLabel: string, nodeDescription: string) => void;
   topicProgress: Record<string, "completed" | "active">;
+  previewOnly?: boolean;
 }) {
   // 클릭 선택 고정 (호버 아님)
   const [selected, setSelected] = useState<string | null>(null);
@@ -403,6 +409,7 @@ function ConceptMapView({
                   );
                 }
                 const btnLabel = nodeStatus === "completed" ? "다시 학습" : "학습 시작";
+                if (previewOnly) return null;
                 return relatedTopic ? (
                   <button
                     onClick={() => onSelectTopic(relatedTopic)}
@@ -686,10 +693,12 @@ function LearningPathView({
   steps,
   onStartStep,
   topicProgress,
+  previewOnly = false,
 }: {
   steps: LearningPathStep[];
   onStartStep: (step: LearningPathStep) => void;
   topicProgress: Record<string, "completed" | "active">;
+  previewOnly?: boolean;
 }) {
   if (!steps || steps.length === 0) {
     return <EmptyState message="이 문서에서 학습 경로를 추출하지 못했습니다." />;
@@ -720,7 +729,7 @@ function LearningPathView({
                           <TopicStatusBadge status={stepStatus} />
                         </div>
                       </div>
-                      {stepStatus === "active" ? (
+                      {!previewOnly && (stepStatus === "active" ? (
                         <span className="flex-shrink-0 text-xs font-bold uppercase tracking-widest text-gray-500 border border-gray-400 px-3 py-1.5 whitespace-nowrap">
                           진행 중
                         </span>
@@ -731,7 +740,7 @@ function LearningPathView({
                         >
                           {stepStatus === "completed" ? "다시 학습" : "학습 시작"}
                         </button>
-                      )}
+                      ))}
                     </div>
                   );
                 })()}
@@ -877,8 +886,8 @@ export default function DocumentDetail() {
     }
   );
 
-  // 구조 선택 state
-  const [showStructureSelect, setShowStructureSelect] = useState(false);
+  // 구조 선택 state: null=미선택, 'tree'|'conceptMap'|'learningPath'=미리보기 중
+  const [previewStructure, setPreviewStructure] = useState<"tree" | "conceptMap" | "learningPath" | null>(null);
   // 평가 선택 모달 state
   const [showEvalModal, setShowEvalModal] = useState(false);
   const [pendingTopic, setPendingTopic] = useState<{ id: string; title: string; description: string } | null>(null);
@@ -896,7 +905,7 @@ export default function DocumentDetail() {
   const setStructureMutation = trpc.document.setStructure.useMutation({
     onSuccess: () => {
       toast.success("학습 구조가 확정되었습니다.");
-      setShowStructureSelect(false);
+      setPreviewStructure(null);
       refetch();
     },
     onError: (e) => toast.error(e.message),
@@ -1190,69 +1199,147 @@ export default function DocumentDetail() {
           </div>
         )}
 
-        {/* 구조 선택 화면 - 분석 완료 후 구조 미선택 시 */}
-        {doc.analysisStatus === "done" && structure && !isAnalyzing && (doc as any).structureLocked !== 1 && (
-          <div className="border-2 border-red-600 p-8 space-y-6">
-            <div className="flex items-center gap-3">
-              <div className="w-4 h-4 bg-red-600" />
-              <div>
-                <p className="font-black text-lg uppercase tracking-widest">학습 구조 선택</p>
-                <p className="text-sm text-black/50 mt-0.5">한 번 선택하면 해당 구조로만 학습이 진행됩니다. 재분석 시 선택이 초기화됩니다.</p>
+        {/* 구조 선택 화면 - 분석 완료 후 구조 미선택 시: 미리보기 + 확정 2단계 */}
+        {doc.analysisStatus === "done" && structure && !isAnalyzing && (doc as any).structureLocked !== 1 && (() => {
+          type StructureKey = "tree" | "conceptMap" | "learningPath";
+          const structures: Array<{
+            key: StructureKey;
+            label: string;
+            shortLabel: string;
+            desc: string;
+            stat: string;
+            available: boolean;
+          }> = [
+            {
+              key: "tree",
+              label: "목차 트리",
+              shortLabel: "트리",
+              desc: "체계적인 챕터와 토픽 구조로 순서대로 학습. 대부분의 학습자에게 가장 적합합니다.",
+              stat: `${structure.chapters.length}개 챕터 · ${structure.chapters.reduce((a,c)=>a+c.topics.length,0)}개 토픽`,
+              available: true,
+            },
+            {
+              key: "conceptMap",
+              label: "개념 맵",
+              shortLabel: "맵",
+              desc: "개념 간 연결 관계를 시각적으로 학습. 전체 연관성을 파악하고 싶을 때 적합합니다.",
+              stat: `${structure.conceptMap?.length ?? 0}개 개념 노드`,
+              available: !!(structure.conceptMap && structure.conceptMap.length > 0),
+            },
+            {
+              key: "learningPath",
+              label: "학습 경로",
+              shortLabel: "경로",
+              desc: "AI가 추천하는 단계별 학습 순서. 처음 학습하는 분야에 적합합니다.",
+              stat: `${structure.learningPath?.length ?? 0}단계`,
+              available: !!(structure.learningPath && structure.learningPath.length > 0),
+            },
+          ];
+
+          return (
+            <div className="space-y-0 border-2 border-red-600">
+              {/* 헤더 */}
+              <div className="px-8 py-5 border-b-2 border-red-600 flex items-center gap-4">
+                <div className="w-4 h-4 bg-red-600 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="font-black text-lg uppercase tracking-widest">학습 구조 선택</p>
+                  <p className="text-sm text-black/50 mt-0.5">각 구조를 클릭해 미리본 후, 원하는 구조를 최종 확정하세요.</p>
+                </div>
               </div>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              {/* 목차 트리 */}
-              <button
-                onClick={() => setStructureMutation.mutate({ documentId: docId, structure: "tree" })}
-                disabled={setStructureMutation.isPending}
-                className="border-2 border-black p-6 text-left hover:bg-black hover:text-white transition-colors group disabled:opacity-50"
-              >
-                <div className="text-2xl font-black mb-2">트리</div>
-                <div className="text-sm font-bold uppercase tracking-widest mb-2">목차 트리</div>
-                <div className="text-xs text-black/50 group-hover:text-white/60 leading-relaxed">체계적인 챕터와 토픽 구조로 순서대로 학습. 대부분의 학습자에게 가장 적합합니다.</div>
-                <div className="mt-3 text-xs font-bold text-red-600 group-hover:text-red-300">{structure.chapters.length}개 챕터 · {structure.chapters.reduce((a,c)=>a+c.topics.length,0)}개 토픽</div>
-              </button>
-              {/* 개념 맵 */}
-              {structure.conceptMap && structure.conceptMap.length > 0 ? (
-                <button
-                  onClick={() => setStructureMutation.mutate({ documentId: docId, structure: "conceptMap" })}
-                  disabled={setStructureMutation.isPending}
-                  className="border-2 border-black p-6 text-left hover:bg-black hover:text-white transition-colors group disabled:opacity-50"
-                >
-                  <div className="text-2xl font-black mb-2">맵</div>
-                  <div className="text-sm font-bold uppercase tracking-widest mb-2">개념 맵</div>
-                  <div className="text-xs text-black/50 group-hover:text-white/60 leading-relaxed">개념 간 연결 관계를 시각적으로 학습. 전체 연관성을 파악하고 싶을 때 적합합니다.</div>
-                  <div className="mt-3 text-xs font-bold text-red-600 group-hover:text-red-300">{structure.conceptMap.length}개 개념 노드</div>
-                </button>
-              ) : (
-                <div className="border-2 border-black/20 p-6 text-left opacity-40">
-                  <div className="text-2xl font-black mb-2">맵</div>
-                  <div className="text-sm font-bold uppercase tracking-widest mb-2">개념 맵</div>
-                  <div className="text-xs text-black/40">이 문서에서 개념 맵 데이터가 추출되지 않았습니다.</div>
+
+              {/* 구조 선택 카드 3개 */}
+              <div className="grid grid-cols-3 divide-x-2 divide-black/10">
+                {structures.map((s) => {
+                  const isSelected = previewStructure === s.key;
+                  return (
+                    <button
+                      key={s.key}
+                      onClick={() => s.available && setPreviewStructure(isSelected ? null : s.key)}
+                      disabled={!s.available}
+                      className={`p-6 text-left transition-all ${
+                        !s.available
+                          ? "opacity-40 cursor-not-allowed bg-white"
+                          : isSelected
+                          ? "bg-black text-white"
+                          : "bg-white hover:bg-black/5"
+                      }`}
+                    >
+                      <div className={`text-2xl font-black mb-2 ${isSelected ? "text-white" : "text-black"}`}>{s.shortLabel}</div>
+                      <div className={`text-sm font-bold uppercase tracking-widest mb-2 ${isSelected ? "text-white" : "text-black"}`}>{s.label}</div>
+                      <div className={`text-xs leading-relaxed mb-3 ${isSelected ? "text-white/70" : "text-black/50"}`}>{s.desc}</div>
+                      <div className={`text-xs font-bold ${isSelected ? "text-red-300" : "text-red-600"}`}>{s.stat}</div>
+                      {isSelected && (
+                        <div className="mt-3 text-xs font-bold uppercase tracking-widest text-white/60 flex items-center gap-1">
+                          <span className="w-2 h-2 bg-red-400 inline-block" /> 미리보기 중
+                        </div>
+                      )}
+                      {!s.available && (
+                        <div className="mt-3 text-xs text-black/30">데이터 없음</div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* 미리보기 영역 */}
+              {previewStructure && (
+                <div className="border-t-2 border-black/10">
+                  {/* 미리보기 헤더 + 확정 버튼 */}
+                  <div className="px-8 py-4 bg-black/[0.03] border-b border-black/10 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-bold uppercase tracking-widest text-black/40">미리보기</span>
+                      <span className="text-sm font-black uppercase tracking-widest">
+                        {structures.find(s => s.key === previewStructure)?.label}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setStructureMutation.mutate({ documentId: docId, structure: previewStructure })}
+                      disabled={setStructureMutation.isPending}
+                      className="flex items-center gap-2 bg-red-600 text-white text-xs font-bold uppercase tracking-widest px-5 py-2.5 hover:bg-red-700 transition-colors disabled:opacity-50"
+                    >
+                      {setStructureMutation.isPending ? (
+                        <><span className="w-3 h-3 border border-white border-t-transparent animate-spin rounded-full" /> 확정 중…</>
+                      ) : (
+                        <>이 구조로 학습하기 →</>
+                      )}
+                    </button>
+                  </div>
+                  {/* 실제 미리보기 내용 (학습 시작 버튼 없이 읽기 전용) */}
+                  <div className="px-8 py-6 max-h-[60vh] overflow-y-auto">
+                    {previewStructure === "tree" && (
+                      <TreeView structure={structure} onSelectTopic={() => {}} topicProgress={{}} previewOnly={true} />
+                    )}
+                    {previewStructure === "conceptMap" && (
+                      <ConceptMapView
+                        nodes={structure.conceptMap ?? []}
+                        structure={structure}
+                        onSelectTopic={() => {}}
+                        onStartFromNode={() => {}}
+                        topicProgress={{}}
+                        previewOnly={true}
+                      />
+                    )}
+                    {previewStructure === "learningPath" && (
+                      <LearningPathView
+                        steps={structure.learningPath ?? []}
+                        onStartStep={() => {}}
+                        topicProgress={{}}
+                        previewOnly={true}
+                      />
+                    )}
+                  </div>
                 </div>
               )}
-              {/* 학습 경로 */}
-              {structure.learningPath && structure.learningPath.length > 0 ? (
-                <button
-                  onClick={() => setStructureMutation.mutate({ documentId: docId, structure: "learningPath" })}
-                  disabled={setStructureMutation.isPending}
-                  className="border-2 border-black p-6 text-left hover:bg-black hover:text-white transition-colors group disabled:opacity-50"
-                >
-                  <div className="text-2xl font-black mb-2">경로</div>
-                  <div className="text-sm font-bold uppercase tracking-widest mb-2">학습 경로</div>
-                  <div className="text-xs text-black/50 group-hover:text-white/60 leading-relaxed">AI가 추천하는 단계별 학습 순서. 처음 학습하는 분야에 적합합니다.</div>
-                  <div className="mt-3 text-xs font-bold text-red-600 group-hover:text-red-300">{structure.learningPath.length}단계</div>
-                </button>
-              ) : (
-                <div className="border-2 border-black/20 p-6 text-left opacity-40">
-                  <div className="text-2xl font-black mb-2">경로</div>
-                  <div className="text-sm font-bold uppercase tracking-widest mb-2">학습 경로</div>
-                  <div className="text-xs text-black/40">이 문서에서 학습 경로 데이터가 추출되지 않았습니다.</div>
+
+              {/* 미리보기 전 안내 */}
+              {!previewStructure && (
+                <div className="px-8 py-10 text-center border-t-2 border-black/10">
+                  <p className="text-sm text-black/40">위 카드를 클릭하면 해당 구조의 전체 내용을 미리볼 수 있습니다.</p>
                 </div>
               )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* 분석 완료 - 구조 선택 후 */}
         {doc.analysisStatus === "done" && structure && !isAnalyzing && (doc as any).structureLocked === 1 && (
