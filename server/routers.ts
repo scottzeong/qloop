@@ -535,13 +535,44 @@ async function runSocraticEvaluation(opts: {
   }
 }
 
+// 질문 유형 3단계 난이도 매핑
+// 초반 (1~8번): 기초 이해 확인
+const QUESTION_TYPES_EASY = ["definition", "clarification"];
+// 중반 (9~16번): 논리적 사고 요구
+const QUESTION_TYPES_MEDIUM = ["justification", "assumption", "implication", "perspective", "value", "application"];
+// 후반 (17번~): 고차원 사고
+const QUESTION_TYPES_HARD = ["counterexample", "consistency", "synthesis", "reflection"];
+
+function getDifficultyTier(answeredCount: number): { tier: string; allowedTypes: string[]; instruction: string } {
+  if (answeredCount < 8) {
+    return {
+      tier: "easy",
+      allowedTypes: QUESTION_TYPES_EASY,
+      instruction: `DIFFICULTY TIER: EASY (questions 1-8). Use ONLY these types: ${QUESTION_TYPES_EASY.join(", ")}. Focus on basic comprehension and clarification.`,
+    };
+  } else if (answeredCount < 16) {
+    return {
+      tier: "medium",
+      allowedTypes: QUESTION_TYPES_MEDIUM,
+      instruction: `DIFFICULTY TIER: MEDIUM (questions 9-16). Use ONLY these types: ${QUESTION_TYPES_MEDIUM.join(", ")}. Push for reasoning, evidence, and application.`,
+    };
+  } else {
+    return {
+      tier: "hard",
+      allowedTypes: QUESTION_TYPES_HARD,
+      instruction: `DIFFICULTY TIER: HARD (questions 17+). Use ONLY these types: ${QUESTION_TYPES_HARD.join(", ")}. Challenge with synthesis, counterexamples, and deep reflection.`,
+    };
+  }
+}
+
 async function generateNextMessage(
   docTitle: string,
   topicTitle: string,
   conversationHistory: Array<{ role: string; content: string; messageType: string }>,
   userMessage: string,
   isUserQuestion: boolean,
-  openQloopMode = false
+  openQloopMode = false,
+  answeredQuestions = 0
 ): Promise<{ content: string; messageType: string; isTopicComplete: boolean; questionType?: string }> {
   const openQloopInstruction = openQloopMode
     ? `\nOPEN QLOOP MODE: You have access to all your knowledge beyond the provided document. Draw connections to related fields, current events, real-world applications, cutting-edge research, and interdisciplinary perspectives. Enrich the learning experience with broader context and diverse examples from the wider world.`
@@ -564,6 +595,19 @@ async function generateNextMessage(
   const recentTypesInstruction = recentQuestionTypes.length > 0
     ? `\nRECENTLY USED question types (DO NOT repeat these in next 2 turns): ${recentQuestionTypes.join(", ")}. You MUST choose a DIFFERENT type.`
     : "";
+
+  // 진행도 기반 난이도 단계 결정
+  const difficultyTier = getDifficultyTier(answeredQuestions);
+
+  // 학습자 답변 품질 평가: 오답/어려움 감지 시 한 단계 낮춰
+  // 답변이 매우 짧거나(어려움 신호) 또는 일반적으로 잘 모르갪다는 표현이 있으면 쉬운 유형으로 하향
+  const isStruggling = !isUserQuestion && (
+    userMessage.trim().length < 20 ||
+    /모르|\uc798 모르|어렵다|이해가 안|몰라|뭐지|잘 모르겠|어렵습니다|이해가 안 됨|잘 모르겠습니다/.test(userMessage)
+  );
+  const effectiveTier = isStruggling && difficultyTier.tier !== "easy"
+    ? getDifficultyTier(Math.max(0, answeredQuestions - 8)) // 한 단계 하향
+    : difficultyTier;
 
   const baseRules = `CRITICAL RULES:
 - Do NOT ask the learner to read, look at, or refer to any document, book, or material.
@@ -602,8 +646,9 @@ The learner has answered your question. Follow these strict rules:
 
 1. FEEDBACK: Keep it SHORT — maximum 1-2 sentences. Acknowledge correct points or briefly correct misconceptions. Do NOT summarize or repeat what the learner said.
 
-2. NEXT QUESTION: You MUST choose ONE question type and ROTATE through ALL types across the session. NEVER repeat the same type consecutively.
-   Available types (use the EXACT name in "questionType" field):
+2. NEXT QUESTION: Choose ONE question type from the ALLOWED LIST for the current difficulty tier.
+   ${effectiveTier.instruction}
+   All available types for reference:
    - definition: Ask learner to define or explain a key term in their own words
    - clarification: Ask learner to clarify or elaborate on something they said
    - justification: Ask learner to justify or provide evidence for a claim
@@ -616,15 +661,15 @@ The learner has answered your question. Follow these strict rules:
    - synthesis: Ask learner to connect or synthesize multiple ideas
    - application: Ask learner to apply a concept to a real-world scenario
    - reflection: Ask learner to reflect on their own understanding or learning process
-   IMPORTANT: Vary types across the session. Do NOT default to "definition" every time.${recentTypesInstruction}
+   IMPORTANT: You MUST pick from the ALLOWED types only. Do NOT give hints or guidance — just ask the next question directly.${recentTypesInstruction}
 
-3. COMPLETION: If the topic has been thoroughly covered (after 4-6 exchanges), provide a summary and indicate completion.
+3. COMPLETION: The session has a MINIMUM of 24 questions. Do NOT set isTopicComplete=true unless at least 24 questions have been asked (current count: ${answeredQuestions}). Only complete after 24+ exchanges AND the topic is thoroughly covered.
 ${baseRules}${openQloopInstruction}
 Return a JSON with:
 {
   "feedback": "1-2 sentence feedback only",
   "nextQuestion": "next question OR null if topic is complete",
-  "questionType": "one of: definition|clarification|justification|assumption|counterexample|consistency|perspective|implication|value|synthesis|application|reflection — required when nextQuestion is not null",
+  "questionType": "MUST be one of the ALLOWED types for current tier: ${effectiveTier.allowedTypes.join("|")}",
   "topicSummary": "summary if topic is complete OR null",
   "isTopicComplete": boolean
 }`,
@@ -657,14 +702,19 @@ Return a JSON with:
 
     const rawResp = response.choices[0]?.message?.content;
     const parsed = JSON.parse((typeof rawResp === "string" ? rawResp : null) || "{}");
-    const content = parsed.isTopicComplete
+    // 서버에서 24문항 미만 시 isTopicComplete 강제 false 처리
+    const MIN_QUESTIONS = 24;
+    const forceNotComplete = answeredQuestions < MIN_QUESTIONS;
+    const isComplete = !forceNotComplete && (parsed.isTopicComplete || false);
+
+    const content = isComplete
       ? `${parsed.feedback}\n\n**토픽 완료!** ${parsed.topicSummary}`
       : `${parsed.feedback}\n\n${parsed.nextQuestion}`;
 
     return {
       content,
-      messageType: parsed.isTopicComplete ? "feedback" : "question",
-      isTopicComplete: parsed.isTopicComplete || false,
+      messageType: isComplete ? "feedback" : "question",
+      isTopicComplete: isComplete,
       questionType: parsed.questionType ?? undefined,
     };
   }
@@ -1085,13 +1135,16 @@ export const appRouter = router({
 
         // AI 응답 생성 — 문서 직접 참조 없이 순수 문답
         const sessionOpenQloop = (session as any).openQloopMode === 1;
+        // 다음 질문 생성 시 현재 답변을 반영한 누적 답변 수 기준으로 난이도 계산
+        const currentAnsweredForTier = (session.answeredQuestions || 0) + (input.isUserQuestion ? 0 : 1);
         const aiResponse = await generateNextMessage(
           doc.title,
           session.startTopicTitle || "",
           history,
           input.content,
           input.isUserQuestion,
-          sessionOpenQloop
+          sessionOpenQloop,
+          currentAnsweredForTier
         );
 
         // AI 메시지 저장
