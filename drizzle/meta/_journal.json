@@ -57,6 +57,13 @@
       "when": 1778078059939,
       "tag": "0007_living_doomsday",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1778164654305,
+      "tag": "0008_parched_the_liberteens",
+      "breakpoints": true
     }
   ]
 }

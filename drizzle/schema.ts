@@ -69,6 +69,10 @@ export const documents = mysqlTable("documents", {
   structureLocked: int("structureLocked").default(0).notNull(),
   // 분석 단계 상세 상태 (실시간 진행 표시용)
   analysisStep: mysqlEnum("analysisStep", ["uploading", "extracting", "structuring", "done", "error"]),
+  // 자료 원문 언어 (자동 감지, 예: "ko", "en", "ja", "zh", "fr", "de", "es")
+  sourceLanguage: varchar("sourceLanguage", { length: 10 }).default("ko").notNull(),
+  // 학습 언어 (사용자 선택, AI Tutor가 이 언어로 문답)
+  learningLanguage: varchar("learningLanguage", { length: 10 }).default("ko").notNull(),
 });
 export type Document = typeof documents.$inferSelect;
 export type InsertDocument = typeof documents.$inferInsert;

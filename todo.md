@@ -236,3 +236,12 @@
 - [x] 최소 질문 수 24개로 조정 (토픽 완료 조건 변경)
 - [x] 학습자 오답/어려움 감지 시 더 쉬운 유형으로 자동 하향 조정
 - [x] 진행도(answeredQuestions) 기반 난이도 단계 결정 로직 추가
+
+## v4.14 외국어 자료 + 한국어 문답 (B방식)
+- [x] DB: documents 테이블에 sourceLanguage, learningLanguage 필드 추가
+- [x] 자료 분석 시 원문 언어 자동 감지 (LLM 활용)
+- [x] 업로드 UI: 학습 언어 선택 옵션 추가 (기본값: 한국어)
+- [x] AI Tutor 프롬프트: sourceLanguage != learningLanguage 시 learningLanguage로 문답 지시
+- [x] 세션 시작 화면: 언어 배지 표시 (예: "영어 자료 → 한국어 학습")
+- [x] DocumentDetail.tsx: 언어 배지 표시
+- [x] generateNextMessage, generateAnalysis 등 모든 AI 호출에 언어 지시 전파

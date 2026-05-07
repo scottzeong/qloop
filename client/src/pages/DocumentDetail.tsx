@@ -755,6 +755,79 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
+// ─── Language Badge ─────────────────────────────────────────────────────────
+
+const LANG_LABELS: Record<string, string> = {
+  ko: "한국어", en: "English", ja: "日本語", zh: "中文",
+  fr: "Français", de: "Deutsch", es: "Español", pt: "Português",
+  ar: "العربية", ru: "Русский",
+};
+
+const LEARNING_LANG_OPTIONS = [
+  { value: "ko", label: "한국어로 학습" },
+  { value: "en", label: "English" },
+  { value: "ja", label: "日本語" },
+  { value: "zh", label: "中文" },
+];
+
+function LanguageBadge({ doc, docId }: { doc: any; docId: number }) {
+  const utils = trpc.useUtils();
+  const [open, setOpen] = useState(false);
+  const setLangMutation = trpc.document.setLearningLanguage.useMutation({
+    onSuccess: () => {
+      utils.document.get.invalidate({ documentId: docId });
+      toast.success("학습 언어가 변경되었습니다.");
+      setOpen(false);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const srcLang = doc.sourceLanguage ?? "ko";
+  const learnLang = doc.learningLanguage ?? "ko";
+  const isForeign = srcLang !== "ko" && srcLang !== learnLang;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title="학습 언어 설정"
+        className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest px-2.5 py-1.5 border transition-colors ${
+          isForeign
+            ? "border-blue-500 text-blue-600 hover:bg-blue-50"
+            : "border-black/20 text-black/40 hover:border-black hover:text-black"
+        }`}
+      >
+        <span>{LANG_LABELS[srcLang] ?? srcLang.toUpperCase()}</span>
+        {isForeign && (
+          <>
+            <span className="text-black/30">→</span>
+            <span>{LANG_LABELS[learnLang] ?? learnLang.toUpperCase()}</span>
+          </>
+        )}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 bg-white border border-black shadow-lg z-50 min-w-[180px]">
+          <p className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-black/40 border-b border-black/10">
+            학습 언어 선택
+          </p>
+          {LEARNING_LANG_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setLangMutation.mutate({ documentId: docId, learningLanguage: opt.value })}
+              disabled={setLangMutation.isPending}
+              className={`w-full text-left px-3 py-2 text-sm hover:bg-black/5 transition-colors ${
+                learnLang === opt.value ? "font-bold text-red-600" : "text-black"
+              }`}
+            >
+              {opt.label} {learnLang === opt.value && "✓"}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Open QLoop Toggle ───────────────────────────────────────────────────────
 
 function OpenQloopToggle({ documentId }: { documentId: number }) {
@@ -975,6 +1048,8 @@ export default function DocumentDetail() {
               </span>
             )}
           </div>
+          {/* 언어 배지 + 학습 언어 변경 */}
+          <LanguageBadge doc={doc} docId={docId} />
           {/* Open QLoop 토글 */}
           <OpenQloopToggle documentId={docId} />
           {/* 학습 구조 상태 표시 */}

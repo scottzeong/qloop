@@ -192,7 +192,7 @@ async function analyzeDocumentStructure(
   fileUrl: string,
   docTitle: string,
   mimeType: string = "application/pdf"
-): Promise<DocumentStructure> {
+): Promise<DocumentStructure & { detectedLanguage?: string }> {
   const systemPrompt = `You are an expert educational content analyzer.
 Analyze the provided document comprehensively and extract its structure in MULTIPLE formats simultaneously.
 Return a single JSON object containing ALL of the following:
@@ -425,22 +425,47 @@ Return ONLY valid JSON matching the schema exactly.`;
   if (!Array.isArray(parsed.learningPath)) parsed.learningPath = [];
   if (!parsed.documentType) parsed.documentType = "other";
 
-  return parsed;
+  // 원문 언어 감지: 첫 번째 토픽 제목으로 언어 판단
+  let detectedLanguage = "ko";
+  try {
+    const sampleText = parsed.chapters?.[0]?.title || parsed.title || docTitle || "";
+    const langResp = await invokeLLM({
+      messages: [
+        { role: "system", content: "Detect the language of the given text and return ONLY the ISO 639-1 language code (e.g. en, ko, ja, zh, fr, de, es, pt, ar). Return nothing else." },
+        { role: "user", content: sampleText },
+      ],
+    });
+    const raw = langResp.choices[0]?.message?.content;
+    const code = (typeof raw === "string" ? raw.trim().toLowerCase() : "").slice(0, 5);
+    if (/^[a-z]{2}(-[a-z]{2})?$/.test(code)) detectedLanguage = code.slice(0, 2);
+  } catch (_) { /* 감지 실패 시 ko 폴백 */ }
+
+  return { ...parsed, detectedLanguage };
 }
 
 /**
  * 첫 번째 질문 생성 — 문서를 직접 참조하지 않고 토픽 제목/설명만으로 질문 생성
  * 학습자가 문서를 읽지 않고 순수 문답으로 학습할 수 있도록 함
  */
+// 언어 코드 → 이름 맵
+const LANGUAGE_NAMES: Record<string, string> = {
+  ko: "Korean", en: "English", ja: "Japanese", zh: "Chinese",
+  fr: "French", de: "German", es: "Spanish", pt: "Portuguese",
+  ar: "Arabic", ru: "Russian", it: "Italian", nl: "Dutch",
+};
+
 async function generateFirstQuestion(
   topicTitle: string,
   topicDescription: string,
   docTitle: string,
-  openQloopMode = false
+  openQloopMode = false,
+  learningLanguage = "ko"
 ): Promise<string> {
   const openQloopInstruction = openQloopMode
     ? `\nOPEN QLOOP MODE: You have access to all your knowledge beyond the provided document. Feel free to draw connections to related fields, current events, real-world applications, cutting-edge research, and interdisciplinary perspectives. Enrich the learning experience with broader context and diverse examples from the wider world.`
     : "";
+  const langName = LANGUAGE_NAMES[learningLanguage] || "Korean";
+  const languageInstruction = `\nIMPORTANT: The document may be written in a foreign language, but you MUST ask your question in ${langName}. The learner will also answer in ${langName}. Do NOT use the source document's language if it differs from ${langName}.`;
   const response = await invokeLLM({
     messages: [
       {
@@ -455,7 +480,7 @@ CRITICAL RULES:
 - The question should be open-ended and thought-provoking.
 - Assess the learner's baseline understanding of the topic concept itself.
 - Be directly related to the topic.
-- Use the same language as the topic title (Korean if Korean).${openQloopInstruction}
+- Use the same language as the topic title (Korean if Korean).${openQloopInstruction}${languageInstruction}
 Return only the question text, nothing else.`,
       },
       {
@@ -572,7 +597,8 @@ async function generateNextMessage(
   userMessage: string,
   isUserQuestion: boolean,
   openQloopMode = false,
-  answeredQuestions = 0
+  answeredQuestions = 0,
+  learningLanguage = "ko"
 ): Promise<{ content: string; messageType: string; isTopicComplete: boolean; questionType?: string }> {
   const openQloopInstruction = openQloopMode
     ? `\nOPEN QLOOP MODE: You have access to all your knowledge beyond the provided document. Draw connections to related fields, current events, real-world applications, cutting-edge research, and interdisciplinary perspectives. Enrich the learning experience with broader context and diverse examples from the wider world.`
@@ -609,11 +635,15 @@ async function generateNextMessage(
     ? getDifficultyTier(Math.max(0, answeredQuestions - 8)) // 한 단계 하향
     : difficultyTier;
 
+  const langName2 = LANGUAGE_NAMES[learningLanguage] || "Korean";
+  const langInstruction2 = learningLanguage !== "ko"
+    ? `\nIMPORTANT: The source document may be in a foreign language. You MUST write ALL feedback and questions in ${langName2}. The learner will respond in ${langName2}.`
+    : `\nIMPORTANT: Always write ALL feedback and questions in Korean (한국어). The learner will respond in Korean.`;
   const baseRules = `CRITICAL RULES:
 - Do NOT ask the learner to read, look at, or refer to any document, book, or material.
 - Do NOT say things like "according to the document", "as described in the text", "what does the document say about...".
 - All questions and feedback must be based on the learner's own thinking and understanding.
-- Use the same language as the conversation (Korean if Korean).`;
+- Use the same language as the conversation (Korean if Korean).${langInstruction2}`;
 
   if (isUserQuestion) {
     const response = await invokeLLM({
@@ -950,9 +980,17 @@ export const appRouter = router({
           const mimeForAnalysis = doc.fileType === "pdf" ? "application/pdf" : doc.fileType === "doc" ? "application/msword" : doc.fileType === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : doc.fileType === "ppt" ? "application/vnd.ms-powerpoint" : doc.fileType === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/pdf";
           // 단계 2: structuring (AI 구조 분석 중)
           await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "structuring");
-          const structure = await analyzeDocumentStructure(signedUrl, doc.title, mimeForAnalysis);
+          const structureResult = await analyzeDocumentStructure(signedUrl, doc.title, mimeForAnalysis);
+          const { detectedLanguage, ...structure } = structureResult;
+          // 원문 언어 저장
+          if (detectedLanguage) {
+            const db2 = await getDb();
+            if (db2) {
+              await db2.update(documents).set({ sourceLanguage: detectedLanguage }).where(eq(documents.id, input.documentId));
+            }
+          }
           await updateDocumentAnalysis(input.documentId, "done", structure, undefined, "done");
-          return { success: true, structure };
+          return { success: true, structure, detectedLanguage };
         } catch (e) {
           await updateDocumentAnalysis(input.documentId, "error", undefined, undefined, "error");
           throw e;
@@ -1005,6 +1043,20 @@ export const appRouter = router({
         }).where(eq(documents.id, input.documentId));
         return { success: true };
       }),
+    // 학습 언어 설정 (B방식: 원문 유지 + 지정 언어로 문답)
+    setLearningLanguage: protectedProcedure
+      .input(z.object({
+        documentId: z.number(),
+        learningLanguage: z.string().min(2).max(5), // ISO 639-1 코드
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const doc = await getDocumentById(input.documentId);
+        if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
+        const db = await getDb();
+        if (!db) throw new Error("DB 연결 실패");
+        await db.update(documents).set({ learningLanguage: input.learningLanguage }).where(eq(documents.id, input.documentId));
+        return { success: true };
+      }),
     // 재분석 (학습 구조 잠금 초기화 포함)
     reanalyze: protectedProcedure
       .input(z.object({ documentId: z.number() }))
@@ -1026,9 +1078,17 @@ export const appRouter = router({
           const signedUrl = await storageGetSignedUrl(actualKey);
           const mimeForAnalysis = doc.fileType === "pdf" ? "application/pdf" : doc.fileType === "doc" ? "application/msword" : doc.fileType === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : doc.fileType === "ppt" ? "application/vnd.ms-powerpoint" : doc.fileType === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/pdf";
           await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "structuring");
-          const structure = await analyzeDocumentStructure(signedUrl, doc.title, mimeForAnalysis);
+          const structureResult = await analyzeDocumentStructure(signedUrl, doc.title, mimeForAnalysis);
+          const { detectedLanguage, ...structure } = structureResult;
+          // 원문 언어 저장
+          if (detectedLanguage) {
+            const db2 = await getDb();
+            if (db2) {
+              await db2.update(documents).set({ sourceLanguage: detectedLanguage }).where(eq(documents.id, input.documentId));
+            }
+          }
           await updateDocumentAnalysis(input.documentId, "done", structure, undefined, "done");
-          return { success: true, structure };
+          return { success: true, structure, detectedLanguage };
         } catch (e) {
           await updateDocumentAnalysis(input.documentId, "error", undefined, undefined, "error");
           throw e;
@@ -1072,11 +1132,13 @@ export const appRouter = router({
           selectedStructure: input.selectedStructure ?? null,
         });
         // 첫 번째 질문 생성 — 문서 직접 참조 없이 토픽 정보만 사용
+        const learningLang = (doc as any).learningLanguage || "ko";
         const firstQuestion = await generateFirstQuestion(
           input.topicTitle,
           input.topicDescription,
           doc.title,
-          openQloopMode
+          openQloopMode,
+          learningLang
         );
 
         await createSessionMessage({
@@ -1137,6 +1199,7 @@ export const appRouter = router({
         const sessionOpenQloop = (session as any).openQloopMode === 1;
         // 다음 질문 생성 시 현재 답변을 반영한 누적 답변 수 기준으로 난이도 계산
         const currentAnsweredForTier = (session.answeredQuestions || 0) + (input.isUserQuestion ? 0 : 1);
+        const docLearningLang = (doc as any).learningLanguage || "ko";
         const aiResponse = await generateNextMessage(
           doc.title,
           session.startTopicTitle || "",
@@ -1144,7 +1207,8 @@ export const appRouter = router({
           input.content,
           input.isUserQuestion,
           sessionOpenQloop,
-          currentAnsweredForTier
+          currentAnsweredForTier,
+          docLearningLang
         );
 
         // AI 메시지 저장
