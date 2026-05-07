@@ -108,14 +108,14 @@ export default function SocraticProfile() {
   const { isAuthenticated } = useAuth();
   const [expandedEval, setExpandedEval] = useState<number | null>(null);
 
-  const { data: profile, isLoading: profileLoading } = trpc.socratic.getLearnerProfile.useQuery(
+  const { data: profile, isLoading: profileLoading, refetch: refetchProfile } = trpc.socratic.getLearnerProfile.useQuery(
     undefined,
-    { enabled: isAuthenticated }
+    { enabled: isAuthenticated, staleTime: 0, refetchOnMount: "always" }
   );
 
   const { data: evaluations, isLoading: evalsLoading } = trpc.socratic.getLearnerEvaluations.useQuery(
     { limit: 20 },
-    { enabled: isAuthenticated }
+    { enabled: isAuthenticated, staleTime: 0, refetchOnMount: "always" }
   );
 
   const isLoading = profileLoading || evalsLoading;

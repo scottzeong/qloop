@@ -628,7 +628,14 @@ ${dimensionDescriptions}
       });
 
       // 학습자 프로파일 업데이트
-      await updateLearnerProfile(ctx.user.id, avgDimScores, avgTypeScores);
+      await updateLearnerProfile(
+        ctx.user.id,
+        avgDimScores,
+        avgTypeScores,
+        Array.from(new Set(allStrengths)).slice(0, 5),
+        Array.from(new Set(allWeaknesses)).slice(0, 5),
+        evals.length
+      );
 
       // 세션 완료 처리
       await db.update(learningSessions)
@@ -723,7 +730,10 @@ ${dimensionDescriptions}
 async function updateLearnerProfile(
   learnerId: number,
   dimScores: Record<string, number>,
-  typeScores: Record<string, number>
+  typeScores: Record<string, number>,
+  strengths: string[] = [],
+  weaknesses: string[] = [],
+  questionsAnsweredThisSession = 0
 ) {
   const db = await getDb();
   if (!db) return;
@@ -761,7 +771,9 @@ async function updateLearnerProfile(
     slciScore: slci,
     slciLevel,
     totalSessionsCompleted: (existing?.totalSessionsCompleted ?? 0) + 1,
-    totalQuestionsAnswered: (existing?.totalQuestionsAnswered ?? 0),
+    totalQuestionsAnswered: (existing?.totalQuestionsAnswered ?? 0) + questionsAnsweredThisSession,
+    dominantStrengthsJson: strengths.length > 0 ? strengths : ((existing?.dominantStrengthsJson as string[]) ?? []),
+    recurringWeaknessesJson: weaknesses.length > 0 ? weaknesses : ((existing?.recurringWeaknessesJson as string[]) ?? []),
   };
 
   if (existing) {

@@ -204,3 +204,7 @@
 - [x] LearningSession.tsx: handleComplete에서 session.complete 후 socratic.completeModule 자동 호출
 - [x] 평가 데이터 없을 때(질문 없이 종료) 예외 처리 (graceful fallback)
 - [x] 세션 종료 완료 후 "QLOOP Profile이 업데이트되었습니다" 토스트 표시
+
+## v4.8 QLOOP Profile 최신 세션 결과 반영 버그 수정
+- [x] SocraticProfile.tsx 진단: getLearnerProfile 쿼리 캐시 문제 또는 completeModule 미호출 여부 확인
+- [x] 세션 종료 후 Profile 페이지 방문 시 최신 데이터 즉시 반영되도록 수정
