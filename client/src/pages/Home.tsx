@@ -19,7 +19,7 @@ export default function Home() {
       <header className="border-b-2 border-black">
         <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
           <div className="flex items-center">
-            <img src="/manus-storage/QLoopLogo_be7719bb.png" alt="QLoop" className="h-9 w-auto" />
+            <img src="/manus-storage/Logo-QLoop_277bc2d4.png" alt="QLoop" className="h-9 w-auto" />
           </div>
           <nav className="flex items-center gap-8">
             <span className="swiss-label">Core QLoop</span>
@@ -118,7 +118,7 @@ export default function Home() {
       <footer className="border-t-2 border-black">
         <div className="max-w-7xl mx-auto px-8 py-6 flex items-center justify-between">
           <div className="flex items-center">
-            <img src="/manus-storage/QLoopLogo_be7719bb.png" alt="QLoop" className="h-6 w-auto" />
+            <img src="/manus-storage/Logo-QLoop_277bc2d4.png" alt="QLoop" className="h-6 w-auto" />
           </div>
           <span className="swiss-label">Neural Campus</span>
         </div>

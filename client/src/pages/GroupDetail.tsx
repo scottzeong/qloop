@@ -119,7 +119,7 @@ export default function GroupDetail() {
       <header className="border-b-2 border-black bg-white z-50">
         <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
           <div className="flex items-center cursor-pointer" onClick={() => navigate("/")}>
-            <img src="/manus-storage/QLoopLogo_be7719bb.png" alt="QLoop" className="h-8 w-auto" />
+            <img src="/manus-storage/Logo-QLoop_277bc2d4.png" alt="QLoop" className="h-8 w-auto" />
           </div>
           <nav className="flex items-center gap-6">
             <button onClick={() => navigate("/history")} className="swiss-label hover:text-black transition-colors flex items-center gap-1">
