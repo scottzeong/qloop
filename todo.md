@@ -208,3 +208,9 @@
 ## v4.8 QLOOP Profile 최신 세션 결과 반영 버그 수정
 - [x] SocraticProfile.tsx 진단: getLearnerProfile 쿼리 캐시 문제 또는 completeModule 미호출 여부 확인
 - [x] 세션 종료 후 Profile 페이지 방문 시 최신 데이터 즉시 반영되도록 수정
+
+## v4.9 QLOOP Profile 데이터 표시 전면 수정
+- [x] DB 실제 데이터 확인 (learner_socratic_profiles, question_evaluations)
+- [x] 총 평가 횟수 / 평균 점수 / 그래프 데이터 올바르게 표시
+- [x] 최근 평가 이력을 질문유형별로 그룹화하여 표시
+- [x] 미리보기(샘플) 배너 제거

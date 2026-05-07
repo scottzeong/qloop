@@ -655,7 +655,7 @@ ${dimensionDescriptions}
   // ── 학습자 Socratic Profile 조회 ─────────────────────────
   getLearnerProfile: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) return { profile: null, recentModuleEvaluations: [] };
+    if (!db) return { profile: null, recentModuleEvaluations: [], computedStats: null };
     const [profile] = await db
       .select()
       .from(learnerSocraticProfiles)
@@ -670,7 +670,80 @@ ${dimensionDescriptions}
       .orderBy(desc(moduleEvaluations.createdAt))
       .limit(5);
 
-    return { profile: profile ?? null, recentModuleEvaluations: recentEvals };
+    // questionEvaluations 기반 실시간 통계 계산 (profile이 없거나 최신 데이터 보완용)
+    const allQEvals = await db
+      .select()
+      .from(questionEvaluations)
+      .where(eq(questionEvaluations.learnerId, ctx.user.id))
+      .orderBy(desc(questionEvaluations.createdAt));
+
+    let computedStats: {
+      totalAnswered: number;
+      avgScore: number;
+      typeScores: Record<string, { count: number; avgScore: number; level: string }>;
+      dimScores: Record<string, number>;
+      allStrengths: string[];
+      allWeaknesses: string[];
+    } | null = null;
+
+    if (allQEvals.length > 0) {
+      // questionType 이름 조회
+      const qtypes = await db.select().from(questionTypes);
+      const qtypeMap: Record<number, string> = {};
+      const qtypeDisplayMap: Record<number, string> = {};
+      for (const qt of qtypes) {
+        qtypeMap[qt.id] = qt.name;
+        qtypeDisplayMap[qt.id] = qt.displayName ?? qt.name;
+      }
+
+      const typeGroups: Record<string, { scores: number[]; levels: string[] }> = {};
+      const dimGroups: Record<string, number[]> = {};
+      const allStrengths: string[] = [];
+      const allWeaknesses: string[] = [];
+      let totalScore = 0;
+
+      for (const ev of allQEvals) {
+        const typeName = qtypeDisplayMap[ev.questionTypeId] ?? String(ev.questionTypeId);
+        if (!typeGroups[typeName]) typeGroups[typeName] = { scores: [], levels: [] };
+        typeGroups[typeName].scores.push(ev.weightedScore ?? 0);
+        typeGroups[typeName].levels.push(ev.level ?? "Developing");
+        totalScore += ev.weightedScore ?? 0;
+        const ds = (ev.dimensionScoresJson as Record<string, number>) ?? {};
+        for (const [k, v] of Object.entries(ds)) {
+          if (!dimGroups[k]) dimGroups[k] = [];
+          dimGroups[k].push(typeof v === "number" ? v : 0);
+        }
+        allStrengths.push(...((ev.strengthsJson as string[]) ?? []));
+        allWeaknesses.push(...((ev.weaknessesJson as string[]) ?? []));
+      }
+
+      const typeScores: Record<string, { count: number; avgScore: number; level: string }> = {};
+      for (const [name, g] of Object.entries(typeGroups)) {
+        const avg = Math.round(g.scores.reduce((a, b) => a + b, 0) / g.scores.length);
+        // 최빈 레벨
+        const levelCounts: Record<string, number> = {};
+        for (const l of g.levels) levelCounts[l] = (levelCounts[l] ?? 0) + 1;
+        const dominantLevel = Object.entries(levelCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "Developing";
+        typeScores[name] = { count: g.scores.length, avgScore: avg, level: dominantLevel };
+      }
+
+      const dimScores: Record<string, number> = {};
+      for (const [k, v] of Object.entries(dimGroups)) {
+        // 0-5 → 0-100
+        dimScores[k] = Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 20);
+      }
+
+      computedStats = {
+        totalAnswered: allQEvals.length,
+        avgScore: Math.round(totalScore / allQEvals.length),
+        typeScores,
+        dimScores,
+        allStrengths: Array.from(new Set(allStrengths)).slice(0, 5),
+        allWeaknesses: Array.from(new Set(allWeaknesses)).slice(0, 5),
+      };
+    }
+
+    return { profile: profile ?? null, recentModuleEvaluations: recentEvals, computedStats };
   }),
 
   // ── 세션의 모듈 평가 조회 ─────────────────────────────────
