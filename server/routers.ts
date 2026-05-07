@@ -542,13 +542,28 @@ async function generateNextMessage(
   userMessage: string,
   isUserQuestion: boolean,
   openQloopMode = false
-): Promise<{ content: string; messageType: string; isTopicComplete: boolean }> {
+): Promise<{ content: string; messageType: string; isTopicComplete: boolean; questionType?: string }> {
   const openQloopInstruction = openQloopMode
     ? `\nOPEN QLOOP MODE: You have access to all your knowledge beyond the provided document. Draw connections to related fields, current events, real-world applications, cutting-edge research, and interdisciplinary perspectives. Enrich the learning experience with broader context and diverse examples from the wider world.`
     : "";
   const historyText = conversationHistory
     .map((m) => `[${m.role === "ai" ? "AI 튜터" : "학습자"}]: ${m.content}`)
     .join("\n");
+
+  // 최근 사용된 질문 유형 추출 (반복 방지용) - messageType 필드에 questionType이 저장된 경우 활용
+  const recentQuestionTypes: string[] = [];
+  for (const m of [...conversationHistory].reverse()) {
+    if (m.role === "ai" && m.messageType === "question" && recentQuestionTypes.length < 3) {
+      // messageType 필드에 questionType이 포함된 경우 (형식: "question:definition")
+      const qtMatch = m.messageType.match(/^question:(.+)$/);
+      if (qtMatch) {
+        recentQuestionTypes.push(qtMatch[1]);
+      }
+    }
+  }
+  const recentTypesInstruction = recentQuestionTypes.length > 0
+    ? `\nRECENTLY USED question types (DO NOT repeat these in next 2 turns): ${recentQuestionTypes.join(", ")}. You MUST choose a DIFFERENT type.`
+    : "";
 
   const baseRules = `CRITICAL RULES:
 - Do NOT ask the learner to read, look at, or refer to any document, book, or material.
@@ -587,16 +602,21 @@ The learner has answered your question. Follow these strict rules:
 
 1. FEEDBACK: Keep it SHORT — maximum 1-2 sentences. Acknowledge correct points or briefly correct misconceptions. Do NOT summarize or repeat what the learner said.
 
-2. NEXT QUESTION: Choose ONE question type from the following and vary them throughout the session:
-   - [hint] Give a small hint and ask them to elaborate further
-   - [compare] Ask them to compare two concepts or approaches
-   - [cause] Ask about the cause or reason behind something
-   - [effect] Ask about the consequence or result of something
-   - [apply] Ask them to apply the concept to a real-world scenario
-   - [define] Ask them to define or explain a specific term in their own words
-   - [example] Ask them to give a concrete example
-   - [challenge] Present a slightly incorrect statement and ask if they agree
-   Do NOT always ask open-ended "what do you think" style questions.
+2. NEXT QUESTION: You MUST choose ONE question type and ROTATE through ALL types across the session. NEVER repeat the same type consecutively.
+   Available types (use the EXACT name in "questionType" field):
+   - definition: Ask learner to define or explain a key term in their own words
+   - clarification: Ask learner to clarify or elaborate on something they said
+   - justification: Ask learner to justify or provide evidence for a claim
+   - assumption: Ask learner to identify an underlying assumption
+   - counterexample: Ask learner to think of a counterexample or exception
+   - consistency: Ask learner to check if two ideas are consistent with each other
+   - perspective: Ask learner to consider an alternative viewpoint
+   - implication: Ask learner about the consequence or implication of something
+   - value: Ask learner about the importance or value of a concept
+   - synthesis: Ask learner to connect or synthesize multiple ideas
+   - application: Ask learner to apply a concept to a real-world scenario
+   - reflection: Ask learner to reflect on their own understanding or learning process
+   IMPORTANT: Vary types across the session. Do NOT default to "definition" every time.${recentTypesInstruction}
 
 3. COMPLETION: If the topic has been thoroughly covered (after 4-6 exchanges), provide a summary and indicate completion.
 ${baseRules}${openQloopInstruction}
@@ -604,9 +624,10 @@ Return a JSON with:
 {
   "feedback": "1-2 sentence feedback only",
   "nextQuestion": "next question OR null if topic is complete",
+  "questionType": "one of: definition|clarification|justification|assumption|counterexample|consistency|perspective|implication|value|synthesis|application|reflection — required when nextQuestion is not null",
   "topicSummary": "summary if topic is complete OR null",
   "isTopicComplete": boolean
-}}`,
+}`,
         },
         {
           role: "user" as const,
@@ -623,10 +644,11 @@ Return a JSON with:
             properties: {
               feedback: { type: "string" },
               nextQuestion: { type: ["string", "null"] },
+              questionType: { type: ["string", "null"] },
               topicSummary: { type: ["string", "null"] },
               isTopicComplete: { type: "boolean" },
             },
-            required: ["feedback", "nextQuestion", "topicSummary", "isTopicComplete"],
+            required: ["feedback", "nextQuestion", "questionType", "topicSummary", "isTopicComplete"],
             additionalProperties: false,
           },
         },
@@ -643,6 +665,7 @@ Return a JSON with:
       content,
       messageType: parsed.isTopicComplete ? "feedback" : "question",
       isTopicComplete: parsed.isTopicComplete || false,
+      questionType: parsed.questionType ?? undefined,
     };
   }
 }
@@ -1050,10 +1073,14 @@ export const appRouter = router({
 
         // 대화 히스토리 조회
         const messages = await getSessionMessages(input.sessionId);
+        // questionTypeName을 messageType에 포함하여 generateNextMessage에서 이전 질문 유형 추적 가능
         const history = messages.map((m) => ({
           role: m.role,
           content: m.content,
-          messageType: m.messageType,
+          // AI 질문 메시지에 questionTypeName이 있으면 "question:TYPE" 형식으로 저장
+          messageType: (m.role === "ai" && m.messageType === "question" && (m as any).questionTypeName)
+            ? `question:${(m as any).questionTypeName}`
+            : m.messageType,
         }));
 
         // AI 응답 생성 — 문서 직접 참조 없이 순수 문답
@@ -1117,14 +1144,18 @@ export const appRouter = router({
                 .where(eq(socraticEvaluationPolicies.courseType, "global"))
                 .limit(1);
               if (defaultPolicy) {
-                // 질문유형 조회 (이름으로)
+                // 질문유형 조회: AI 응답의 questionType 우선 사용, 없으면 이전 질문 유형, 최후 폴백은 definition
                 let qtId: number | undefined;
-                if (questionTypeName) {
-                  const [qt] = await db.select().from(questionTypes).where(eq(questionTypes.name, questionTypeName)).limit(1);
+                const resolvedTypeName = aiResponse.questionType || questionTypeName;
+                if (resolvedTypeName) {
+                  // AI 응답 questionType을 DB questionTypes 이름으로 매핑
+                  // AI가 반환하는 questionType은 DB의 name과 직접 일치함 (12종)
+                  const dbTypeName = resolvedTypeName;
+                  const [qt] = await db.select().from(questionTypes).where(eq(questionTypes.name, dbTypeName)).limit(1);
                   qtId = qt?.id;
                 }
                 if (!qtId) {
-                  // 기본 질문유형 (definition)
+                  // 최후 폴백: definition
                   const [qt] = await db.select().from(questionTypes).where(eq(questionTypes.name, "definition")).limit(1);
                   qtId = qt?.id;
                 }
@@ -1147,6 +1178,8 @@ export const appRouter = router({
             console.warn("[Socratic] 질문 저장 오류:", e);
           }
         }
+        // AI 질문 메시지 저장 시 questionType을 questionTypeName에 포함 (이전 유형 추적용)
+        const resolvedQuestionTypeName = aiResponse.questionType || questionTypeName;
         await createSessionMessage({
           sessionId: input.sessionId,
           role: "ai",
@@ -1155,7 +1188,7 @@ export const appRouter = router({
           topicId: session.currentTopicId ?? undefined,
           topicTitle: session.startTopicTitle ?? undefined,
           questionIndex: aiResponse.isTopicComplete ? undefined : msgCount + 1,
-          questionTypeName: questionTypeName,
+          questionTypeName: resolvedQuestionTypeName,
           socraticQuestionId: newSocraticQuestionId,
         });
 
