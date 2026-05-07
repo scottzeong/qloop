@@ -1160,8 +1160,10 @@ export const appRouter = router({
         });
 
         // 진행 상황 업데이트
+        // answeredQuestions: 역질문(isUserQuestion)은 학습자 답변이 아니므로 제외
+        // totalQuestions: 역질문에 대한 AI 답변은 새 질문이 아니므로 제외
         const newAnswered = (session.answeredQuestions || 0) + (input.isUserQuestion ? 0 : 1);
-        const newTotal = (session.totalQuestions || 0) + (aiResponse.isTopicComplete ? 0 : 1);
+        const newTotal = (session.totalQuestions || 0) + (aiResponse.isTopicComplete || input.isUserQuestion ? 0 : 1);
 
         if (aiResponse.isTopicComplete) {
           const completedTopics = Array.isArray(session.completedTopics)
