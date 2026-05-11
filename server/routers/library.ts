@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDb, createDocument, updateDocumentAnalysis } from "../db";
+import { getDb } from "../db";
 import {
   knowledgeLibrary,
   documents,
 } from "../../drizzle/schema";
-import { eq, and, desc, like, or } from "drizzle-orm";
+import { eq, and, desc, like, or, inArray } from "drizzle-orm";
 import { storagePut, storageGetSignedUrl } from "../storage";
 import { invokeLLM, type Message } from "../_core/llm";
 import mammoth from "mammoth";
@@ -33,121 +33,68 @@ const MIME_TO_FILE_TYPE: Record<AllowedMime, "pdf" | "doc" | "docx" | "ppt" | "p
   "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
 };
 
-// ─── AI 문서 분석 (routers.ts의 analyzeDocumentStructure와 동일 로직) ──────────
+// ─── 텍스트 추출 헬퍼 ─────────────────────────────────────────────────────────
 
-const MIME_TO_LLM_TYPE: Record<AllowedMime, "application/pdf"> = {
-  "application/pdf": "application/pdf",
-  "application/msword": "application/pdf",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "application/pdf",
-  "application/vnd.ms-powerpoint": "application/pdf",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "application/pdf",
-};
-
-async function extractTextForLibrary(fileUrl: string, mimeType: string): Promise<string | null> {
+async function extractTextFromFile(fileUrl: string, mimeType: string): Promise<string | null> {
   try {
     const res = await fetch(fileUrl);
     if (!res.ok) return null;
     const buffer = Buffer.from(await res.arrayBuffer());
     if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
-      // DOCX → mammoth
       const result = await mammoth.extractRawText({ buffer });
       return result.value || null;
     } else if (mimeType === "application/msword") {
-      // DOC (Word 97-2003, CFB 포맷) → word-extractor
       const extractor = new WordExtractor();
       const doc = await extractor.extract(buffer);
       return doc.getBody() || null;
-    } else {
+    } else if (mimeType !== "application/pdf") {
       // PPT / PPTX → officeparser
       const ast = await parseOffice(buffer);
       return ast.toText() || null;
     }
+    // PDF: LLM이 직접 처리하므로 null 반환
+    return null;
   } catch { return null; }
 }
 
-async function analyzeDocForLibrary(fileUrl: string, docTitle: string, mimeType: string = "application/pdf") {
-  const systemPrompt = `You are an expert educational content analyzer.
-Analyze the provided document comprehensively and extract its structure in MULTIPLE formats simultaneously.
-Return a single JSON object containing ALL of the following:
-1. chapters: Hierarchical chapter/topic/subtopic tree
-2. conceptMap: Key concepts as nodes with connections (max 15 nodes)
-3. keyConceptCards: Important terms with definitions and examples (max 20 cards)
-4. timeline: Chronological/sequential events or development stages IF the document has historical or process content (empty array if not applicable)
-5. comparisonTables: Comparison tables for contrasting concepts/items IF the document compares things (empty array if not applicable)
-6. learningPath: Recommended sequential learning steps (3-6 steps)
-7. documentType: One of: textbook, research, manual, report, narrative, reference, other
-For conceptMap nodes: type "core"/"sub"/"related", connections = array of other node IDs.
-For keyConceptCards: importance "high"/"medium"/"low".
-For learningPath: estimatedMinutes per step.
-Be thorough. Use the same language as the document (Korean if Korean).
-Return ONLY valid JSON matching the schema exactly.`;
+// ─── AI 문서 요약 추출 (Library 컨텍스트용, 간략 버전) ────────────────────────
 
-  // PDF는 file_url로 직접, Word/PPT는 텍스트 추출 후 텍스트로 전달
+async function extractLibraryContext(fileUrl: string, docTitle: string, mimeType: string): Promise<string> {
   const isPdf = mimeType === "application/pdf";
   let userContent: Message["content"];
+
   if (isPdf) {
     userContent = [
       { type: "file_url" as const, file_url: { url: fileUrl, mime_type: "application/pdf" } },
-      { type: "text" as const, text: `Please analyze this document titled "${docTitle}" and return the hierarchical structure as JSON.` },
+      { type: "text" as const, text: `Please extract the key concepts, main topics, and important facts from this document titled "${docTitle}". Provide a comprehensive summary that can be used as context for generating learning questions. Include: main themes, key terms, important facts, and core arguments. Be thorough but concise.` },
     ];
   } else {
-    const extractedText = await extractTextForLibrary(fileUrl, mimeType);
+    const extractedText = await extractTextFromFile(fileUrl, mimeType);
     if (!extractedText || extractedText.trim().length < 50) {
-      throw new Error("파일에서 텍스트를 추출할 수 없습니다.");
+      return `[Document: ${docTitle}] (텍스트 추출 실패)`;
     }
-    const truncated = extractedText.length > 50000 ? extractedText.slice(0, 50000) + "\n...[truncated]" : extractedText;
-    userContent = `Please analyze this document titled "${docTitle}".\n\nDocument content:\n${truncated}\n\nReturn the hierarchical structure as JSON.`;
+    const truncated = extractedText.length > 30000 ? extractedText.slice(0, 30000) + "\n...[truncated]" : extractedText;
+    userContent = `Please extract the key concepts, main topics, and important facts from this document titled "${docTitle}".\n\nDocument content:\n${truncated}\n\nProvide a comprehensive summary for learning context.`;
   }
 
   const response = await invokeLLM({
     messages: [
-      { role: "system", content: systemPrompt },
+      {
+        role: "system",
+        content: "You are an expert educational content analyzer. Extract key concepts and important information from documents to create learning context summaries. Be comprehensive and use the same language as the document.",
+      },
       { role: "user" as const, content: userContent },
     ] satisfies Message[],
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: "document_structure",
-        strict: false,
-        schema: {
-          type: "object",
-          properties: {
-            chapters: { type: "array" },
-            conceptMap: { type: "object" },
-            keyConceptCards: { type: "array" },
-            timeline: { type: "array" },
-            comparisonTables: { type: "array" },
-            learningPath: { type: "array" },
-            documentType: { type: "string" },
-          },
-        },
-      },
-    },
   });
 
   const raw = response.choices?.[0]?.message?.content;
-  if (!raw || typeof raw !== "string") throw new Error("AI 분석 결과를 받지 못했습니다.");
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed.chapters)) parsed.chapters = [];
-    if (!Array.isArray(parsed.conceptMap)) parsed.conceptMap = [];
-    if (!Array.isArray(parsed.keyConceptCards)) parsed.keyConceptCards = [];
-    if (!Array.isArray(parsed.timeline)) parsed.timeline = [];
-    if (!Array.isArray(parsed.comparisonTables)) parsed.comparisonTables = [];
-    if (!Array.isArray(parsed.learningPath)) parsed.learningPath = [];
-    if (!parsed.documentType) parsed.documentType = "other";
-    if (!parsed.title) parsed.title = docTitle;
-    if (!parsed.summary) parsed.summary = "";
-    return parsed;
-  } catch {
-    throw new Error("AI 분석 결과를 파싱하지 못했습니다. 다시 시도해 주세요.");
-  }
+  return (typeof raw === "string" ? raw : null) ?? `[Document: ${docTitle}]`;
 }
 
 // ─── Knowledge Library Router ─────────────────────────────────────────────────
 
 export const libraryRouter = router({
-  // 공개 Library 목록 조회 (학습자)
+  // 공개 Library 목록 조회 (학습자/관리자 공통)
   listLibrary: protectedProcedure
     .input(
       z.object({
@@ -175,25 +122,24 @@ export const libraryRouter = router({
       const items = await db
         .select({
           id: knowledgeLibrary.id,
-          documentId: knowledgeLibrary.documentId,
           title: knowledgeLibrary.title,
           description: knowledgeLibrary.description,
           tags: knowledgeLibrary.tags,
           downloadCount: knowledgeLibrary.downloadCount,
           createdAt: knowledgeLibrary.createdAt,
-          fileType: documents.fileType,
-          pageCount: documents.pageCount,
-          analysisStatus: documents.analysisStatus,
+          fileType: knowledgeLibrary.fileType,
+          fileSize: knowledgeLibrary.fileSize,
+          // 기존 호환성
+          documentId: knowledgeLibrary.documentId,
         })
         .from(knowledgeLibrary)
-        .leftJoin(documents, eq(knowledgeLibrary.documentId, documents.id))
         .where(and(...conditions))
         .orderBy(desc(knowledgeLibrary.createdAt));
 
       return { items };
     }),
 
-  // Library 자료를 내 문서로 가져오기 (복사본 생성)
+  // Library 자료를 내 문서로 가져오기 (복사본 생성 — documentId 있는 구형 항목만 지원)
   importFromLibrary: protectedProcedure
     .input(z.object({ libraryItemId: z.number() }))
     .mutation(async ({ ctx, input }) => {
@@ -208,10 +154,19 @@ export const libraryRouter = router({
 
       if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Library 항목을 찾을 수 없습니다." });
 
+      // 독립 파일 업로드 방식 항목: documents 복사 대신 다운로드 카운트만 증가
+      if (!item.documentId) {
+        await db
+          .update(knowledgeLibrary)
+          .set({ downloadCount: (item.downloadCount ?? 0) + 1 })
+          .where(eq(knowledgeLibrary.id, item.id));
+        return { success: true, newDocumentId: null, message: "Library 자료를 학습 컨텍스트로 사용할 수 있습니다." };
+      }
+
       const [originalDoc] = await db
         .select()
         .from(documents)
-        .where(eq(documents.id, item.documentId))
+        .where(eq(documents.id, item.documentId as number))
         .limit(1);
 
       if (!originalDoc) throw new TRPCError({ code: "NOT_FOUND", message: "원본 문서를 찾을 수 없습니다." });
@@ -237,12 +192,84 @@ export const libraryRouter = router({
       return { success: true, newDocumentId: (result as any).insertId };
     }),
 
-  // 관리자: 파일 직접 업로드 → AI 분석 → Library 등록 (원스텝)
-  uploadAndRegister: protectedProcedure
+  // ─── 독립 파일 업로드 (관리자 + 학습자 공통) ──────────────────────────────────
+  // 관리자: isPublic=true로 전체 공개 가능
+  // 학습자: isPublic=false로 본인만 사용 가능 (학습 컨텍스트용)
+  uploadFile: protectedProcedure
     .input(
       z.object({
         fileName: z.string(),
         fileData: z.string(), // base64
+        fileSize: z.number(),
+        mimeType: z.string(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+        tags: z.string().optional(),
+        isPublic: z.boolean().default(false),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // 관리자만 공개 등록 가능
+      if (input.isPublic && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "공개 Library 등록은 관리자만 가능합니다." });
+      }
+      if (!ALLOWED_MIME_TYPES.includes(input.mimeType as AllowedMime)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "지원하지 않는 파일 형식입니다. PDF, DOC, DOCX, PPT, PPTX만 가능합니다." });
+      }
+      if (input.fileSize > 20 * 1024 * 1024) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "파일 크기가 20MB를 초과합니다." });
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB 연결 실패" });
+
+      // 1. S3 업로드
+      const buffer = Buffer.from(input.fileData, "base64");
+      const safeFileName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const prefix = input.isPublic ? "library/public" : `library/user/${ctx.user.id}`;
+      const key = `${prefix}/${Date.now()}-${safeFileName}`;
+      const { url } = await storagePut(key, buffer, input.mimeType);
+
+      const fileType = MIME_TO_FILE_TYPE[input.mimeType as AllowedMime] ?? "pdf";
+      const titleWithoutExt = input.title || input.fileName.replace(/\.(pdf|doc|docx|ppt|pptx)$/i, "");
+
+      // 2. 텍스트/컨텍스트 추출 (AI 활용)
+      let extractedText: string | null = null;
+      try {
+        const signedUrl = await storageGetSignedUrl(key);
+        extractedText = await extractLibraryContext(signedUrl, titleWithoutExt, input.mimeType);
+      } catch (_) {
+        // 추출 실패 시 null로 저장 (업로드는 계속 진행)
+      }
+
+      // 3. knowledgeLibrary 레코드 직접 생성 (documents 테이블 불필요)
+      const [result] = await db.insert(knowledgeLibrary).values({
+        storageKey: key,
+        storageUrl: url,
+        fileType,
+        fileSize: input.fileSize,
+        extractedText,
+        documentId: null,
+        addedBy: ctx.user.id,
+        title: titleWithoutExt,
+        description: input.description ?? null,
+        tags: input.tags ?? null,
+        isPublic: input.isPublic ? 1 : 0,
+      });
+
+      return {
+        success: true,
+        libraryItemId: (result as any).insertId,
+        hasContext: !!extractedText,
+      };
+    }),
+
+  // 기존 uploadAndRegister 호환 유지 (관리자 전용, 공개 등록)
+  uploadAndRegister: protectedProcedure
+    .input(
+      z.object({
+        fileName: z.string(),
+        fileData: z.string(),
         fileSize: z.number(),
         mimeType: z.string(),
         description: z.string().optional(),
@@ -255,67 +282,31 @@ export const libraryRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "관리자만 Library에 업로드할 수 있습니다." });
       }
       if (!ALLOWED_MIME_TYPES.includes(input.mimeType as AllowedMime)) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "지원하지 않는 파일 형식입니다. PDF, DOC, DOCX, PPT, PPTX만 가능합니다." });
+        throw new TRPCError({ code: "BAD_REQUEST", message: "지원하지 않는 파일 형식입니다." });
       }
-
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB 연결 실패" });
-
-      // 1. S3 업로드
       const buffer = Buffer.from(input.fileData, "base64");
       const safeFileName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const key = `library/${ctx.user.id}/${Date.now()}-${safeFileName}`;
+      const key = `library/public/${Date.now()}-${safeFileName}`;
       const { url } = await storagePut(key, buffer, input.mimeType);
-
       const fileType = MIME_TO_FILE_TYPE[input.mimeType as AllowedMime] ?? "pdf";
       const titleWithoutExt = input.fileName.replace(/\.(pdf|doc|docx|ppt|pptx)$/i, "");
-
-      // 2. documents 레코드 생성 (관리자 소유)
-      const docId = await createDocument({
-        userId: ctx.user.id,
-        groupId: null,
-        title: titleWithoutExt,
-        fileType,
-        storageKey: key,
-        storageUrl: url,
-        fileSize: input.fileSize,
-        analysisStatus: "analyzing",
-      });
-
-      // 3. AI 분석
-      let structure: any = null;
-      let analysisError: string | null = null;
+      let extractedText: string | null = null;
       try {
         const signedUrl = await storageGetSignedUrl(key);
-        structure = await analyzeDocForLibrary(signedUrl, titleWithoutExt, input.mimeType);
-        await updateDocumentAnalysis(docId, "done", structure);
-      } catch (e) {
-        analysisError = e instanceof Error ? e.message : "AI 분석 실패";
-        await updateDocumentAnalysis(docId, "error");
-      }
-
-      // 분석 실패 시 Library 등록 차단
-      if (analysisError || !structure) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: `AI 분석에 실패했습니다. 파일이 S3에 저장되었으나 Library 등록은 취소되었습니다. (documentId: ${docId})`,
-        });
-      }
-
-      // 4. Knowledge Library 등록
-      await db.insert(knowledgeLibrary).values({
-        documentId: docId,
-        addedBy: ctx.user.id,
-        title: titleWithoutExt,
-        description: input.description ?? null,
-        tags: input.tags ?? null,
-        isPublic: input.isPublic ? 1 : 0,
+        extractedText = await extractLibraryContext(signedUrl, titleWithoutExt, input.mimeType);
+      } catch (_) {}
+      const [result] = await db.insert(knowledgeLibrary).values({
+        storageKey: key, storageUrl: url, fileType, fileSize: input.fileSize,
+        extractedText, documentId: null, addedBy: ctx.user.id,
+        title: titleWithoutExt, description: input.description ?? null,
+        tags: input.tags ?? null, isPublic: input.isPublic ? 1 : 0,
       });
-
-      return { success: true, documentId: docId, analysisStatus: "done" };
+      return { success: true, libraryItemId: (result as any).insertId, hasContext: !!extractedText };
     }),
 
-  // 관리자: Library에 기존 문서 추가
+  // 관리자: Library에 기존 문서 추가 (구형 방식, 호환성 유지)
   addToLibrary: protectedProcedure
     .input(
       z.object({
@@ -364,23 +355,84 @@ export const libraryRouter = router({
     const items = await db
       .select({
         id: knowledgeLibrary.id,
-        documentId: knowledgeLibrary.documentId,
         title: knowledgeLibrary.title,
         description: knowledgeLibrary.description,
         tags: knowledgeLibrary.tags,
         isPublic: knowledgeLibrary.isPublic,
         downloadCount: knowledgeLibrary.downloadCount,
         createdAt: knowledgeLibrary.createdAt,
-        fileType: documents.fileType,
-        pageCount: documents.pageCount,
-        analysisStatus: documents.analysisStatus,
+        fileType: knowledgeLibrary.fileType,
+        fileSize: knowledgeLibrary.fileSize,
+        documentId: knowledgeLibrary.documentId,
+        storageKey: knowledgeLibrary.storageKey,
+        hasContext: knowledgeLibrary.extractedText,
       })
       .from(knowledgeLibrary)
-      .leftJoin(documents, eq(knowledgeLibrary.documentId, documents.id))
+      .orderBy(desc(knowledgeLibrary.createdAt));
+
+    return {
+      items: items.map(item => ({
+        ...item,
+        hasContext: !!item.hasContext,
+      })),
+    };
+  }),
+
+  // 학습자: 본인이 업로드한 Library 자료 목록 (isPublic=0, addedBy=me)
+  listMyLibrary: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB 연결 실패" });
+
+    const items = await db
+      .select({
+        id: knowledgeLibrary.id,
+        title: knowledgeLibrary.title,
+        description: knowledgeLibrary.description,
+        tags: knowledgeLibrary.tags,
+        fileType: knowledgeLibrary.fileType,
+        fileSize: knowledgeLibrary.fileSize,
+        createdAt: knowledgeLibrary.createdAt,
+        isPublic: knowledgeLibrary.isPublic,
+      })
+      .from(knowledgeLibrary)
+      .where(eq(knowledgeLibrary.addedBy, ctx.user.id))
       .orderBy(desc(knowledgeLibrary.createdAt));
 
     return { items };
   }),
+
+  // Library 자료 컨텍스트 조회 (학습 세션에서 AI 프롬프트 구성용)
+  getLibraryContexts: protectedProcedure
+    .input(z.object({ libraryItemIds: z.array(z.number()) }))
+    .query(async ({ ctx, input }) => {
+      if (input.libraryItemIds.length === 0) return { contexts: [] };
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB 연결 실패" });
+
+      const items = await db
+        .select({
+          id: knowledgeLibrary.id,
+          title: knowledgeLibrary.title,
+          extractedText: knowledgeLibrary.extractedText,
+          isPublic: knowledgeLibrary.isPublic,
+          addedBy: knowledgeLibrary.addedBy,
+        })
+        .from(knowledgeLibrary)
+        .where(inArray(knowledgeLibrary.id, input.libraryItemIds));
+
+      // 접근 권한 확인: 공개이거나 본인 업로드만 허용
+      const accessible = items.filter(
+        item => item.isPublic === 1 || item.addedBy === ctx.user.id
+      );
+
+      return {
+        contexts: accessible.map(item => ({
+          id: item.id,
+          title: item.title,
+          text: item.extractedText ?? "",
+        })),
+      };
+    }),
 
   // 관리자: Library에서 제거
   removeFromLibrary: protectedProcedure
@@ -389,6 +441,24 @@ export const libraryRouter = router({
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB 연결 실패" });
+      await db.delete(knowledgeLibrary).where(eq(knowledgeLibrary.id, input.libraryItemId));
+      return { success: true };
+    }),
+
+  // 학습자: 본인 Library 자료 삭제
+  deleteMyLibraryItem: protectedProcedure
+    .input(z.object({ libraryItemId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB 연결 실패" });
+      const [item] = await db
+        .select({ addedBy: knowledgeLibrary.addedBy })
+        .from(knowledgeLibrary)
+        .where(eq(knowledgeLibrary.id, input.libraryItemId))
+        .limit(1);
+      if (!item || item.addedBy !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "삭제 권한이 없습니다." });
+      }
       await db.delete(knowledgeLibrary).where(eq(knowledgeLibrary.id, input.libraryItemId));
       return { success: true };
     }),

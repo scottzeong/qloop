@@ -1,0 +1,8 @@
+{
+  "query": "\nALTER TABLE knowledgeLibrary \n  MODIFY COLUMN documentId int NULL,\n  ADD COLUMN storageKey varchar(512) NULL AFTER id,\n  ADD COLUMN storageUrl varchar(1024) NULL AFTER storageKey,\n  ADD COLUMN fileType enum('pdf','doc','docx','ppt','pptx') NULL AFTER storageUrl,\n  ADD COLUMN fileSize int NULL AFTER fileType,\n  ADD COLUMN extractedText text NULL AFTER fileSize;\n\nALTER TABLE learningSessions\n  ADD COLUMN libraryContextIds json NULL AFTER selectedStructure;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user PBmX1TLNWYzhjh7.96966ba0982e --database NvrzUNjEMAuyrZ6SHXrcZ8 --execute \nALTER TABLE knowledgeLibrary \n  MODIFY COLUMN documentId int NULL,\n  ADD COLUMN storageKey varchar(512) NULL AFTER id,\n  ADD COLUMN storageUrl varchar(1024) NULL AFTER storageKey,\n  ADD COLUMN fileType enum('pdf','doc','docx','ppt','pptx') NULL AFTER storageUrl,\n  ADD COLUMN fileSize int NULL AFTER fileType,\n  ADD COLUMN extractedText text NULL AFTER fileSize;\n\nALTER TABLE learningSessions\n  ADD COLUMN libraryContextIds json NULL AFTER selectedStructure;\n",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 2: Unknown column 'storagekey' in 'knowledgeLibrary'"
+  ]
+}

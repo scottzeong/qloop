@@ -852,7 +852,7 @@ function OpenQloopToggle({ documentId }: { documentId: number }) {
     <button
       onClick={() => setOpenQloop.mutate({ documentId, enabled: !enabled })}
       disabled={setOpenQloop.isPending}
-      title={enabled ? "Open QLoop 비활성화: LLM 자체 지식 활용 모드 끄기" : "Open QLoop 활성화: LLM 자체 지식 활용 모드 켜기"}
+      title={enabled ? "Open QLoop 비활성화: 인터넷 검색 기반 확장 학습 모드 끄기" : "Open QLoop 활성화: 인터넷 검색 기반 확장 학습 모드 켜기"}
       className={`text-xs font-bold uppercase tracking-widest px-3 py-1.5 border transition-colors ${
         enabled
           ? "bg-black text-white border-black hover:bg-black/80"
@@ -893,6 +893,8 @@ export default function DocumentDetail() {
   const [pendingTopic, setPendingTopic] = useState<{ id: string; title: string; description: string } | null>(null);
   const [selectedPolicyId, setSelectedPolicyId] = useState<number | null>(null);
   const [evalEnabled, setEvalEnabled] = useState<boolean | null>(null);
+  // Knowledge Library 컨텍스트 선택 state
+  const [selectedLibraryIds, setSelectedLibraryIds] = useState<number[]>([]);
 
   const deleteDocMutation = trpc.document.delete.useMutation();
   const analyzeMutation = trpc.document.analyze.useMutation({
@@ -920,6 +922,8 @@ export default function DocumentDetail() {
   const { data: policies } = trpc.socratic.getPolicies.useQuery();
 
   const startSession = trpc.session.start.useMutation();
+  const { data: myLibraryData } = trpc.library.listMyLibrary.useQuery();
+  const myLibraryItems = myLibraryData?.items ?? [];
   const { data: topicProgressData } = trpc.session.getTopicProgress.useQuery(
     { documentId: docId },
     { enabled: isAuthenticated && !!docId }
@@ -934,6 +938,7 @@ export default function DocumentDetail() {
     setPendingTopic({ id: topic.id, title: topic.title, description: topic.description });
     setEvalEnabled(null);
     setSelectedPolicyId(null);
+    setSelectedLibraryIds([]);
     setShowEvalModal(true);
   };
 
@@ -960,6 +965,7 @@ export default function DocumentDetail() {
         evaluationEnabled: evalEnabled,
         evaluationPolicyId: evalEnabled ? (selectedPolicyId ?? undefined) : undefined,
         selectedStructure: selectedStructure ?? undefined,
+        libraryContextIds: selectedLibraryIds.length > 0 ? selectedLibraryIds : undefined,
       });
       navigate(`/sessions/${sessionId}`);
     } catch (e: unknown) {
@@ -1411,6 +1417,38 @@ export default function DocumentDetail() {
                 )}
                 {structure && (doc as any)?.selectedStructure === 'learningPath' && structure.learningPath && (
                   <p className="text-xs text-black/30">전체 {structure.learningPath.length}단계</p>
+                )}
+              </div>
+            )}
+            {/* Knowledge Library 컨텍스트 선택 */}
+            {myLibraryItems.length > 0 && (
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-black/50 mb-2">Knowledge Library 컨텍스트 <span className="text-black/30 font-normal normal-case tracking-normal">(선택)</span></p>
+                <p className="text-xs text-black/40 mb-3">선택한 자료가 AI 질문 생성의 추가 컨텍스트로 활용됩니다.</p>
+                <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                  {myLibraryItems.map((item: any) => {
+                    const isSelected = selectedLibraryIds.includes(item.id);
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => setSelectedLibraryIds(prev =>
+                          isSelected ? prev.filter(id => id !== item.id) : [...prev, item.id]
+                        )}
+                        className={`w-full flex items-center gap-2 border px-3 py-2 text-left transition-colors text-xs ${
+                          isSelected ? "border-red-600 bg-red-50 text-red-800" : "border-black/20 hover:border-black/50"
+                        }`}
+                      >
+                        <span className={`w-3.5 h-3.5 border flex-shrink-0 flex items-center justify-center ${isSelected ? "border-red-600 bg-red-600" : "border-black/30"}`}>
+                          {isSelected && <span className="text-white text-[8px] font-bold">✓</span>}
+                        </span>
+                        <span className="truncate font-medium">{item.title}</span>
+                        {item.fileType && <span className="flex-shrink-0 text-[10px] font-bold px-1 py-0.5 bg-gray-100 text-gray-500 uppercase">{item.fileType}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+                {selectedLibraryIds.length > 0 && (
+                  <p className="text-xs text-red-600 font-medium mt-1.5">{selectedLibraryIds.length}개 자료 선택됨</p>
                 )}
               </div>
             )}

@@ -454,15 +454,48 @@ const LANGUAGE_NAMES: Record<string, string> = {
   ar: "Arabic", ru: "Russian", it: "Italian", nl: "Dutch",
 };
 
+/**
+ * Open QLoop: 인터넷 검색으로 토픽 관련 최신 컨텍스트 수집
+ */
+async function fetchWebContext(topicTitle: string, docTitle: string): Promise<string> {
+  try {
+    const query = encodeURIComponent(`${topicTitle} ${docTitle} latest research 2024 2025`);
+    const res = await fetch(`https://api.duckduckgo.com/?q=${query}&format=json&no_redirect=1&no_html=1&skip_disambig=1`, {
+      headers: { "User-Agent": "QLoop-Educational-Bot/1.0" },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return "";
+    const data = await res.json();
+    const snippets: string[] = [];
+    if (data.AbstractText) snippets.push(data.AbstractText);
+    if (data.RelatedTopics) {
+      for (const t of data.RelatedTopics.slice(0, 5)) {
+        if (t.Text) snippets.push(t.Text);
+      }
+    }
+    return snippets.filter(Boolean).join("\n").slice(0, 3000);
+  } catch {
+    return "";
+  }
+}
+
 async function generateFirstQuestion(
   topicTitle: string,
   topicDescription: string,
   docTitle: string,
   openQloopMode = false,
-  learningLanguage = "ko"
+  learningLanguage = "ko",
+  libraryContext = ""
 ): Promise<string> {
+  let webContext = "";
+  if (openQloopMode) {
+    webContext = await fetchWebContext(topicTitle, docTitle);
+  }
   const openQloopInstruction = openQloopMode
-    ? `\nOPEN QLOOP MODE: You have access to all your knowledge beyond the provided document. Feel free to draw connections to related fields, current events, real-world applications, cutting-edge research, and interdisciplinary perspectives. Enrich the learning experience with broader context and diverse examples from the wider world.`
+    ? `\nOPEN QLOOP MODE: You have access to real-time internet search results about this topic. Use the following web context to enrich your questions with current events, recent research, and real-world applications. Draw connections beyond the document.${webContext ? `\n\nWEB SEARCH CONTEXT:\n${webContext}` : ""}`
+    : "";
+  const libraryContextInstruction = libraryContext
+    ? `\n\nADDITIONAL KNOWLEDGE LIBRARY CONTEXT (use to enrich questions and feedback, but do NOT ask the learner to read these materials):\n${libraryContext.slice(0, 8000)}`
     : "";
   const langName = LANGUAGE_NAMES[learningLanguage] || "Korean";
   const languageInstruction = `\nIMPORTANT: The document may be written in a foreign language, but you MUST ask your question in ${langName}. The learner will also answer in ${langName}. Do NOT use the source document's language if it differs from ${langName}.`;
@@ -480,7 +513,7 @@ CRITICAL RULES:
 - The question should be open-ended and thought-provoking.
 - Assess the learner's baseline understanding of the topic concept itself.
 - Be directly related to the topic.
-- Use the same language as the topic title (Korean if Korean).${openQloopInstruction}${languageInstruction}
+- Use the same language as the topic title (Korean if Korean).${openQloopInstruction}${languageInstruction}${libraryContextInstruction}
 Return only the question text, nothing else.`,
       },
       {
@@ -598,10 +631,19 @@ async function generateNextMessage(
   isUserQuestion: boolean,
   openQloopMode = false,
   answeredQuestions = 0,
-  learningLanguage = "ko"
+  learningLanguage = "ko",
+  libraryContext = ""
 ): Promise<{ content: string; messageType: string; isTopicComplete: boolean; questionType?: string }> {
+  // Open QLoop: 대화 초반(1~3번째 답변)에만 웹 검색 수행 (비용 절감)
+  let webContextForNext = "";
+  if (openQloopMode && answeredQuestions <= 3) {
+    webContextForNext = await fetchWebContext(topicTitle, docTitle);
+  }
   const openQloopInstruction = openQloopMode
-    ? `\nOPEN QLOOP MODE: You have access to all your knowledge beyond the provided document. Draw connections to related fields, current events, real-world applications, cutting-edge research, and interdisciplinary perspectives. Enrich the learning experience with broader context and diverse examples from the wider world.`
+    ? `\nOPEN QLOOP MODE: You have access to real-time internet search results about this topic. Use the following web context to enrich your questions and feedback with current events, recent research, and real-world applications.${webContextForNext ? `\n\nWEB SEARCH CONTEXT:\n${webContextForNext}` : ""}`
+    : "";
+  const libraryContextInstruction = libraryContext
+    ? `\n\nADDITIONAL KNOWLEDGE LIBRARY CONTEXT (use to enrich questions and feedback, but do NOT ask the learner to read these materials):\n${libraryContext.slice(0, 8000)}`
     : "";
   const historyText = conversationHistory
     .map((m) => `[${m.role === "ai" ? "AI 튜터" : "학습자"}]: ${m.content}`)
@@ -653,7 +695,7 @@ async function generateNextMessage(
           content: `You are an expert educational tutor. The learner has asked you a question.
 Answer their question clearly and thoroughly based on your knowledge of the topic.
 After answering, naturally transition back to the learning session with a follow-up question.
-${baseRules}${openQloopInstruction}`,
+${baseRules}${openQloopInstruction}${libraryContextInstruction}`,
         },
         {
           role: "user" as const,
@@ -694,7 +736,7 @@ The learner has answered your question. Follow these strict rules:
    IMPORTANT: You MUST pick from the ALLOWED types only. Do NOT give hints or guidance — just ask the next question directly.${recentTypesInstruction}
 
 3. COMPLETION: The session has a MINIMUM of 24 questions. Do NOT set isTopicComplete=true unless at least 24 questions have been asked (current count: ${answeredQuestions}). Only complete after 24+ exchanges AND the topic is thoroughly covered.
-${baseRules}${openQloopInstruction}
+${baseRules}${openQloopInstruction}${libraryContextInstruction}
 Return a JSON with:
 {
   "feedback": "1-2 sentence feedback only",
@@ -1110,12 +1152,39 @@ export const appRouter = router({
           evaluationEnabled: z.boolean().optional(),
           evaluationPolicyId: z.number().optional(),
           selectedStructure: z.enum(["tree", "conceptMap", "learningPath"]).optional(),
+          libraryContextIds: z.array(z.number()).optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
          const doc = await getDocumentById(input.documentId);
         if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
         const openQloopMode = (doc as any).openQloopEnabled === 1;
+
+        // Knowledge Library 컨텍스트 조회
+        let libraryContext = "";
+        if (input.libraryContextIds && input.libraryContextIds.length > 0) {
+          try {
+            const db = await getDb();
+            if (db) {
+              const { inArray } = await import("drizzle-orm");
+              const { knowledgeLibrary } = await import("../drizzle/schema");
+              const libItems = await db
+                .select({ id: knowledgeLibrary.id, title: knowledgeLibrary.title, extractedText: knowledgeLibrary.extractedText, isPublic: knowledgeLibrary.isPublic, addedBy: knowledgeLibrary.addedBy })
+                .from(knowledgeLibrary)
+                .where(inArray(knowledgeLibrary.id, input.libraryContextIds));
+              const accessible = libItems.filter(item => item.isPublic === 1 || item.addedBy === ctx.user.id);
+              if (accessible.length > 0) {
+                libraryContext = accessible
+                  .map(item => `[Knowledge Library: ${item.title}]\n${item.extractedText ?? ""}`.trim())
+                  .filter(Boolean)
+                  .join("\n\n---\n\n");
+              }
+            }
+          } catch (e) {
+            console.warn("[Library Context] 컨텍스트 조회 실패:", e);
+          }
+        }
+
         const sessionId = await createLearningSession({
           userId: ctx.user.id,
           documentId: input.documentId,
@@ -1130,6 +1199,7 @@ export const appRouter = router({
           evaluationEnabled: input.evaluationEnabled ? 1 : 0,
           evaluationPolicyId: input.evaluationPolicyId ?? null,
           selectedStructure: input.selectedStructure ?? null,
+          libraryContextIds: input.libraryContextIds ?? null,
         });
         // 첫 번째 질문 생성 — 문서 직접 참조 없이 토픽 정보만 사용
         const learningLang = (doc as any).learningLanguage || "ko";
@@ -1138,7 +1208,8 @@ export const appRouter = router({
           input.topicDescription,
           doc.title,
           openQloopMode,
-          learningLang
+          learningLang,
+          libraryContext
         );
 
         await createSessionMessage({
@@ -1200,6 +1271,33 @@ export const appRouter = router({
         // 다음 질문 생성 시 현재 답변을 반영한 누적 답변 수 기준으로 난이도 계산
         const currentAnsweredForTier = (session.answeredQuestions || 0) + (input.isUserQuestion ? 0 : 1);
         const docLearningLang = (doc as any).learningLanguage || "ko";
+
+        // Knowledge Library 컨텍스트 조회 (sendMessage 시에도 세션에 저장된 libraryContextIds 활용)
+        let sessionLibraryContext = "";
+        const sessionLibraryIds = (session as any).libraryContextIds as number[] | null;
+        if (sessionLibraryIds && sessionLibraryIds.length > 0) {
+          try {
+            const db2 = await getDb();
+            if (db2) {
+              const { inArray: inArray2 } = await import("drizzle-orm");
+              const { knowledgeLibrary: kl } = await import("../drizzle/schema");
+              const libItems2 = await db2
+                .select({ id: kl.id, title: kl.title, extractedText: kl.extractedText, isPublic: kl.isPublic, addedBy: kl.addedBy })
+                .from(kl)
+                .where(inArray2(kl.id, sessionLibraryIds));
+              const accessible2 = libItems2.filter(item => item.isPublic === 1 || item.addedBy === ctx.user.id);
+              if (accessible2.length > 0) {
+                sessionLibraryContext = accessible2
+                  .map(item => `[Knowledge Library: ${item.title}]\n${item.extractedText ?? ""}`.trim())
+                  .filter(Boolean)
+                  .join("\n\n---\n\n");
+              }
+            }
+          } catch (e) {
+            console.warn("[Library Context] sendMessage 컨텍스트 조회 실패:", e);
+          }
+        }
+
         const aiResponse = await generateNextMessage(
           doc.title,
           session.startTopicTitle || "",
@@ -1208,7 +1306,8 @@ export const appRouter = router({
           input.isUserQuestion,
           sessionOpenQloop,
           currentAnsweredForTier,
-          docLearningLang
+          docLearningLang,
+          sessionLibraryContext
         );
 
         // AI 메시지 저장

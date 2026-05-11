@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE learningSessions ADD COLUMN libraryContextIds json NULL",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user PBmX1TLNWYzhjh7.96966ba0982e --database NvrzUNjEMAuyrZ6SHXrcZ8 --execute ALTER TABLE learningSessions ADD COLUMN libraryContextIds json NULL",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1950
+}

@@ -102,6 +102,8 @@ export const learningSessions = mysqlTable("learningSessions", {
   evaluationPolicyId: int("evaluationPolicyId"),
   // 선택된 학습 구조 (문서에서 복사)
   selectedStructure: mysqlEnum("selectedStructure", ["tree", "conceptMap", "learningPath"]),
+  // 학습 시 포함할 Knowledge Library 자료 ID 목록 (JSON 배열)
+  libraryContextIds: json("libraryContextIds").$type<number[]>(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   completedAt: timestamp("completedAt"),
@@ -339,15 +341,23 @@ export const learnerSocraticProfiles = mysqlTable("learnerSocraticProfiles", {
 
 export type LearnerSocraticProfile = typeof learnerSocraticProfiles.$inferSelect;
 
-// Knowledge Library - 관리자가 선별한 공유 자료
+// Knowledge Library - 독립 파일 업로드 방식의 공유 자료
 export const knowledgeLibrary = mysqlTable("knowledgeLibrary", {
   id: int("id").autoincrement().primaryKey(),
-  documentId: int("documentId").notNull(), // 원본 문서 ID (관리자 소유)
-  addedBy: int("addedBy").notNull(),        // 등록한 관리자 userId
+  // 독립 파일 업로드 방식: storageKey/storageUrl 직접 저장
+  storageKey: varchar("storageKey", { length: 512 }),
+  storageUrl: varchar("storageUrl", { length: 1024 }),
+  fileType: mysqlEnum("fileType", ["pdf", "doc", "docx", "ppt", "pptx"]),
+  fileSize: int("fileSize"),
+  // 추출된 텍스트 내용 (AI 질문 생성 컨텍스트용)
+  extractedText: text("extractedText"),
+  // 기존 호환성: documentId는 nullable로 유지 (기존 데이터 보존)
+  documentId: int("documentId"),
+  addedBy: int("addedBy").notNull(),
   title: varchar("title", { length: 512 }).notNull(),
   description: text("description"),
-  tags: varchar("tags", { length: 512 }),   // 쉼표 구분 태그
-  isPublic: int("isPublic").default(1).notNull(), // 1=공개, 0=비공개
+  tags: varchar("tags", { length: 512 }),
+  isPublic: int("isPublic").default(1).notNull(),
   downloadCount: int("downloadCount").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

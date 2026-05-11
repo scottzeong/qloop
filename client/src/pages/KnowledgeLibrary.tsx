@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   BookOpen, Plus, Download, Search, Tag, ArrowLeft, Library,
@@ -241,23 +241,19 @@ function AdminView() {
   const [uploadDescInput, setUploadDescInput] = useState("");
   const [uploadIsPublic, setUploadIsPublic] = useState(true);
 
-  // 기존 문서 추가 다이얼로그
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [selectedDocId, setSelectedDocId] = useState<string>("");
-  const [tagInput, setTagInput] = useState("");
-  const [descInput, setDescInput] = useState("");
+
 
   const { data: adminData, refetch: refetchAdmin } = trpc.library.listLibraryAdmin.useQuery();
   const adminItems = adminData?.items ?? [];
 
-  const { data: myDocs } = trpc.document.list.useQuery();
+
 
   const uploadAndRegisterMutation = trpc.library.uploadAndRegister.useMutation({
     onSuccess: (data) => {
-      if (data.analysisStatus === "done") {
-        toast.success("파일이 Library에 등록되었습니다! AI 분석이 완료되었습니다.");
+      if (data.hasContext) {
+        toast.success("파일이 Library에 등록되었습니다! 컨텍스트 추출이 완료되었습니다.");
       } else {
-        toast.warning("파일이 등록되었으나 AI 분석이 완료되지 않았습니다. 잠시 후 다시 확인하세요.");
+        toast.success("파일이 Library에 등록되었습니다.");
       }
       setPendingFile(null);
       setUploadTagInput("");
@@ -267,17 +263,7 @@ function AdminView() {
     onError: (err) => toast.error(`업로드 실패: ${err.message}`),
   });
 
-  const addMutation = trpc.library.addToLibrary.useMutation({
-    onSuccess: () => {
-      toast.success("Knowledge Library에 추가되었습니다.");
-      setAddDialogOpen(false);
-      setSelectedDocId("");
-      setTagInput("");
-      setDescInput("");
-      refetchAdmin();
-    },
-    onError: (err) => toast.error(err.message),
-  });
+
 
   const removeMutation = trpc.library.removeFromLibrary.useMutation({
     onSuccess: () => { toast.success("라이브러리에서 제거되었습니다."); refetchAdmin(); },
@@ -339,15 +325,7 @@ function AdminView() {
     }
   };
 
-  const handleAddExisting = () => {
-    if (!selectedDocId) return toast.error("문서를 선택해주세요.");
-    const tags = tagInput.split(",").map((t) => t.trim()).filter(Boolean).join(",");
-    addMutation.mutate({
-      documentId: Number(selectedDocId),
-      tags: tags || undefined,
-      description: descInput.trim() || undefined,
-    });
-  };
+
 
   return (
     <>
@@ -464,16 +442,7 @@ function AdminView() {
         )}
       </div>
 
-      {/* 학습자료에서 추가 */}
-      <div className="mb-8">
-        <div className="flex justify-between items-center mb-3">
-          <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">학습자료에서 추가</h2>
-          <Button onClick={() => setAddDialogOpen(true)} size="sm" variant="outline" className="gap-2">
-            <Plus className="w-4 h-4" />
-            학습자료에서 선택
-          </Button>
-        </div>
-      </div>
+
 
       {/* 등록된 자료 목록 */}
       <div>
@@ -481,6 +450,7 @@ function AdminView() {
           <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">
             등록된 지식 ({adminItems.length}개)
           </h2>
+          <p className="text-xs text-muted-foreground">위 업로드 영역에서 파일을 직접 등록하세요.</p>
         </div>
 
         {adminItems.length === 0 ? (
@@ -503,9 +473,9 @@ function AdminView() {
                       <Badge variant={isPublic ? "default" : "secondary"} className="text-xs">
                         {isPublic ? "공개" : "비공개"}
                       </Badge>
-                      {item.analysisStatus === "done" && (
+                      {item.hasContext && (
                         <Badge variant="outline" className="text-xs text-green-700 border-green-400">
-                          분석완료
+                          컨텍스트 추출완료
                         </Badge>
                       )}
                       {tags.map((tag) => (
@@ -549,57 +519,7 @@ function AdminView() {
         )}
       </div>
 
-      {/* 기존 문서 추가 다이얼로그 */}
-      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>학습자료에서 Library에 추가</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <label className="text-sm font-medium mb-1 block">문서 선택</label>
-              <Select value={selectedDocId} onValueChange={setSelectedDocId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="추가할 문서를 선택하세요" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(myDocs ?? []).map((doc: any) => (
-                    <SelectItem key={doc.id} value={String(doc.id)}>
-                      {doc.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">설명 (선택)</label>
-              <Input
-                placeholder="자료에 대한 간단한 설명"
-                value={descInput}
-                onChange={(e) => setDescInput(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">태그 (쉼표로 구분)</label>
-              <Input
-                placeholder="예: 수학, 미적분, 기초"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddDialogOpen(false)}>취소</Button>
-            <Button
-              onClick={handleAddExisting}
-              disabled={addMutation.isPending}
-              className="bg-red-600 hover:bg-red-700 text-white"
-            >
-              추가
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
     </>
   );
 }

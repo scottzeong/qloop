@@ -252,3 +252,16 @@
 - [x] DocumentDetail.tsx: 구조 카드 클릭 → 해당 구조 전체 미리보기 펼쳐짘 (탭 전환 방식)
 - [x] DocumentDetail.tsx: 미리보기 상태에서 "이 구조로 학습하기" 확정 버튼 클릭 시에만 structureLocked 고정
 - [x] GroupDetail.tsx: 동일한 미리보기 + 확정 플로우 적용
+
+## v4.16 Knowledge Library 독립 업로드 + 학습 컨텍스트 통합 + Open QLoop 재정의
+
+- [x] DB: knowledgeLibrary 테이블에 storageKey, storageUrl, fileType, fileSize 필드 추가 (documentId 의존 제거, 독립 파일 업로드)
+- [x] server/routers.ts: library.uploadFile 프로시저 추가 (파일 → S3 저장 → knowledgeLibrary 레코드 직접 생성)
+- [x] KnowledgeLibrary.tsx 관리자 업로드: 기존 문서 선택 방식 제거 → 직접 파일 업로드 방식으로 교체
+- [x] DB: learningSessions 테이블에 libraryContextIds 필드 추가 (학습 시 포함할 라이브러리 자료 ID 목록)
+- [x] DocumentDetail.tsx: 학습 시작 전 평가 선택 모달에 "Knowledge Library 자료 포함" 다중 선택 UI 추가
+- [x] server/routers.ts: session.start에 libraryContextIds 파라미터 추가
+- [x] server/routers.ts: generateNextMessage에서 libraryContextIds 자료 내용을 프롬프트 컨텍스트에 추가
+- [x] Open QLoop 재정의: openQloopMode=1 시 웹 검색 API 호출 후 결과를 프롬프트에 추가
+- [x] DocumentDetail.tsx: Open QLoop 토글 설명 텍스트 업데이트 ("인터넷 검색으로 추가 맥락 제공")
+- [x] server/routers.ts: generateNextMessage에서 openQloopMode=1 시 Manus 검색 API 또는 LLM 웹 검색 활용
