@@ -312,3 +312,9 @@
 - [x] server/routers.ts: group.analyze 프로시저 이미 존재 (979줄~, 문서 통합 분석)
 - [x] GroupDetail.tsx: 통합 분석 버튼 및 분석 결과 표시 UI 추가 (목차/개념맵/학습경로)
 - [x] DB: documentGroups 테이블에 structure JSON 콼럼 이미 존재
+
+## v4.22 통합 분석 방식 수정
+- [x] server/routers.ts: group.analyze 프로시저 수정 - 개별 구조 합치기 방식 → 모든 문서 원문 텍스트 통합 후 AI가 완전히 새로운 목차/개념맵/학습경로 생성 (PDF: file_url 배열, Word/PPT: 텍스트 통합)
+- [x] server/routers.ts: storageGetSignedUrl로 각 문서 파일 URL 획득 후 텍스트 추출
+- [x] GroupDetail.tsx: 통합 분석 결과에 학습 시작 버튼 추가 (목차 토픽별/개념별/학습경로 단계별)
+- [x] GroupDetail.tsx: 통합 분석 완료 시 개별 문서 구조 선택/토픽 표시 UI 숨기기

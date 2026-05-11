@@ -336,13 +336,24 @@ export default function GroupDetail() {
                         <div className="space-y-2">
                           {gs.chapters.map((ch: any, i: number) => (
                             <div key={i} className="border border-black/10 p-3">
-                              <div className="font-bold text-sm">{ch.title}</div>
+                              <div className="font-bold text-sm mb-2">{ch.title}</div>
                               {ch.topics && ch.topics.length > 0 && (
-                                <div className="mt-2 space-y-1 pl-4">
+                                <div className="space-y-1 pl-4">
                                   {ch.topics.map((t: any, j: number) => (
-                                    <div key={j} className="text-xs text-gray-500 flex items-center gap-2">
-                                      <ChevronRight size={10} className="flex-shrink-0" />
-                                      {t.title}
+                                    <div key={j} className="flex items-center justify-between gap-2 py-1">
+                                      <div className="flex items-center gap-2 text-xs text-gray-600">
+                                        <ChevronRight size={10} className="flex-shrink-0" />
+                                        {t.title}
+                                      </div>
+                                      <button
+                                        onClick={() => {
+                                          const firstDoc = groupDetail.documents?.[0];
+                                          if (firstDoc) handleStartLearning(t.id || `ch${i}_t${j}`, t.title, firstDoc.id);
+                                        }}
+                                        className="flex-shrink-0 text-xs font-bold px-2 py-0.5 bg-black text-white hover:bg-[var(--swiss-red)] transition-colors"
+                                      >
+                                        학습
+                                      </button>
                                     </div>
                                   ))}
                                 </div>
@@ -355,13 +366,26 @@ export default function GroupDetail() {
                     {gs.conceptMap && gs.conceptMap.length > 0 && (
                       <div>
                         <div className="swiss-label mb-3">개념 맵</div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="grid grid-cols-2 gap-2">
                           {gs.conceptMap.map((c: any, i: number) => (
-                            <div key={i} className="border border-black/20 px-3 py-1.5 text-xs">
-                              <span className="font-bold">{c.concept}</span>
-                              {c.relatedConcepts && c.relatedConcepts.length > 0 && (
-                                <span className="text-gray-400 ml-1">→ {c.relatedConcepts.slice(0, 3).join(", ")}</span>
-                              )}
+                            <div key={i} className="border border-black/20 p-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <span className="font-bold text-xs block">{c.concept}</span>
+                                  {c.relatedConcepts && c.relatedConcepts.length > 0 && (
+                                    <span className="text-gray-400 text-xs">→ {c.relatedConcepts.slice(0, 2).join(", ")}</span>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    const firstDoc = groupDetail.documents?.[0];
+                                    if (firstDoc) handleStartLearning(c.id || `concept_${i}`, c.concept, firstDoc.id);
+                                  }}
+                                  className="flex-shrink-0 text-xs font-bold px-2 py-0.5 bg-black text-white hover:bg-[var(--swiss-red)] transition-colors"
+                                >
+                                  학습
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -372,13 +396,29 @@ export default function GroupDetail() {
                         <div className="swiss-label mb-3">학습 경로</div>
                         <div className="space-y-2">
                           {gs.learningPath.map((step: any, i: number) => (
-                            <div key={i} className="flex items-start gap-3">
-                              <div className="w-6 h-6 bg-black text-white text-xs font-bold flex items-center justify-center flex-shrink-0">{step.step ?? i + 1}</div>
-                              <div>
-                                <div className="font-bold text-sm">{step.title}</div>
-                                {step.topics && step.topics.length > 0 && (
-                                  <div className="text-xs text-gray-400 mt-0.5">{step.topics.map((t: any) => t.title).join(" · ")}</div>
-                                )}
+                            <div key={i} className="border border-black/10 p-4">
+                              <div className="flex items-start gap-3">
+                                <div className="w-6 h-6 bg-black text-white text-xs font-bold flex items-center justify-center flex-shrink-0">{step.step ?? i + 1}</div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-bold text-sm">{step.title}</div>
+                                  {step.description && (
+                                    <div className="text-xs text-gray-500 mt-0.5">{step.description}</div>
+                                  )}
+                                  {step.topics && step.topics.length > 0 && (
+                                    <div className="text-xs text-gray-400 mt-1">{step.topics.map((t: any) => t.title).join(" · ")}</div>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    const firstDoc = groupDetail.documents?.[0];
+                                    const topicTitle = step.topics?.[0]?.title || step.title;
+                                    const topicId = step.topics?.[0]?.id || `step_${step.step ?? i + 1}`;
+                                    if (firstDoc) handleStartLearning(topicId, topicTitle, firstDoc.id);
+                                  }}
+                                  className="flex-shrink-0 text-xs font-bold px-3 py-1.5 bg-black text-white hover:bg-[var(--swiss-red)] transition-colors"
+                                >
+                                  학습 시작
+                                </button>
                               </div>
                             </div>
                           ))}
@@ -392,7 +432,12 @@ export default function GroupDetail() {
 
             {/* Documents in group */}
             <div className="space-y-6">
-              <div className="swiss-label mb-2">그룹 내 문서</div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="swiss-label">그룹 내 문서</div>
+                {!!groupDetail.structure && (
+                  <span className="text-xs text-gray-400">통합 분석 완료 — 위 분석 결과에서 학습을 시작하세요</span>
+                )}
+              </div>
 
               {!groupDetail.documents || groupDetail.documents.length === 0 ? (
                 <div className="border border-gray-200 p-12 text-center">
@@ -458,8 +503,8 @@ export default function GroupDetail() {
                           </div>
                         )}
 
-                        {/* 분석 완료 + 구조 미선택: 미리보기 + 확정 2단계 */}
-                        {isDone && structure && !isLocked && (() => {
+                        {/* 분석 완료 + 구조 미선택: 미리보기 + 확정 2단계 (통합 분석 미완료 시만 표시) */}
+                        {isDone && structure && !isLocked && !groupDetail.structure && (() => {
                           type StructureKey = "tree" | "conceptMap" | "learningPath";
                           const docPreview = previewStructureByDoc[doc.id] ?? null;
                           const structureOptions: Array<{
@@ -584,8 +629,8 @@ export default function GroupDetail() {
                           );
                         })()}
 
-                        {/* 분석 완료 + 구조 선택 완료 → 토픽 표시 */}
-                        {isDone && structure && isLocked && selectedStructure && (
+                        {/* 분석 완료 + 구조 선택 완료 → 토픽 표시 (통합 분석 미완료 시만 표시) */}
+                        {isDone && structure && isLocked && selectedStructure && !groupDetail.structure && (
                           <div className="p-5">
                             {selectedStructure === "tree" && structure.chapters && (
                               <>

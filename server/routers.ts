@@ -987,38 +987,194 @@ export const appRouter = router({
         await updateDocumentGroup(input.groupId, { analysisStatus: "analyzing" });
 
         try {
-          // 각 문서를 개별 분석 후 통합
-          const structures: DocumentStructure[] = [];
+          // 모든 문서의 원문 내용을 수집: PDF는 file_url, Word/PPT는 텍스트 추출
+          type DocEntry = { title: string; kind: "pdf"; signedUrl: string } | { title: string; kind: "text"; text: string };
+          const docEntries: DocEntry[] = [];
           for (const doc of docs) {
-            if (doc.analysisStatus === "done" && doc.structure) {
-              structures.push(doc.structure as DocumentStructure);
+            const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, "");
+            const signedUrl = await storageGetSignedUrl(actualKey);
+            const mimeType = doc.fileType === "pdf" ? "application/pdf"
+              : doc.fileType === "doc" ? "application/msword"
+              : doc.fileType === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              : doc.fileType === "ppt" ? "application/vnd.ms-powerpoint"
+              : doc.fileType === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+              : "application/pdf";
+            if (mimeType === "application/pdf") {
+              docEntries.push({ title: doc.title, kind: "pdf", signedUrl });
             } else {
-              const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, "");
-              const signedUrl = await storageGetSignedUrl(actualKey);
-              const mimeForAnalysis = doc.fileType === "pdf" ? "application/pdf" : doc.fileType === "doc" ? "application/msword" : doc.fileType === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : doc.fileType === "ppt" ? "application/vnd.ms-powerpoint" : doc.fileType === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/pdf";
-              const structure = await analyzeDocumentStructure(signedUrl, doc.title, mimeForAnalysis);
-              await updateDocumentAnalysis(doc.id, "done", structure);
-              structures.push(structure);
+              const text = await extractTextFromOfficeFile(signedUrl, mimeType);
+              if (text && text.trim().length > 50) {
+                const truncated = text.length > 30000 ? text.slice(0, 30000) + "\n...[truncated]" : text;
+                docEntries.push({ title: doc.title, kind: "text", text: `[문서: ${doc.title}]\n${truncated}` });
+              }
             }
           }
 
-          // 통합 구조 생성
-          const mergedStructure: DocumentStructure = {
-            title: group.name,
-            summary: structures.map((s) => s.summary).filter(Boolean).join(" | "),
-            chapters: structures.flatMap((s, i) =>
-              s.chapters.map((ch) => ({ ...ch, id: `doc${i}_${ch.id}`, title: `[${docs[i]?.title ?? ""}] ${ch.title}` }))
-            ),
-            conceptMap: structures.flatMap((s) => s.conceptMap ?? []),
-            keyConceptCards: structures.flatMap((s) => s.keyConceptCards ?? []),
-            timeline: structures.flatMap((s) => s.timeline ?? []),
-            comparisonTables: structures.flatMap((s) => s.comparisonTables ?? []),
-            learningPath: structures.flatMap((s) => s.learningPath ?? []),
-            documentType: "other",
-          };
+          if (docEntries.length === 0) throw new Error("분석할 수 있는 문서 내용이 없습니다.");
 
-          await updateDocumentGroup(input.groupId, { analysisStatus: "done", structure: mergedStructure });
-          return { success: true, structure: mergedStructure };
+          // PDF만 있는 경우 file_url 방식, 혼합인 경우 PDF+텍스트 함께 전달
+          const allPdf = docEntries.every(e => e.kind === "pdf");
+          const groupSystemPrompt = `You are an expert educational content synthesizer.
+You are given ${docs.length} document(s) that belong to a learning group titled "${group.name}".
+Your task is to analyze ALL the documents TOGETHER and create a UNIFIED, COHERENT educational structure.
+Do NOT simply list each document separately. Instead, SYNTHESIZE the content across all documents to create:
+1. A unified chapter/topic tree that integrates concepts from all documents
+2. A unified concept map showing how concepts across all documents relate to each other
+3. A unified learning path that guides learners through all the material in the optimal order
+The result should feel like a single integrated curriculum, not a collection of separate documents.
+Return ONLY valid JSON matching the schema exactly.`;
+
+          let analysisContent: Message["content"];
+          if (allPdf) {
+            // 모든 문서가 PDF: file_url 배열로 전달
+            analysisContent = [
+              { type: "text" as const, text: `Analyze these ${docs.length} PDF documents together as a unified learning group titled "${group.name}". Create a single integrated educational structure that synthesizes content from all documents.` },
+              ...docEntries.map(e => ({ type: "file_url" as const, file_url: { url: (e as { kind: "pdf"; signedUrl: string }).signedUrl, mime_type: "application/pdf" as const } })),
+            ];
+          } else {
+            // 혼합 그룹: PDF는 file_url로, 텍스트(Word/PPT)는 텍스트로 함께 전달
+            const pdfEntries = docEntries.filter(e => e.kind === "pdf") as { title: string; kind: "pdf"; signedUrl: string }[];
+            const textEntries = docEntries.filter(e => e.kind === "text") as { title: string; kind: "text"; text: string }[];
+            const combinedText = textEntries.map(e => e.text).join("\n\n" + "=".repeat(50) + "\n\n");
+            const maxLen = 60000;
+            const truncatedCombined = combinedText.length > maxLen ? combinedText.slice(0, maxLen) + "\n...[truncated]" : combinedText;
+            const contentParts: Array<{ type: "text"; text: string } | { type: "file_url"; file_url: { url: string; mime_type: "application/pdf" } }> = [
+              { type: "text", text: `Analyze these ${docs.length} documents together as a unified learning group titled "${group.name}". Create a single integrated educational structure.` },
+              ...pdfEntries.map(e => ({ type: "file_url" as const, file_url: { url: e.signedUrl, mime_type: "application/pdf" as const } })),
+            ];
+            if (truncatedCombined.trim()) {
+              contentParts.push({ type: "text", text: `\n\nAdditional document content (Word/PPT):\n${truncatedCombined}` });
+            }
+            analysisContent = contentParts;
+          }
+
+          const response = await invokeLLM({
+            messages: [
+              { role: "system", content: groupSystemPrompt },
+              { role: "user" as const, content: analysisContent },
+            ] satisfies Message[],
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "group_structure",
+                strict: true,
+                schema: {
+                  type: "object",
+                  properties: {
+                    title: { type: "string" },
+                    summary: { type: "string" },
+                    documentType: { type: "string", enum: ["textbook", "research", "manual", "report", "narrative", "reference", "other"] },
+                    chapters: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          id: { type: "string" },
+                          title: { type: "string" },
+                          order: { type: "integer" },
+                          topics: {
+                            type: "array",
+                            items: {
+                              type: "object",
+                              properties: {
+                                id: { type: "string" },
+                                title: { type: "string" },
+                                description: { type: "string" },
+                                order: { type: "integer" },
+                                subtopics: {
+                                  type: "array",
+                                  items: {
+                                    type: "object",
+                                    properties: {
+                                      id: { type: "string" },
+                                      title: { type: "string" },
+                                      description: { type: "string" },
+                                      order: { type: "integer" },
+                                    },
+                                    required: ["id", "title", "description", "order"],
+                                    additionalProperties: false,
+                                  },
+                                },
+                              },
+                              required: ["id", "title", "description", "order", "subtopics"],
+                              additionalProperties: false,
+                            },
+                          },
+                        },
+                        required: ["id", "title", "order", "topics"],
+                        additionalProperties: false,
+                      },
+                    },
+                    conceptMap: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          id: { type: "string" },
+                          concept: { type: "string" },
+                          relatedConcepts: { type: "array", items: { type: "string" } },
+                        },
+                        required: ["id", "concept", "relatedConcepts"],
+                        additionalProperties: false,
+                      },
+                    },
+                    learningPath: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          step: { type: "integer" },
+                          title: { type: "string" },
+                          description: { type: "string" },
+                          topics: {
+                            type: "array",
+                            items: {
+                              type: "object",
+                              properties: {
+                                id: { type: "string" },
+                                title: { type: "string" },
+                              },
+                              required: ["id", "title"],
+                              additionalProperties: false,
+                            },
+                          },
+                        },
+                        required: ["step", "title", "description", "topics"],
+                        additionalProperties: false,
+                      },
+                    },
+                  },
+                  required: ["title", "summary", "documentType", "chapters", "conceptMap", "learningPath"],
+                  additionalProperties: false,
+                },
+              },
+            },
+          });
+
+          const rawContent = response.choices[0]?.message?.content;
+          const content = typeof rawContent === "string" ? rawContent : null;
+          if (!content) throw new Error("AI 통합 분석 결과를 받지 못했습니다.");
+
+          let unifiedStructure: DocumentStructure;
+          try {
+            const parsed = JSON.parse(content) as any;
+            unifiedStructure = {
+              title: parsed.title || group.name,
+              summary: parsed.summary || "",
+              documentType: parsed.documentType || "other",
+              chapters: Array.isArray(parsed.chapters) ? parsed.chapters : [],
+              conceptMap: Array.isArray(parsed.conceptMap) ? parsed.conceptMap : [],
+              learningPath: Array.isArray(parsed.learningPath) ? parsed.learningPath : [],
+              keyConceptCards: [],
+              timeline: [],
+              comparisonTables: [],
+            };
+          } catch {
+            throw new Error("AI 통합 분석 결과를 파싱하지 못했습니다. 다시 시도해 주세요.");
+          }
+
+          await updateDocumentGroup(input.groupId, { analysisStatus: "done", structure: unifiedStructure });
+          return { success: true, structure: unifiedStructure };
         } catch (e) {
           await updateDocumentGroup(input.groupId, { analysisStatus: "error" });
           throw e;
