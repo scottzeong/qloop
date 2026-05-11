@@ -1,11 +1,12 @@
-import { useAuth } from "@/_core/hooks/useAuth";
+
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation, useParams } from "wouter";
 import React, { useState } from "react";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Folder, FileText, BookOpen, ChevronRight,
+  ArrowLeft, Folder, FileText, ChevronRight,
   BarChart2, LogOut, AlertCircle, CheckCircle2, Lock, GitBranch, Map, Route,
   Pencil, Check, X
 } from "lucide-react";
@@ -28,10 +29,6 @@ export default function GroupDetail() {
     { enabled: isAuthenticated && !isNaN(groupId) }
   );
   const startSessionMutation = trpc.session.start.useMutation();
-  const setStructureMutation = trpc.document.setStructure.useMutation({
-    onSuccess: () => { refetch(); },
-    onError: (e) => toast.error(e.message),
-  });
   const { data: policies } = trpc.socratic.getPolicies.useQuery(undefined, { enabled: isAuthenticated });
 
   // 평가 선택 모달 state
@@ -72,31 +69,21 @@ export default function GroupDetail() {
   };
 
   // 통합 분석 state
-  const [showGroupAnalysis, setShowGroupAnalysis] = useState(false);
+  // 그룹 구조 선택 state: null = 미선택, 선택 시 상세 미리보기 표시
+  const [groupPreviewStructure, setGroupPreviewStructure] = useState<"tree" | "conceptMap" | "learningPath" | null>(null);
 
   const analyzeGroupMutation = trpc.group.analyze.useMutation({
     onSuccess: () => {
       refetch();
-      setShowGroupAnalysis(true);
       toast.success("통합 분석이 완료되었습니다.");
     },
     onError: (e) => toast.error(e.message),
   });
 
-  // 구조 미리보기 state (문서별): docId -> 선택된 구조 키
-  const [previewStructureByDoc, setPreviewStructureByDoc] = useState<Record<number, "tree" | "conceptMap" | "learningPath" | null>>({});
-
-  const togglePreviewStructure = (docId: number, structure: "tree" | "conceptMap" | "learningPath") => {
-    setPreviewStructureByDoc(prev => ({
-      ...prev,
-      [docId]: prev[docId] === structure ? null : structure,
-    }));
-  };
-
-  const handleConfirmStructure = (docId: number, structure: "tree" | "conceptMap" | "learningPath") => {
-    setStructureMutation.mutate({ documentId: docId, structure });
-    setPreviewStructureByDoc(prev => ({ ...prev, [docId]: null }));
-  };
+  const setGroupStructureMutation = trpc.group.setGroupStructure.useMutation({
+    onSuccess: () => { refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
 
   const handleStartLearning = (topicId: string, topicTitle: string, documentId: number) => {
     setPendingTopic({ id: topicId, title: topicTitle, documentId });
@@ -281,30 +268,21 @@ export default function GroupDetail() {
             <div className="mb-10">
               <div className="flex items-center justify-between mb-4">
                 <div className="swiss-label">통합 분석</div>
-                <div className="flex items-center gap-3">
-                  {!!groupDetail.structure && (
-                    <button
-                      onClick={() => setShowGroupAnalysis(v => !v)}
-                      className="text-xs font-bold underline hover:text-[var(--swiss-red)] transition-colors"
-                    >
-                      {showGroupAnalysis ? "분석 결과 접기" : "분석 결과 보기"}
-                    </button>
+                <button
+                  onClick={() => analyzeGroupMutation.mutate({ groupId })}
+                  disabled={analyzeGroupMutation.isPending || groupDetail.analysisStatus === "analyzing"}
+                  className="flex items-center gap-2 bg-black text-white px-4 py-2 text-xs font-bold uppercase tracking-widest hover:bg-[var(--swiss-red)] transition-colors disabled:opacity-50"
+                >
+                  {analyzeGroupMutation.isPending || groupDetail.analysisStatus === "analyzing" ? (
+                    <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> 분석 중...</>
+                  ) : (
+                    <><GitBranch size={12} /> {groupDetail.structure ? "재분석" : "통합 분석 시작"}</>
                   )}
-                  <button
-                    onClick={() => analyzeGroupMutation.mutate({ groupId })}
-                    disabled={analyzeGroupMutation.isPending || groupDetail.analysisStatus === "analyzing"}
-                    className="flex items-center gap-2 bg-black text-white px-4 py-2 text-xs font-bold uppercase tracking-widest hover:bg-[var(--swiss-red)] transition-colors disabled:opacity-50"
-                  >
-                    {analyzeGroupMutation.isPending || groupDetail.analysisStatus === "analyzing" ? (
-                      <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> 분석 중...</>
-                    ) : (
-                      <><GitBranch size={12} /> {groupDetail.structure ? "재분석" : "통합 분석 시작"}</>
-                    )}
-                  </button>
-                </div>
+                </button>
               </div>
 
-              {!groupDetail.structure && !analyzeGroupMutation.isPending && groupDetail.analysisStatus !== "analyzing" && groupDetail.analysisStatus !== "done" && (
+              {/* 미분석 상태 안내 */}
+              {!groupDetail.structure && !analyzeGroupMutation.isPending && groupDetail.analysisStatus !== "analyzing" && (
                 <div className="border border-dashed border-black/20 p-8 text-center">
                   <GitBranch size={28} className="mx-auto mb-3 text-gray-200" />
                   <p className="text-sm text-gray-400 mb-1">그룹 내 모든 문서를 통합 분석하여</p>
@@ -312,6 +290,7 @@ export default function GroupDetail() {
                 </div>
               )}
 
+              {/* 분석 중 */}
               {(analyzeGroupMutation.isPending || groupDetail.analysisStatus === "analyzing") && (
                 <div className="border border-black/10 p-8 text-center">
                   <div className="w-6 h-6 border-2 border-black border-t-transparent rounded-full animate-spin mx-auto mb-3" />
@@ -320,125 +299,235 @@ export default function GroupDetail() {
                 </div>
               )}
 
-              {showGroupAnalysis && !!groupDetail.structure && (() => {
+              {/* 분석 완료: 3개 구조 카드 선택 → 상세 미리보기 → 학습 시작 */}
+              {!!groupDetail.structure && !analyzeGroupMutation.isPending && groupDetail.analysisStatus !== "analyzing" && (() => {
                 const gs = groupDetail.structure as any;
+                const selectedGroupStructure = (groupDetail as any).selectedStructure as "tree" | "conceptMap" | "learningPath" | null;
+                const firstDoc = groupDetail.documents?.[0];
+
+                type StructureKey = "tree" | "conceptMap" | "learningPath";
+                const structureOptions: Array<{
+                  key: StructureKey;
+                  label: string;
+                  icon: React.ReactNode;
+                  stat: string;
+                  available: boolean;
+                }> = [
+                  {
+                    key: "tree",
+                    label: "목차 트리",
+                    icon: <GitBranch size={18} />,
+                    stat: `${gs.chapters?.length ?? 0}개 챕터`,
+                    available: !!(gs.chapters && gs.chapters.length > 0),
+                  },
+                  {
+                    key: "conceptMap",
+                    label: "개념 맵",
+                    icon: <Map size={18} />,
+                    stat: `${gs.conceptMap?.length ?? 0}개 개념`,
+                    available: !!(gs.conceptMap && gs.conceptMap.length > 0),
+                  },
+                  {
+                    key: "learningPath",
+                    label: "학습 경로",
+                    icon: <Route size={18} />,
+                    stat: `${gs.learningPath?.length ?? 0}단계`,
+                    available: !!(gs.learningPath && gs.learningPath.length > 0),
+                  },
+                ];
+
                 return (
-                  <div className="border-2 border-black p-6 space-y-6">
+                  <div>
+                    {/* 요약 */}
                     {gs.summary && (
-                      <div>
-                        <div className="swiss-label mb-2">요약</div>
-                        <p className="text-sm text-gray-600">{gs.summary}</p>
+                      <div className="mb-4 border border-black/10 bg-black/[0.02] px-5 py-3">
+                        <p className="text-xs text-gray-500">{gs.summary}</p>
                       </div>
                     )}
-                    {gs.chapters && gs.chapters.length > 0 && (
-                      <div>
-                        <div className="swiss-label mb-3">통합 목차 트리</div>
-                        <div className="space-y-2">
-                          {gs.chapters.map((ch: any, i: number) => (
-                            <div key={i} className="border border-black/10 p-3">
-                              <div className="font-bold text-sm mb-2">{ch.title}</div>
-                              {ch.topics && ch.topics.length > 0 && (
-                                <div className="space-y-1 pl-4">
-                                  {ch.topics.map((t: any, j: number) => (
-                                    <div key={j} className="flex items-center justify-between gap-2 py-1">
-                                      <div className="flex items-center gap-2 text-xs text-gray-600">
-                                        <ChevronRight size={10} className="flex-shrink-0" />
-                                        {t.title}
+
+                    {/* 구조 선택 카드 3개 */}
+                    <div className="mb-2">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-bold uppercase tracking-widest text-black/50">학습 구조 선택</p>
+                        {selectedGroupStructure && (
+                          <span className="flex items-center gap-1 text-xs font-bold px-2 py-0.5 bg-black text-white">
+                            <Lock size={10} /> {STRUCTURE_LABELS[selectedGroupStructure]} 확정됨
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        {structureOptions.map((s) => {
+                          const isSelected = groupPreviewStructure === s.key;
+                          const isConfirmed = selectedGroupStructure === s.key;
+                          return (
+                            <button
+                              key={s.key}
+                              onClick={() => s.available && setGroupPreviewStructure(prev => prev === s.key ? null : s.key)}
+                              disabled={!s.available}
+                              className={`p-4 text-left border-2 transition-all ${
+                                !s.available
+                                  ? "opacity-40 cursor-not-allowed border-black/20 bg-white"
+                                  : isConfirmed
+                                  ? "border-red-600 bg-red-600 text-white"
+                                  : isSelected
+                                  ? "border-black bg-black text-white"
+                                  : "border-black/30 bg-white hover:border-black"
+                              }`}
+                            >
+                              <div className={`mb-2 ${isConfirmed ? "text-white" : isSelected ? "text-red-300" : "text-red-600"}`}>{s.icon}</div>
+                              <div className={`text-xs font-bold uppercase tracking-widest mb-1 ${isConfirmed || isSelected ? "text-white" : "text-black"}`}>{s.label}</div>
+                              <div className={`text-xs ${isConfirmed || isSelected ? "text-white/70" : "text-black/40"}`}>{s.stat}</div>
+                              {isConfirmed && <div className="mt-1.5 text-xs text-white/80 font-bold">✓ 확정됨</div>}
+                              {isSelected && !isConfirmed && <div className="mt-1.5 text-xs text-white/60">미리보기 중</div>}
+                              {!s.available && <div className="mt-1 text-xs text-black/30">데이터 없음</div>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 미리보기 + 확정 + 학습 시작 */}
+                    {groupPreviewStructure && (
+                      <div className="border-2 border-black mt-4">
+                        {/* 미리보기 헤더 */}
+                        <div className="px-5 py-3 bg-black/[0.03] border-b border-black/10 flex items-center justify-between gap-3">
+                          <span className="text-xs font-bold uppercase tracking-widest text-black/50">
+                            미리보기 — {STRUCTURE_LABELS[groupPreviewStructure]}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            {(groupDetail as any).selectedStructure !== groupPreviewStructure && (
+                              <button
+                                onClick={() => setGroupStructureMutation.mutate({ groupId, structure: groupPreviewStructure })}
+                                disabled={setGroupStructureMutation.isPending}
+                                className="flex items-center gap-1.5 border-2 border-black text-black text-xs font-bold uppercase tracking-widest px-4 py-2 hover:bg-black hover:text-white transition-colors disabled:opacity-50"
+                              >
+                                {setGroupStructureMutation.isPending ? "확정 중…" : "이 구조로 확정"}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 미리보기 내용 */}
+                        <div className="px-5 py-4 max-h-96 overflow-y-auto">
+                          {groupPreviewStructure === "tree" && gs.chapters && (
+                            <div className="space-y-3">
+                              {gs.chapters.map((ch: any, i: number) => (
+                                <div key={ch.id || i} className="border border-black/10">
+                                  <div className="bg-black/5 px-4 py-2 text-xs font-bold uppercase tracking-widest">{ch.title}</div>
+                                  <div className="divide-y divide-black/5">
+                                    {(ch.topics ?? []).map((t: any, j: number) => (
+                                      <div key={t.id || j} className="flex items-center justify-between px-4 py-2 gap-3">
+                                        <div className="flex items-center gap-2 text-xs text-black/70 flex-1 min-w-0">
+                                          <ChevronRight size={10} className="flex-shrink-0" />
+                                          <span className="truncate">{t.title}</span>
+                                        </div>
+                                        {firstDoc && (
+                                          <button
+                                            onClick={() => handleStartLearning(t.id || `ch${i}_t${j}`, t.title, firstDoc.id)}
+                                            className="flex-shrink-0 text-xs font-bold px-3 py-1 bg-black text-white hover:bg-[var(--swiss-red)] transition-colors"
+                                          >
+                                            학습
+                                          </button>
+                                        )}
                                       </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {groupPreviewStructure === "conceptMap" && gs.conceptMap && (
+                            <div className="grid grid-cols-2 gap-2">
+                              {gs.conceptMap.map((c: any, i: number) => (
+                                <div key={c.id || i} className="border border-black/20 p-3 flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <span className="font-bold text-xs block truncate">{c.label || c.concept}</span>
+                                    {(c.connections || c.relatedConcepts) && (
+                                      <span className="text-gray-400 text-xs truncate block">
+                                        → {(c.connections || c.relatedConcepts || []).slice(0, 2).join(", ")}
+                                      </span>
+                                    )}
+                                    {c.description && (
+                                      <span className="text-gray-400 text-xs line-clamp-1 block mt-0.5">{c.description}</span>
+                                    )}
+                                  </div>
+                                  {firstDoc && (
+                                    <button
+                                      onClick={() => handleStartLearning(c.id || `concept_${i}`, c.label || c.concept, firstDoc.id)}
+                                      className="flex-shrink-0 text-xs font-bold px-2 py-0.5 bg-black text-white hover:bg-[var(--swiss-red)] transition-colors"
+                                    >
+                                      학습
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {groupPreviewStructure === "learningPath" && gs.learningPath && (
+                            <div className="space-y-2">
+                              {gs.learningPath.map((step: any, i: number) => (
+                                <div key={step.id || step.step || i} className="border border-black/10">
+                                  <div className="flex items-center gap-3 px-4 py-3 bg-black/[0.02] border-b border-black/10">
+                                    <div className="w-6 h-6 bg-black text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+                                      {step.step ?? step.order ?? i + 1}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-bold text-sm truncate">{step.title}</div>
+                                      {step.description && (
+                                        <div className="text-xs text-gray-500 truncate">{step.description}</div>
+                                      )}
+                                    </div>
+                                    {firstDoc && (
                                       <button
                                         onClick={() => {
-                                          const firstDoc = groupDetail.documents?.[0];
-                                          if (firstDoc) handleStartLearning(t.id || `ch${i}_t${j}`, t.title, firstDoc.id);
+                                          const topicId = step.topicIds?.[0] || step.topics?.[0]?.id || step.id || `step_${step.step ?? i + 1}`;
+                                          const topicTitle = step.topics?.[0]?.title || step.title;
+                                          handleStartLearning(topicId, topicTitle, firstDoc.id);
                                         }}
-                                        className="flex-shrink-0 text-xs font-bold px-2 py-0.5 bg-black text-white hover:bg-[var(--swiss-red)] transition-colors"
+                                        className="flex-shrink-0 text-xs font-bold px-3 py-1.5 bg-black text-white hover:bg-[var(--swiss-red)] transition-colors"
                                       >
-                                        학습
+                                        학습 시작
                                       </button>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {gs.conceptMap && gs.conceptMap.length > 0 && (
-                      <div>
-                        <div className="swiss-label mb-3">개념 맵</div>
-                        <div className="grid grid-cols-2 gap-2">
-                          {gs.conceptMap.map((c: any, i: number) => (
-                            <div key={i} className="border border-black/20 p-3">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1 min-w-0">
-                                  <span className="font-bold text-xs block">{c.concept}</span>
-                                  {c.relatedConcepts && c.relatedConcepts.length > 0 && (
-                                    <span className="text-gray-400 text-xs">→ {c.relatedConcepts.slice(0, 2).join(", ")}</span>
-                                  )}
-                                </div>
-                                <button
-                                  onClick={() => {
-                                    const firstDoc = groupDetail.documents?.[0];
-                                    if (firstDoc) handleStartLearning(c.id || `concept_${i}`, c.concept, firstDoc.id);
-                                  }}
-                                  className="flex-shrink-0 text-xs font-bold px-2 py-0.5 bg-black text-white hover:bg-[var(--swiss-red)] transition-colors"
-                                >
-                                  학습
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {gs.learningPath && gs.learningPath.length > 0 && (
-                      <div>
-                        <div className="swiss-label mb-3">학습 경로</div>
-                        <div className="space-y-2">
-                          {gs.learningPath.map((step: any, i: number) => (
-                            <div key={i} className="border border-black/10 p-4">
-                              <div className="flex items-start gap-3">
-                                <div className="w-6 h-6 bg-black text-white text-xs font-bold flex items-center justify-center flex-shrink-0">{step.step ?? i + 1}</div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-bold text-sm">{step.title}</div>
-                                  {step.description && (
-                                    <div className="text-xs text-gray-500 mt-0.5">{step.description}</div>
-                                  )}
+                                    )}
+                                  </div>
                                   {step.topics && step.topics.length > 0 && (
-                                    <div className="text-xs text-gray-400 mt-1">{step.topics.map((t: any) => t.title).join(" · ")}</div>
+                                    <div className="divide-y divide-black/5">
+                                      {step.topics.map((t: any, j: number) => (
+                                        <div key={t.id || j} className="flex items-center justify-between px-4 py-2 gap-3 pl-12">
+                                          <span className="text-xs text-black/60 flex-1 min-w-0 truncate">{t.title}</span>
+                                          {firstDoc && (
+                                            <button
+                                              onClick={() => handleStartLearning(t.id || `step${i}_t${j}`, t.title, firstDoc.id)}
+                                              className="flex-shrink-0 text-xs font-bold px-2 py-0.5 bg-black/10 text-black hover:bg-black hover:text-white transition-colors"
+                                            >
+                                              학습
+                                            </button>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
                                   )}
                                 </div>
-                                <button
-                                  onClick={() => {
-                                    const firstDoc = groupDetail.documents?.[0];
-                                    const topicTitle = step.topics?.[0]?.title || step.title;
-                                    const topicId = step.topics?.[0]?.id || `step_${step.step ?? i + 1}`;
-                                    if (firstDoc) handleStartLearning(topicId, topicTitle, firstDoc.id);
-                                  }}
-                                  className="flex-shrink-0 text-xs font-bold px-3 py-1.5 bg-black text-white hover:bg-[var(--swiss-red)] transition-colors"
-                                >
-                                  학습 시작
-                                </button>
-                              </div>
+                              ))}
                             </div>
-                          ))}
+                          )}
                         </div>
                       </div>
+                    )}
+
+                    {!groupPreviewStructure && (
+                      <p className="text-xs text-black/30 text-center mt-3">위 카드를 클릭하면 구조를 미리볼 수 있습니다.</p>
                     )}
                   </div>
                 );
               })()}
             </div>
 
-            {/* Documents in group */}
-            <div className="space-y-6">
-              <div className="flex items-center justify-between mb-2">
-                <div className="swiss-label">그룹 내 문서</div>
-                {!!groupDetail.structure && (
-                  <span className="text-xs text-gray-400">통합 분석 완료 — 위 분석 결과에서 학습을 시작하세요</span>
-                )}
-              </div>
-
+            {/* 그룹 내 문서 목록 (간단히 표시) */}
+            <div className="space-y-3">
+              <div className="swiss-label mb-4">그룹 내 문서</div>
               {!groupDetail.documents || groupDetail.documents.length === 0 ? (
                 <div className="border border-gray-200 p-12 text-center">
                   <FileText size={32} className="mx-auto mb-3 text-gray-200" />
@@ -451,340 +540,31 @@ export default function GroupDetail() {
                   </button>
                 </div>
               ) : (
-                <div className="space-y-6">
-                  {groupDetail.documents.map((doc: any) => {
-                    const structure = doc.structure as {
-                      chapters?: Array<{
-                        id: string;
-                        title: string;
-                        topics?: Array<{ id: string; title: string; description?: string }>;
-                      }>;
-                      conceptMap?: Array<{ id: string; concept: string; relatedConcepts?: string[] }>;
-                      learningPath?: Array<{ step: number; title: string; topics?: Array<{ id: string; title: string }> }>;
-                    } | null;
-
-                    const isLocked = doc.structureLocked === 1;
-                    const selectedStructure = doc.selectedStructure as "tree" | "conceptMap" | "learningPath" | null;
-                    const isDone = doc.analysisStatus === "done";
-                    const topicProgress: Record<string, "completed" | "active"> = (groupDetail as any).topicProgressByDoc?.[doc.id] ?? {};
-
-                    return (
-                      <div key={doc.id} className="border-2 border-black">
-                        {/* Doc header */}
-                        <div className="flex items-center justify-between p-5 border-b border-black/20 bg-black/[0.02]">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-2 h-2 flex-shrink-0 rounded-full ${isDone ? "bg-red-600" : "bg-gray-300"}`} />
-                            <span className="font-bold">{doc.title}</span>
-                            {doc.fileType && (
-                              <span className="text-xs font-bold px-2 py-0.5 bg-gray-100 text-gray-600">
-                                {doc.fileType.toUpperCase()}
-                              </span>
-                            )}
-                            {isLocked && selectedStructure && (
-                              <span className="flex items-center gap-1 text-xs font-bold px-2 py-0.5 bg-black text-white">
-                                <Lock size={10} />
-                                {STRUCTURE_LABELS[selectedStructure]}
-                              </span>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => navigate(`/documents/${doc.id}`)}
-                            className="flex items-center gap-1 text-xs swiss-label hover:text-black transition-colors"
-                          >
-                            문서 열기 <ChevronRight size={12} />
-                          </button>
-                        </div>
-
-                        {/* 미분석 상태 */}
-                        {!isDone && (
-                          <div className="p-5 flex items-center gap-2 text-sm text-gray-400">
-                            <AlertCircle size={14} />
-                            분석이 필요합니다. 문서를 열어 분석을 실행하세요.
-                          </div>
+                <div className="space-y-2">
+                  {groupDetail.documents.map((doc: any) => (
+                    <div key={doc.id} className="flex items-center justify-between border border-black/20 px-4 py-3 hover:border-black transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-2 h-2 flex-shrink-0 rounded-full ${doc.analysisStatus === "done" ? "bg-red-600" : "bg-gray-300"}`} />
+                        <span className="font-bold text-sm">{doc.title}</span>
+                        {doc.fileType && (
+                          <span className="text-xs font-bold px-2 py-0.5 bg-gray-100 text-gray-500">
+                            {doc.fileType.toUpperCase()}
+                          </span>
                         )}
-
-                        {/* 분석 완료 + 구조 미선택: 미리보기 + 확정 2단계 (통합 분석 미완료 시만 표시) */}
-                        {isDone && structure && !isLocked && !groupDetail.structure && (() => {
-                          type StructureKey = "tree" | "conceptMap" | "learningPath";
-                          const docPreview = previewStructureByDoc[doc.id] ?? null;
-                          const structureOptions: Array<{
-                            key: StructureKey;
-                            label: string;
-                            icon: React.ReactNode;
-                            stat: string;
-                            available: boolean;
-                          }> = [
-                            {
-                              key: "tree",
-                              label: "목차 트리",
-                              icon: <GitBranch size={16} />,
-                              stat: `${structure.chapters?.length ?? 0}개 챕터`,
-                              available: true,
-                            },
-                            {
-                              key: "conceptMap",
-                              label: "개념 맵",
-                              icon: <Map size={16} />,
-                              stat: `${structure.conceptMap?.length ?? 0}개 개념`,
-                              available: !!(structure.conceptMap && structure.conceptMap.length > 0),
-                            },
-                            {
-                              key: "learningPath",
-                              label: "학습 경로",
-                              icon: <Route size={16} />,
-                              stat: `${structure.learningPath?.length ?? 0}단계`,
-                              available: !!(structure.learningPath && structure.learningPath.length > 0),
-                            },
-                          ];
-                          return (
-                            <div>
-                              {/* 구조 선택 카드 */}
-                              <div className="px-5 pt-4 pb-3">
-                                <div className="flex items-center justify-between mb-3">
-                                  <p className="text-xs font-bold uppercase tracking-widest text-black/50">학습 구조 선택</p>
-                                  <p className="text-xs text-black/30">클릭해 미리본 후 확정하세요</p>
-                                </div>
-                                <div className="grid grid-cols-3 gap-2">
-                                  {structureOptions.map((s) => {
-                                    const isSelected = docPreview === s.key;
-                                    return (
-                                      <button
-                                        key={s.key}
-                                        onClick={() => s.available && togglePreviewStructure(doc.id, s.key)}
-                                        disabled={!s.available}
-                                        className={`p-3 text-left border-2 transition-all ${
-                                          !s.available
-                                            ? "opacity-40 cursor-not-allowed border-black/20 bg-white"
-                                            : isSelected
-                                            ? "border-black bg-black text-white"
-                                            : "border-black/30 bg-white hover:border-black"
-                                        }`}
-                                      >
-                                        <div className={`mb-1.5 ${isSelected ? "text-red-300" : "text-red-600"}`}>{s.icon}</div>
-                                        <div className={`text-xs font-bold uppercase tracking-widest mb-1 ${isSelected ? "text-white" : "text-black"}`}>{s.label}</div>
-                                        <div className={`text-xs ${isSelected ? "text-white/60" : "text-black/40"}`}>{s.stat}</div>
-                                        {isSelected && <div className="mt-1.5 text-xs text-white/50">미리보기 중</div>}
-                                        {!s.available && <div className="mt-1 text-xs text-black/30">데이터 없음</div>}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                              {/* 미리보기 영역 */}
-                              {docPreview && (
-                                <div className="border-t border-black/10">
-                                  <div className="px-5 py-3 bg-black/[0.02] flex items-center justify-between gap-3">
-                                    <span className="text-xs font-bold uppercase tracking-widest text-black/40">
-                                      미리보기 — {structureOptions.find(s => s.key === docPreview)?.label}
-                                    </span>
-                                    <button
-                                      onClick={() => handleConfirmStructure(doc.id, docPreview)}
-                                      disabled={setStructureMutation.isPending}
-                                      className="flex items-center gap-1.5 bg-red-600 text-white text-xs font-bold uppercase tracking-widest px-4 py-2 hover:bg-red-700 transition-colors disabled:opacity-50"
-                                    >
-                                      {setStructureMutation.isPending ? "확정 중…" : "이 구조로 학습하기 →"}
-                                    </button>
-                                  </div>
-                                  <div className="px-5 py-4 max-h-80 overflow-y-auto text-sm">
-                                    {docPreview === "tree" && structure.chapters && (
-                                      <div className="space-y-2">
-                                        {structure.chapters.map((ch: any) => (
-                                          <div key={ch.id} className="border border-black/10">
-                                            <div className="bg-black/5 px-3 py-2 text-xs font-bold uppercase tracking-widest">{ch.title}</div>
-                                            <div className="divide-y divide-black/5">
-                                              {(ch.topics ?? []).map((t: any) => (
-                                                <div key={t.id} className="px-3 py-2 text-xs text-black/70">{t.title}</div>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                    {docPreview === "conceptMap" && structure.conceptMap && (
-                                      <div className="flex flex-wrap gap-2">
-                                        {structure.conceptMap.map((n: any) => (
-                                          <span key={n.id} className="text-xs border border-black/20 px-2 py-1 font-medium">{n.concept}</span>
-                                        ))}
-                                      </div>
-                                    )}
-                                    {docPreview === "learningPath" && structure.learningPath && (
-                                      <div className="space-y-2">
-                                        {structure.learningPath.map((step: any, idx: number) => (
-                                          <div key={step.step ?? idx} className="flex items-start gap-3 border border-black/10 px-3 py-2">
-                                            <span className="text-xs font-black text-black/40 w-5 flex-shrink-0">{String(step.step ?? idx+1).padStart(2,"0")}</span>
-                                            <span className="text-xs text-black/70">{step.title}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-                              {!docPreview && (
-                                <div className="px-5 pb-4 text-center">
-                                  <p className="text-xs text-black/30">위 카드를 클릭하면 구조를 미리볼 수 있습니다.</p>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()}
-
-                        {/* 분석 완료 + 구조 선택 완료 → 토픽 표시 (통합 분석 미완료 시만 표시) */}
-                        {isDone && structure && isLocked && selectedStructure && !groupDetail.structure && (
-                          <div className="p-5">
-                            {selectedStructure === "tree" && structure.chapters && (
-                              <>
-                                <div className="swiss-label mb-4 text-xs">학습 토픽 선택 (목차 트리)</div>
-                                <div className="grid grid-cols-2 gap-3">
-                                  {structure.chapters.flatMap((ch) =>
-                                    (ch.topics ?? []).map((topic) => {
-                                      const tStatus = topicProgress[topic.id];
-                                      if (tStatus === "active") {
-                                        return (
-                                          <div key={topic.id} className="p-4 border border-gray-300 bg-gray-50">
-                                            <div className="flex items-start gap-2">
-                                              <BookOpen size={12} className="mt-0.5 flex-shrink-0 text-gray-400" />
-                                              <div className="flex-1 min-w-0">
-                                                <p className="text-xs font-bold text-gray-600">{topic.title}</p>
-                                                <span className="text-xs font-bold text-gray-500">진행 중</span>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        );
-                                      }
-                                      return (
-                                        <button
-                                          key={topic.id}
-                                          onClick={() => handleStartLearning(topic.id, topic.title, doc.id)}
-                                          disabled={starting}
-                                          className="text-left p-4 border border-black hover:bg-black hover:text-white transition-colors group disabled:opacity-50"
-                                        >
-                                          <div className="flex items-start gap-2">
-                                            <BookOpen size={12} className="mt-0.5 flex-shrink-0 group-hover:text-white text-[var(--swiss-red)]" />
-                                            <div>
-                                              <p className="text-xs font-bold">{topic.title}</p>
-                                              {topic.description && (
-                                                <p className="text-xs text-gray-400 group-hover:text-gray-300 mt-0.5 line-clamp-2">
-                                                  {topic.description}
-                                                </p>
-                                              )}
-                                              {tStatus === "completed" && (
-                                                <span className="text-xs font-bold text-green-600">✓ 완료</span>
-                                              )}
-                                            </div>
-                                          </div>
-                                        </button>
-                                      );
-                                    })
-                                  )}
-                                </div>
-                              </>
-                            )}
-
-                            {selectedStructure === "conceptMap" && structure.conceptMap && (
-                              <>
-                                <div className="swiss-label mb-4 text-xs">학습 토픽 선택 (개념 맵)</div>
-                                <div className="grid grid-cols-2 gap-3">
-                                  {structure.conceptMap.map((node: any) => {
-                                    const nStatus = topicProgress[node.id];
-                                    if (nStatus === "active") {
-                                      return (
-                                        <div key={node.id} className="p-4 border border-gray-300 bg-gray-50">
-                                          <div className="flex items-start gap-2">
-                                            <Map size={12} className="mt-0.5 flex-shrink-0 text-gray-400" />
-                                            <div className="flex-1 min-w-0">
-                                              <p className="text-xs font-bold text-gray-600">{node.concept}</p>
-                                              <span className="text-xs font-bold text-gray-500">진행 중</span>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      );
-                                    }
-                                    return (
-                                      <button
-                                        key={node.id}
-                                        onClick={() => handleStartLearning(node.id, node.concept, doc.id)}
-                                        disabled={starting}
-                                        className="text-left p-4 border border-black hover:bg-black hover:text-white transition-colors group disabled:opacity-50"
-                                      >
-                                        <div className="flex items-start gap-2">
-                                          <Map size={12} className="mt-0.5 flex-shrink-0 group-hover:text-white text-[var(--swiss-red)]" />
-                                          <div>
-                                            <p className="text-xs font-bold">{node.concept}</p>
-                                            {node.relatedConcepts && node.relatedConcepts.length > 0 && (
-                                              <p className="text-xs text-gray-400 group-hover:text-gray-300 mt-0.5 line-clamp-1">
-                                                연관: {node.relatedConcepts.slice(0, 2).join(", ")}
-                                              </p>
-                                            )}
-                                            {nStatus === "completed" && (
-                                              <span className="text-xs font-bold text-green-600">✓ 완료</span>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </>
-                            )}
-
-                            {selectedStructure === "learningPath" && structure.learningPath && (
-                              <>
-                                <div className="swiss-label mb-4 text-xs">학습 토픽 선택 (학습 경로)</div>
-                                <div className="space-y-3">
-                                  {structure.learningPath.map((step: any) => (
-                                    <div key={step.step} className="border border-black/20">
-                                      <div className="px-4 py-2 bg-black/5 border-b border-black/10">
-                                        <span className="text-xs font-bold uppercase tracking-widest">
-                                          Step {step.step}: {step.title}
-                                        </span>
-                                      </div>
-                                      <div className="grid grid-cols-2 gap-2 p-3">
-                                        {(step.topics ?? []).map((topic: any) => {
-                                          const tpStatus = topicProgress[topic.id];
-                                          if (tpStatus === "active") {
-                                            return (
-                                              <div key={topic.id} className="p-3 border border-gray-300 bg-gray-50">
-                                                <div className="flex items-start gap-2">
-                                                  <Route size={11} className="mt-0.5 flex-shrink-0 text-gray-400" />
-                                                  <div>
-                                                    <p className="text-xs font-bold text-gray-600">{topic.title}</p>
-                                                    <span className="text-xs font-bold text-gray-500">진행 중</span>
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            );
-                                          }
-                                          return (
-                                            <button
-                                              key={topic.id}
-                                              onClick={() => handleStartLearning(topic.id, topic.title, doc.id)}
-                                              disabled={starting}
-                                              className="text-left p-3 border border-black hover:bg-black hover:text-white transition-colors group disabled:opacity-50"
-                                            >
-                                              <div className="flex items-start gap-2">
-                                                <Route size={11} className="mt-0.5 flex-shrink-0 group-hover:text-white text-[var(--swiss-red)]" />
-                                                <div>
-                                                  <p className="text-xs font-bold">{topic.title}</p>
-                                                  {tpStatus === "completed" && (
-                                                    <span className="text-xs font-bold text-green-600">✓ 완료</span>
-                                                  )}
-                                                </div>
-                                              </div>
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </>
-                            )}
-                          </div>
+                        {doc.analysisStatus !== "done" && (
+                          <span className="flex items-center gap-1 text-xs text-gray-400">
+                            <AlertCircle size={11} /> 미분석
+                          </span>
                         )}
                       </div>
-                    );
-                  })}
+                      <button
+                        onClick={() => navigate(`/documents/${doc.id}`)}
+                        className="flex items-center gap-1 text-xs swiss-label hover:text-black transition-colors flex-shrink-0"
+                      >
+                        문서 열기 <ChevronRight size={12} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

@@ -71,6 +71,13 @@
       "when": 1778497384139,
       "tag": "0009_tidy_mulholland_black",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1778508599970,
+      "tag": "0010_clumsy_black_knight",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,1 @@
+ALTER TABLE `documentGroups` ADD `selectedStructure` enum('tree','conceptMap','learningPath');

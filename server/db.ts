@@ -103,6 +103,7 @@ export async function updateDocumentGroup(
     description: string;
     analysisStatus: "pending" | "analyzing" | "done" | "error";
     structure: unknown;
+    selectedStructure: "tree" | "conceptMap" | "learningPath";
   }>
 ) {
   const db = await getDb();

@@ -318,3 +318,9 @@
 - [x] server/routers.ts: storageGetSignedUrl로 각 문서 파일 URL 획득 후 텍스트 추출
 - [x] GroupDetail.tsx: 통합 분석 결과에 학습 시작 버튼 추가 (목차 토픽별/개념별/학습경로 단계별)
 - [x] GroupDetail.tsx: 통합 분석 완료 시 개별 문서 구조 선택/토픽 표시 UI 숨기기
+
+## v4.23 학습그룹 통합 분석 UI 개편
+- [x] GroupDetail.tsx: 통합 분석 결과를 학습자료와 동일한 3개 구조 카드(목차 트리/개념 맵/학습 경로) 선택 → 상세 미리보기 → 학습 시작 형태로 개편
+- [x] GroupDetail.tsx: 개별 문서 분석 섹션(구조 선택/토픽 표시) 완전 제거 - 문서 목록만 간단히 표시
+- [x] GroupDetail.tsx: 통합 분석 미완료 시 분석 시작 안내 UI 유지
+- [x] GroupDetail.tsx: 통합 분석 완료 시 구조 선택 상태를 documentGroups.selectedStructure에 저장 (group.setGroupStructure 프로시저 추가 및 documentGroups 테이블 selectedStructure 콼럼 추가)

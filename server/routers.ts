@@ -1180,8 +1180,16 @@ Return ONLY valid JSON matching the schema exactly.`;
           throw e;
         }
       }),
+     // 통합 분석 구조 선택 확정
+    setGroupStructure: protectedProcedure
+      .input(z.object({ groupId: z.number(), structure: z.enum(["tree", "conceptMap", "learningPath"]) }))
+      .mutation(async ({ ctx, input }) => {
+        const group = await getDocumentGroupById(input.groupId);
+        if (!group || group.userId !== ctx.user.id) throw new Error("그룹을 찾을 수 없습니다.");
+        await updateDocumentGroup(input.groupId, { selectedStructure: input.structure });
+        return { success: true };
+      }),
   }),
-
   // ─── Documents ──────────────────────────────────────────────────────────────
   document: router({
     // 파일 업로드 (PDF / DOC / DOCX / PPT / PPTX)

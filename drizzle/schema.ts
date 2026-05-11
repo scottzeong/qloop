@@ -36,11 +36,12 @@ export const documentGroups = mysqlTable("documentGroups", {
   analysisStatus: mysqlEnum("analysisStatus", ["pending", "analyzing", "done", "error"])
     .default("pending")
     .notNull(),
-  structure: json("structure"),
+   structure: json("structure"),
+  // 통합 분석 후 선택된 학습 구조 (tree/conceptMap/learningPath)
+  selectedStructure: mysqlEnum("selectedStructure", ["tree", "conceptMap", "learningPath"]),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
-
 export type DocumentGroup = typeof documentGroups.$inferSelect;
 export type InsertDocumentGroup = typeof documentGroups.$inferInsert;
 
