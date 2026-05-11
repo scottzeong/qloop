@@ -458,25 +458,84 @@ const LANGUAGE_NAMES: Record<string, string> = {
  * Open QLoop: 인터넷 검색으로 토픽 관련 최신 컨텍스트 수집
  */
 async function fetchWebContext(topicTitle: string, docTitle: string): Promise<string> {
+  const snippets: string[] = [];
+  // 1단계: DuckDuckGo Instant Answer API (단순 키워드)
   try {
-    const query = encodeURIComponent(`${topicTitle} ${docTitle} latest research 2024 2025`);
-    const res = await fetch(`https://api.duckduckgo.com/?q=${query}&format=json&no_redirect=1&no_html=1&skip_disambig=1`, {
-      headers: { "User-Agent": "QLoop-Educational-Bot/1.0" },
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) return "";
-    const data = await res.json();
-    const snippets: string[] = [];
-    if (data.AbstractText) snippets.push(data.AbstractText);
-    if (data.RelatedTopics) {
-      for (const t of data.RelatedTopics.slice(0, 5)) {
-        if (t.Text) snippets.push(t.Text);
+    const ddgQuery = encodeURIComponent(topicTitle);
+    const ddgRes = await fetch(
+      `https://api.duckduckgo.com/?q=${ddgQuery}&format=json&no_redirect=1&no_html=1&skip_disambig=1`,
+      { headers: { "User-Agent": "QLoop-Educational-Bot/1.0" }, signal: AbortSignal.timeout(5000) }
+    );
+    if (ddgRes.ok) {
+      const ddgData = await ddgRes.json();
+      if (ddgData.AbstractText) snippets.push(`[Overview] ${ddgData.AbstractText}`);
+      if (ddgData.RelatedTopics) {
+        for (const t of (ddgData.RelatedTopics as Array<{Text?: string}>).slice(0, 3)) {
+          if (t.Text) snippets.push(`[Related] ${t.Text}`);
+        }
       }
     }
-    return snippets.filter(Boolean).join("\n").slice(0, 3000);
-  } catch {
-    return "";
+  } catch { /* ignore */ }
+
+  // 2단계: Wikipedia OpenSearch → REST summary (DuckDuckGo 결과 부족 시)
+  if (snippets.length === 0) {
+    try {
+      const wikiSearch = encodeURIComponent(topicTitle);
+      const searchRes = await fetch(
+        `https://en.wikipedia.org/w/api.php?action=opensearch&search=${wikiSearch}&limit=3&format=json`,
+        { signal: AbortSignal.timeout(5000) }
+      );
+      if (searchRes.ok) {
+        const searchData = await searchRes.json() as [string, string[], string[], string[]];
+        const titles = searchData[1] ?? [];
+        for (const title of titles.slice(0, 2)) {
+          try {
+            const summaryRes = await fetch(
+              `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
+              { signal: AbortSignal.timeout(5000) }
+            );
+            if (summaryRes.ok) {
+              const summaryData = await summaryRes.json() as { extract?: string; title?: string };
+              if (summaryData.extract) {
+                snippets.push(`[Wikipedia: ${summaryData.title ?? title}] ${summaryData.extract.slice(0, 800)}`);
+              }
+            }
+          } catch { /* ignore */ }
+        }
+      }
+    } catch { /* ignore */ }
   }
+
+  // 3단계: 한국어 Wikipedia 시도 (여전히 결과 없을 때)
+  if (snippets.length === 0) {
+    try {
+      const koQuery = encodeURIComponent(topicTitle);
+      const koSearchRes = await fetch(
+        `https://ko.wikipedia.org/w/api.php?action=opensearch&search=${koQuery}&limit=2&format=json`,
+        { signal: AbortSignal.timeout(5000) }
+      );
+      if (koSearchRes.ok) {
+        const koData = await koSearchRes.json() as [string, string[], string[], string[]];
+        const koTitles = koData[1] ?? [];
+        for (const title of koTitles.slice(0, 1)) {
+          try {
+            const koSummaryRes = await fetch(
+              `https://ko.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
+              { signal: AbortSignal.timeout(5000) }
+            );
+            if (koSummaryRes.ok) {
+              const koSummary = await koSummaryRes.json() as { extract?: string; title?: string };
+              if (koSummary.extract) {
+                snippets.push(`[위키백과: ${koSummary.title ?? title}] ${koSummary.extract.slice(0, 800)}`);
+              }
+            }
+          } catch { /* ignore */ }
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
+  return snippets.filter(Boolean).join("\n\n").slice(0, 4000);
 }
 
 async function generateFirstQuestion(

@@ -549,7 +549,7 @@ export default function KnowledgeLibrary() {
       <div className="max-w-5xl mx-auto px-6 py-8">
         {/* 안내 배너 */}
         <div className="mb-6 p-4 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-sm">
-          <strong>Knowledge Library</strong>는 학습자가 자신의 지식데이터로 활용하고 싶은 자료를 관리하는 것으로 OPEN QLOOP가 활성화되면 자신의 학습자료나 학습그룹에 추가하여 학습이 이루어지게 됩니다.
+          <strong>Knowledge Library</strong>는 학습자가 자신의 지식데이터로 활용하고 싶은 자료를 관리하는 것으로 CORE QLOOP에서 자신이 학습자료와 학습그룹에 추가되어 참고하는 지식데이터베이스입니다.
           {isAdmin
             ? ""
             : ""}
