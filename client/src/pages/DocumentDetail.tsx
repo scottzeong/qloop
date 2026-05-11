@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Trash2, Lock, RotateCcw, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Trash2, Lock, RotateCcw, CheckCircle2, AlertCircle, Search, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type {
   DocumentStructure,
@@ -895,6 +895,8 @@ export default function DocumentDetail() {
   const [evalEnabled, setEvalEnabled] = useState<boolean | null>(null);
   // Knowledge Library 컨텍스트 선택 state
   const [selectedLibraryIds, setSelectedLibraryIds] = useState<number[]>([]);
+  const [librarySearch, setLibrarySearch] = useState("");
+  const [libraryTagFilter, setLibraryTagFilter] = useState<string>("all");
 
   const deleteDocMutation = trpc.document.delete.useMutation();
   const analyzeMutation = trpc.document.analyze.useMutation({
@@ -939,6 +941,8 @@ export default function DocumentDetail() {
     setEvalEnabled(null);
     setSelectedPolicyId(null);
     setSelectedLibraryIds([]);
+    setLibrarySearch("");
+    setLibraryTagFilter("all");
     setShowEvalModal(true);
   };
 
@@ -1421,37 +1425,129 @@ export default function DocumentDetail() {
               </div>
             )}
             {/* Knowledge Library 컨텍스트 선택 */}
-            {myLibraryItems.length > 0 && (
-              <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-black/50 mb-2">Knowledge Library 컨텍스트 <span className="text-black/30 font-normal normal-case tracking-normal">(선택)</span></p>
-                <p className="text-xs text-black/40 mb-3">선택한 자료가 AI 질문 생성의 추가 컨텍스트로 활용됩니다.</p>
-                <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                  {myLibraryItems.map((item: any) => {
-                    const isSelected = selectedLibraryIds.includes(item.id);
-                    return (
+            {myLibraryItems.length > 0 && (() => {
+              // 태그 목록 추출
+              const allTags = Array.from(new Set(
+                myLibraryItems.flatMap((item: any) =>
+                  item.tags ? String(item.tags).split(",").map((t: string) => t.trim()).filter(Boolean) : []
+                )
+              )) as string[];
+              // 검색 + 태그 필터 적용
+              const filteredItems = myLibraryItems.filter((item: any) => {
+                const matchSearch = !librarySearch || item.title.toLowerCase().includes(librarySearch.toLowerCase());
+                const matchTag = libraryTagFilter === "all" || (item.tags && String(item.tags).split(",").map((t: string) => t.trim()).includes(libraryTagFilter));
+                return matchSearch && matchTag;
+              });
+              return (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-bold uppercase tracking-widest text-black/50">
+                      Knowledge Library 컨텍스트 <span className="text-black/30 font-normal normal-case tracking-normal">(선택)</span>
+                    </p>
+                    {selectedLibraryIds.length > 0 && (
                       <button
-                        key={item.id}
-                        onClick={() => setSelectedLibraryIds(prev =>
-                          isSelected ? prev.filter(id => id !== item.id) : [...prev, item.id]
-                        )}
-                        className={`w-full flex items-center gap-2 border px-3 py-2 text-left transition-colors text-xs ${
-                          isSelected ? "border-red-600 bg-red-50 text-red-800" : "border-black/20 hover:border-black/50"
+                        onClick={() => setSelectedLibraryIds([])}
+                        className="text-[10px] text-red-600 font-bold hover:underline flex items-center gap-0.5"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                        선택 초기화
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-black/40 mb-2">선택한 자료가 AI 질문 생성의 추가 컨텍스트로 활용됩니다.</p>
+                  {/* 검색 입력창 */}
+                  <div className="relative mb-2">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-black/30" />
+                    <input
+                      type="text"
+                      placeholder="자료 검색..."
+                      value={librarySearch}
+                      onChange={(e) => setLibrarySearch(e.target.value)}
+                      className="w-full border border-black/20 pl-7 pr-3 py-1.5 text-xs focus:outline-none focus:border-black/50 bg-white"
+                    />
+                    {librarySearch && (
+                      <button onClick={() => setLibrarySearch("")} className="absolute right-2 top-1/2 -translate-y-1/2">
+                        <X className="w-3 h-3 text-black/30 hover:text-black/60" />
+                      </button>
+                    )}
+                  </div>
+                  {/* 태그 필터 버튼 */}
+                  {allTags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      <button
+                        onClick={() => setLibraryTagFilter("all")}
+                        className={`text-[10px] font-bold px-2 py-0.5 border transition-colors ${
+                          libraryTagFilter === "all" ? "bg-black text-white border-black" : "border-black/20 text-black/50 hover:border-black/50"
                         }`}
                       >
-                        <span className={`w-3.5 h-3.5 border flex-shrink-0 flex items-center justify-center ${isSelected ? "border-red-600 bg-red-600" : "border-black/30"}`}>
-                          {isSelected && <span className="text-white text-[8px] font-bold">✓</span>}
-                        </span>
-                        <span className="truncate font-medium">{item.title}</span>
-                        {item.fileType && <span className="flex-shrink-0 text-[10px] font-bold px-1 py-0.5 bg-gray-100 text-gray-500 uppercase">{item.fileType}</span>}
+                        전체
                       </button>
-                    );
-                  })}
+                      {allTags.map((tag: string) => (
+                        <button
+                          key={tag}
+                          onClick={() => setLibraryTagFilter(libraryTagFilter === tag ? "all" : tag)}
+                          className={`text-[10px] font-bold px-2 py-0.5 border transition-colors ${
+                            libraryTagFilter === tag ? "bg-red-600 text-white border-red-600" : "border-black/20 text-black/50 hover:border-black/50"
+                          }`}
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {/* 자료 목록 */}
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                    {filteredItems.length === 0 ? (
+                      <p className="text-xs text-black/30 text-center py-3">검색 결과가 없습니다.</p>
+                    ) : (
+                      filteredItems.map((item: any) => {
+                        const isSelected = selectedLibraryIds.includes(item.id);
+                        const itemTags = item.tags ? String(item.tags).split(",").map((t: string) => t.trim()).filter(Boolean) : [];
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => setSelectedLibraryIds(prev =>
+                              isSelected ? prev.filter(id => id !== item.id) : [...prev, item.id]
+                            )}
+                            className={`w-full flex items-start gap-2 border px-3 py-2 text-left transition-colors text-xs ${
+                              isSelected ? "border-red-600 bg-red-50 text-red-800" : "border-black/20 hover:border-black/50"
+                            }`}
+                          >
+                            <span className={`w-3.5 h-3.5 mt-0.5 border flex-shrink-0 flex items-center justify-center ${isSelected ? "border-red-600 bg-red-600" : "border-black/30"}`}>
+                              {isSelected && <span className="text-white text-[8px] font-bold">✓</span>}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-medium truncate">{item.title}</span>
+                                {item.fileType && (
+                                  <span className="flex-shrink-0 text-[9px] font-bold px-1 py-0.5 bg-gray-100 text-gray-500 uppercase">{item.fileType}</span>
+                                )}
+                              </div>
+                              {itemTags.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-0.5">
+                                  {itemTags.map((tag: string) => (
+                                    <span key={tag} className="text-[9px] px-1.5 py-0.5 bg-black/5 text-black/40 font-medium">{tag}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                  {/* 선택 현황 */}
+                  <div className="flex items-center justify-between mt-1.5">
+                    {selectedLibraryIds.length > 0 ? (
+                      <p className="text-xs text-red-600 font-bold">{selectedLibraryIds.length}개 자료 선택됨</p>
+                    ) : (
+                      <p className="text-xs text-black/30">{myLibraryItems.length}개 자료 중 선택하세요</p>
+                    )}
+                    <p className="text-xs text-black/30">{filteredItems.length}/{myLibraryItems.length}개 표시 중</p>
+                  </div>
                 </div>
-                {selectedLibraryIds.length > 0 && (
-                  <p className="text-xs text-red-600 font-medium mt-1.5">{selectedLibraryIds.length}개 자료 선택됨</p>
-                )}
-              </div>
-            )}
+              );
+            })()}
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-black/50 mb-3">평가 여부 선택 <span className="text-red-600">*필수</span></p>
               <div className="grid grid-cols-2 gap-3">

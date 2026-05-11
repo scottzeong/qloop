@@ -265,3 +265,10 @@
 - [x] Open QLoop 재정의: openQloopMode=1 시 웹 검색 API 호출 후 결과를 프롬프트에 추가
 - [x] DocumentDetail.tsx: Open QLoop 토글 설명 텍스트 업데이트 ("인터넷 검색으로 추가 맥락 제공")
 - [x] server/routers.ts: generateNextMessage에서 openQloopMode=1 시 Manus 검색 API 또는 LLM 웹 검색 활용
+
+## v4.17 Library 자료 선택 UI 검색 + 카테고리 필터
+
+- [x] DocumentDetail.tsx: 평가 모달 Library 선택 영역에 검색 입력사 추가 (제목 기반 실시간 필터)
+- [x] DocumentDetail.tsx: 태그 기반 카테고리 필터 버튼 추가 (전체 + 각 태그별 토글)
+- [x] DocumentDetail.tsx: 검색어/태그 필터 적용 후 결과 없을 때 빈 상태 메시지 표시
+- [x] DocumentDetail.tsx: 선택된 자료 수 및 선택 초기화 버튼 표시
