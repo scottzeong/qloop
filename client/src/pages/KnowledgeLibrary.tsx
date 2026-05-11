@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   BookOpen, Search, Tag, ArrowLeft, Library,
   Trash2, Upload, FileText,
-  Loader2, CheckCircle2, X,
+  Loader2, CheckCircle2, X, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -61,6 +61,15 @@ export default function KnowledgeLibrary() {
   // 검색/필터 상태
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  // 미리보기 펼침 상태 (item.id → boolean)
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const toggleExpand = (id: number) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   // 내 Library 목록 조회
   const { data: myData, refetch } = trpc.library.listMyLibrary.useQuery();
@@ -348,38 +357,65 @@ export default function KnowledgeLibrary() {
                 {filteredItems.map((item) => {
                   const itemTags = parseTags(item.tags as string | null);
                   return (
-                    <div key={item.id} className="border border-border rounded-lg p-4 flex items-start gap-3 hover:shadow-sm transition-shadow">
-                      <BookOpen className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-sm">{item.title}</span>
-                          <FileTypeBadge fileType={item.fileType} />
+                    <div key={item.id} className="border border-border rounded-lg p-4 hover:shadow-sm transition-shadow">
+                      <div className="flex items-start gap-3">
+                        <BookOpen className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-sm">{item.title}</span>
+                            <FileTypeBadge fileType={item.fileType} />
+                          </div>
+                          {(item as any).description && (
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{(item as any).description}</p>
+                          )}
+                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                            {itemTags.map((tag) => (
+                              <Badge key={tag} variant="secondary" className="text-xs gap-1 py-0">
+                                <Tag className="w-2.5 h-2.5" />
+                                {tag}
+                              </Badge>
+                            ))}
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(item.createdAt as unknown as string).toLocaleDateString("ko-KR")}
+                            </span>
+                          </div>
                         </div>
-                        {(item as any).description && (
-                          <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{(item as any).description}</p>
-                        )}
-                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                          {itemTags.map((tag) => (
-                            <Badge key={tag} variant="secondary" className="text-xs gap-1 py-0">
-                              <Tag className="w-2.5 h-2.5" />
-                              {tag}
-                            </Badge>
-                          ))}
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(item.createdAt as unknown as string).toLocaleDateString("ko-KR")}
-                          </span>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {(item as any).extractedText && (
+                            <button
+                              onClick={() => toggleExpand(item.id)}
+                              className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-0.5 px-1.5 py-1 rounded hover:bg-muted"
+                              title="내용 미리보기"
+                            >
+                              {expandedIds.has(item.id) ? (
+                                <><ChevronUp className="w-3.5 h-3.5" /><span>접기</span></>
+                              ) : (
+                                <><ChevronDown className="w-3.5 h-3.5" /><span>미리보기</span></>
+                              )}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              if (!window.confirm("Library에서 삭제하시겠습니까?")) return;
+                              deleteMutation.mutate({ libraryItemId: item.id });
+                            }}
+                            className="text-muted-foreground hover:text-red-600 transition-colors p-1 rounded hover:bg-muted"
+                            title="삭제"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
-                      <button
-                        onClick={() => {
-                          if (!window.confirm("Library에서 삭제하시겠습니까?")) return;
-                          deleteMutation.mutate({ libraryItemId: item.id });
-                        }}
-                        className="text-muted-foreground hover:text-red-600 transition-colors flex-shrink-0"
-                        title="삭제"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {/* 미리보기 펼침 영역 */}
+                      {expandedIds.has(item.id) && (item as any).extractedText && (
+                        <div className="mt-3 ml-8 p-3 bg-muted/50 rounded-md text-xs text-muted-foreground leading-relaxed border border-border/50">
+                          <div className="font-semibold text-foreground mb-1.5 text-[11px] uppercase tracking-wide">추출 텍스트 미리보기</div>
+                          {((item as any).extractedText as string).slice(0, 500)}
+                          {((item as any).extractedText as string).length > 500 && (
+                            <span className="text-muted-foreground/60"> ...이하 {((item as any).extractedText as string).length - 500}자 생략</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

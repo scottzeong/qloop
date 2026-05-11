@@ -316,7 +316,13 @@ export default function LearningSession() {
                             setShowModelPicker(false);
                             try {
                               await updateModel.mutateAsync({ sessionId, qloopModel: model });
-                              toast.success(`${labels[model].name}으로 변경되었습니다.`);
+                              if (model === "curated") {
+                                toast.success("Curated QLoop로 변경되었습니다. 다음 질문부터 Knowledge Library가 참조됩니다.", { duration: 4000 });
+                              } else if (model === "open") {
+                                toast.success("Open QLoop로 변경되었습니다. 다음 질문부터 Knowledge Library와 인터넷 검색이 참조됩니다.", { duration: 4000 });
+                              } else {
+                                toast.success("Core QLoop로 변경되었습니다. 학습자료만 참조합니다.", { duration: 3000 });
+                              }
                               refetchSession();
                             } catch (e) {
                               toast.error("모델 변경 실패");

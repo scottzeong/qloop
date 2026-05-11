@@ -187,6 +187,13 @@ export default function SessionHistory() {
                                 <span className="text-xs text-gray-400">
                                   답변 {s.answeredQuestions ?? 0}개
                                 </span>
+                                {/* QLoop 모델 배지 */}
+                                {(() => {
+                                  const mode = (s as any).openQloopMode;
+                                  if (mode === 1) return <span className="text-[10px] font-bold px-1.5 py-0.5 border border-blue-400 text-blue-600">Open</span>;
+                                  if (mode === 2) return <span className="text-[10px] font-bold px-1.5 py-0.5 border border-red-400 text-red-600">Curated</span>;
+                                  return <span className="text-[10px] font-bold px-1.5 py-0.5 border border-gray-300 text-gray-500">Core</span>;
+                                })()}
                                 {sortMode === "progress" && (
                                   <span className="text-xs font-bold" style={{ color: "var(--swiss-red)" }}>
                                     {progress}%

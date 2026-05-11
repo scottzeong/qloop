@@ -1217,10 +1217,10 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
          const doc = await getDocumentById(input.documentId);
         if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
-        // QLoop 모델 분기: core=자료만, curated=자료+Library, open=자료+Library+인터넷
-        const openQloopMode = input.qloopModel === "open";
-
-        // Curated / Open: 세션 openQloopMode 기반으로 Library 자동 로드
+        // QLoop 모델 분기: core=0, curated=2, open=1
+        const openQloopModeVal = input.qloopModel === "open" ? 1 : input.qloopModel === "curated" ? 2 : 0;
+        const openQloopMode = openQloopModeVal === 1; // 인터넷 검색 여부 (Open QLoop)
+        // Curated / Open: Library 자동 로드
         let libraryContext = "";
         if (input.qloopModel === "curated" || input.qloopModel === "open") {
           try {
@@ -1253,7 +1253,7 @@ export const appRouter = router({
           currentTopicId: input.topicId,
           totalQuestions: 0,
           answeredQuestions: 0,
-          openQloopMode: openQloopMode ? 1 : 0,
+          openQloopMode: openQloopModeVal,
           evaluationEnabled: input.evaluationEnabled ? 1 : 0,
           evaluationPolicyId: input.evaluationPolicyId ?? null,
           selectedStructure: input.selectedStructure ?? null,
@@ -1265,7 +1265,7 @@ export const appRouter = router({
           input.topicTitle,
           input.topicDescription,
           doc.title,
-          openQloopMode,
+          openQloopMode, // open=true
           learningLang,
           libraryContext
         );
@@ -1325,14 +1325,15 @@ export const appRouter = router({
         }));
 
         // AI 응답 생성 — 문서 직접 참조 없이 순수 문답
-        const sessionOpenQloop = (session as any).openQloopMode === 1;
+        const sessionOpenQloopVal = (session as any).openQloopMode as number ?? 0;
+        const sessionOpenQloop = sessionOpenQloopVal === 1; // Open: 인터넷 검색
+        const sessionIsCurated = sessionOpenQloopVal >= 1; // Curated(2) or Open(1): Library 참조
         // 다음 질문 생성 시 현재 답변을 반영한 누적 답변 수 기준으로 난이도 계산
         const currentAnsweredForTier = (session.answeredQuestions || 0) + (input.isUserQuestion ? 0 : 1);
         const docLearningLang = (doc as any).learningLanguage || "ko";
-
         // Curated / Open: 세션 openQloopMode 기반으로 Library 자동 로드
         let libraryContext = "";
-        if (sessionOpenQloop) {
+        if (sessionIsCurated) {
           try {
             const db = await getDb();
             if (db) {
@@ -1512,7 +1513,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const session = await getLearningSessionById(input.sessionId);
         if (!session || session.userId !== ctx.user.id) throw new Error("세션을 찾을 수 없습니다.");
-        const openQloopMode = input.qloopModel === "open" ? 1 : 0;
+        const openQloopMode = input.qloopModel === "open" ? 1 : input.qloopModel === "curated" ? 2 : 0;
         await updateLearningSession(input.sessionId, { openQloopMode });
         return { success: true, qloopModel: input.qloopModel };
       }),

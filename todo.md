@@ -288,3 +288,9 @@
 - [ ] DocumentDetail.tsx: QLoop 모델 선택 카드 UI 추가 (Core/Curated/Open 3종 설명 포함)
 - [ ] LearningSession.tsx: 세션 중 QLoop 모델 변경 버튼/드롭다운 추가
 - [ ] LearningSession.tsx: 모델 변경 시 즉시 반영 (다음 질문부터 새 모델 적용)
+
+## v4.20 QLoop 모델 UX 개선 3종
+
+- [x] LearningSession.tsx: Curated/Open 모델로 변경 시 "다음 질문부터 Knowledge Library가 참조됩니다" 안내 토스트 메시지 추가
+- [x] SessionHistory.tsx: 세션 카드에 QLoop 모델 배지 표시 (Core/Curated/Open)
+- [x] KnowledgeLibrary.tsx: Library 카드에 추출 텍스트 미리보기 접기/펼치기 기능 추가
