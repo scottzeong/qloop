@@ -209,10 +209,7 @@ export const libraryRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // 관리자만 공개 등록 가능
-      if (input.isPublic && ctx.user.role !== "admin") {
-        throw new TRPCError({ code: "FORBIDDEN", message: "공개 Library 등록은 관리자만 가능합니다." });
-      }
+      // 모든 학습자가 본인 Library에 등록 가능 (본인 자료는 항상 비공개로 저장)
       if (!ALLOWED_MIME_TYPES.includes(input.mimeType as AllowedMime)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "지원하지 않는 파일 형식입니다. PDF, DOC, DOCX, PPT, PPTX만 가능합니다." });
       }

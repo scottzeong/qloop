@@ -102,6 +102,8 @@ export default function LearningSession() {
   const [isUserQuestion, setIsUserQuestion] = useState(false);
   const [sending, setSending] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [showModelPicker, setShowModelPicker] = useState(false);
+  const [currentModel, setCurrentModel] = useState<"core" | "curated" | "open">("core");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -121,6 +123,7 @@ export default function LearningSession() {
   );
 
   const sendMessage = trpc.session.sendMessage.useMutation();
+  const updateModel = trpc.session.updateModel.useMutation();
   const completeSession = trpc.session.complete.useMutation();
   const completeModule = trpc.socratic.completeModule.useMutation();
 
@@ -141,6 +144,14 @@ export default function LearningSession() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+  // 세션 로드 시 현재 QLoop 모델 초기화
+  useEffect(() => {
+    if (!session) return;
+    const openQloopMode = (session as any).openQloopMode;
+    if (openQloopMode === 1) setCurrentModel("open");
+    // curated는 openQloopMode=0이지만 libraryContextIds가 있는 경우 (현재는 openQloopMode로만 구분)
+    // 기본값은 core
+  }, [session]);
 
   // AI 메시지 수신 후 입력창 자동 포커스
   useEffect(() => {
@@ -270,6 +281,58 @@ export default function LearningSession() {
               </div>
               <span className="text-xs font-bold">{progress}%</span>
             </div>
+            {/* QLoop 모델 표시 + 변경 */}
+            {!isCompleted && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowModelPicker(!showModelPicker)}
+                  className={`px-3 py-1.5 text-xs font-bold border-2 flex items-center gap-1.5 transition-colors ${
+                    currentModel === "open" ? "border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white" :
+                    currentModel === "curated" ? "border-red-600 text-red-600 hover:bg-red-600 hover:text-white" :
+                    "border-black text-black hover:bg-black hover:text-white"
+                  }`}
+                >
+                  <span>{currentModel === "open" ? "Open" : currentModel === "curated" ? "Curated" : "Core"} QLoop</span>
+                  <span className="opacity-60">▾</span>
+                </button>
+                {showModelPicker && (
+                  <div className="absolute right-0 top-full mt-1 w-56 bg-white border-2 border-black z-50 shadow-lg">
+                    {(["core", "curated", "open"] as const).map((model) => {
+                      const labels: Record<string, { name: string; desc: string }> = {
+                        core: { name: "Core QLoop", desc: "학습자료만 참조" },
+                        curated: { name: "Curated QLoop", desc: "자료 + Knowledge Library" },
+                        open: { name: "Open QLoop", desc: "자료 + Library + 인터넷" },
+                      };
+                      const colors: Record<string, string> = {
+                        core: "hover:bg-black hover:text-white",
+                        curated: "hover:bg-red-600 hover:text-white",
+                        open: "hover:bg-blue-600 hover:text-white",
+                      };
+                      return (
+                        <button
+                          key={model}
+                          onClick={async () => {
+                            setCurrentModel(model);
+                            setShowModelPicker(false);
+                            try {
+                              await updateModel.mutateAsync({ sessionId, qloopModel: model });
+                              toast.success(`${labels[model].name}으로 변경되었습니다.`);
+                              refetchSession();
+                            } catch (e) {
+                              toast.error("모델 변경 실패");
+                            }
+                          }}
+                          className={`w-full px-4 py-3 text-left border-b border-black/10 last:border-b-0 ${colors[model]} ${currentModel === model ? "bg-black/5 font-bold" : ""}`}
+                        >
+                          <div className="text-xs font-bold">{labels[model].name}</div>
+                          <div className="text-[10px] opacity-60 mt-0.5">{labels[model].desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
             {!isCompleted && (
               <button
                 onClick={handleComplete}

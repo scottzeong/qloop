@@ -272,3 +272,19 @@
 - [x] DocumentDetail.tsx: 태그 기반 카테고리 필터 버튼 추가 (전체 + 각 태그별 토글)
 - [x] DocumentDetail.tsx: 검색어/태그 필터 적용 후 결과 없을 때 빈 상태 메시지 표시
 - [x] DocumentDetail.tsx: 선택된 자료 수 및 선택 초기화 버튼 표시
+
+## v4.19 QLoop 모델 3종 + Knowledge Library 단일 뷰
+
+- [ ] KnowledgeLibrary.tsx: 관리자/학습자 구분 제거, 단일 뷰로 통합 (본인 파일 업로드+관리)
+- [ ] KnowledgeLibrary.tsx: isAdmin 분기 로직 제거, 모든 사용자가 동일한 업로드/관리 UI 사용
+- [ ] DB: learningSessions 테이블에 qloopModel 필드 추가 (core/curated/open)
+- [ ] server/routers.ts: session.start에 qloopModel 파라미터 추가
+- [ ] server/routers.ts: generateFirstQuestion/generateNextMessage에서 qloopModel 분기 처리
+  - core: 업로드 자료만 사용
+  - curated: 업로드 자료 + 본인 Library 전체 자동 참조
+  - open: curated + 인터넷 검색 컨텍스트
+- [ ] server/routers.ts: sendMessage에서 qloopModel 변경 허용 (세션 중 변경 지원)
+- [ ] DocumentDetail.tsx: 평가 모달의 Library 개별 선택 UI 제거 (Curated에서 자동 전체 참조)
+- [ ] DocumentDetail.tsx: QLoop 모델 선택 카드 UI 추가 (Core/Curated/Open 3종 설명 포함)
+- [ ] LearningSession.tsx: 세션 중 QLoop 모델 변경 버튼/드롭다운 추가
+- [ ] LearningSession.tsx: 모델 변경 시 즉시 반영 (다음 질문부터 새 모델 적용)

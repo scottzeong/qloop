@@ -1211,29 +1211,28 @@ export const appRouter = router({
           evaluationEnabled: z.boolean().optional(),
           evaluationPolicyId: z.number().optional(),
           selectedStructure: z.enum(["tree", "conceptMap", "learningPath"]).optional(),
-          libraryContextIds: z.array(z.number()).optional(),
+          qloopModel: z.enum(["core", "curated", "open"]).default("core"),
         })
       )
       .mutation(async ({ ctx, input }) => {
          const doc = await getDocumentById(input.documentId);
         if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
-        const openQloopMode = (doc as any).openQloopEnabled === 1;
+        // QLoop 모델 분기: core=자료만, curated=자료+Library, open=자료+Library+인터넷
+        const openQloopMode = input.qloopModel === "open";
 
-        // Knowledge Library 컨텍스트 조회
+        // Curated / Open: 세션 openQloopMode 기반으로 Library 자동 로드
         let libraryContext = "";
-        if (input.libraryContextIds && input.libraryContextIds.length > 0) {
+        if (input.qloopModel === "curated" || input.qloopModel === "open") {
           try {
             const db = await getDb();
             if (db) {
-              const { inArray } = await import("drizzle-orm");
               const { knowledgeLibrary } = await import("../drizzle/schema");
               const libItems = await db
-                .select({ id: knowledgeLibrary.id, title: knowledgeLibrary.title, extractedText: knowledgeLibrary.extractedText, isPublic: knowledgeLibrary.isPublic, addedBy: knowledgeLibrary.addedBy })
+                .select({ id: knowledgeLibrary.id, title: knowledgeLibrary.title, extractedText: knowledgeLibrary.extractedText })
                 .from(knowledgeLibrary)
-                .where(inArray(knowledgeLibrary.id, input.libraryContextIds));
-              const accessible = libItems.filter(item => item.isPublic === 1 || item.addedBy === ctx.user.id);
-              if (accessible.length > 0) {
-                libraryContext = accessible
+                .where(eq(knowledgeLibrary.addedBy, ctx.user.id));
+              if (libItems.length > 0) {
+                libraryContext = libItems
                   .map(item => `[Knowledge Library: ${item.title}]\n${item.extractedText ?? ""}`.trim())
                   .filter(Boolean)
                   .join("\n\n---\n\n");
@@ -1258,7 +1257,7 @@ export const appRouter = router({
           evaluationEnabled: input.evaluationEnabled ? 1 : 0,
           evaluationPolicyId: input.evaluationPolicyId ?? null,
           selectedStructure: input.selectedStructure ?? null,
-          libraryContextIds: input.libraryContextIds ?? null,
+          libraryContextIds: null, // qloopModel로 대체 (Curated/Open은 런타임에 자동 로드)
         });
         // 첫 번째 질문 생성 — 문서 직접 참조 없이 토픽 정보만 사용
         const learningLang = (doc as any).learningLanguage || "ko";
@@ -1331,29 +1330,26 @@ export const appRouter = router({
         const currentAnsweredForTier = (session.answeredQuestions || 0) + (input.isUserQuestion ? 0 : 1);
         const docLearningLang = (doc as any).learningLanguage || "ko";
 
-        // Knowledge Library 컨텍스트 조회 (sendMessage 시에도 세션에 저장된 libraryContextIds 활용)
-        let sessionLibraryContext = "";
-        const sessionLibraryIds = (session as any).libraryContextIds as number[] | null;
-        if (sessionLibraryIds && sessionLibraryIds.length > 0) {
+        // Curated / Open: 세션 openQloopMode 기반으로 Library 자동 로드
+        let libraryContext = "";
+        if (sessionOpenQloop) {
           try {
-            const db2 = await getDb();
-            if (db2) {
-              const { inArray: inArray2 } = await import("drizzle-orm");
-              const { knowledgeLibrary: kl } = await import("../drizzle/schema");
-              const libItems2 = await db2
-                .select({ id: kl.id, title: kl.title, extractedText: kl.extractedText, isPublic: kl.isPublic, addedBy: kl.addedBy })
-                .from(kl)
-                .where(inArray2(kl.id, sessionLibraryIds));
-              const accessible2 = libItems2.filter(item => item.isPublic === 1 || item.addedBy === ctx.user.id);
-              if (accessible2.length > 0) {
-                sessionLibraryContext = accessible2
+            const db = await getDb();
+            if (db) {
+              const { knowledgeLibrary } = await import("../drizzle/schema");
+              const libItems = await db
+                .select({ id: knowledgeLibrary.id, title: knowledgeLibrary.title, extractedText: knowledgeLibrary.extractedText })
+                .from(knowledgeLibrary)
+                .where(eq(knowledgeLibrary.addedBy, ctx.user.id));
+              if (libItems.length > 0) {
+                libraryContext = libItems
                   .map(item => `[Knowledge Library: ${item.title}]\n${item.extractedText ?? ""}`.trim())
                   .filter(Boolean)
                   .join("\n\n---\n\n");
               }
             }
           } catch (e) {
-            console.warn("[Library Context] sendMessage 컨텍스트 조회 실패:", e);
+            console.warn("[Library Context] 컨텍스트 조회 실패:", e);
           }
         }
 
@@ -1366,7 +1362,7 @@ export const appRouter = router({
           sessionOpenQloop,
           currentAnsweredForTier,
           docLearningLang,
-          sessionLibraryContext
+          libraryContext
         );
 
         // AI 메시지 저장
@@ -1507,6 +1503,19 @@ export const appRouter = router({
         };
       }),
 
+    // QLoop 모델 변경 (세션 중)
+    updateModel: protectedProcedure
+      .input(z.object({
+        sessionId: z.number(),
+        qloopModel: z.enum(["core", "curated", "open"]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const session = await getLearningSessionById(input.sessionId);
+        if (!session || session.userId !== ctx.user.id) throw new Error("세션을 찾을 수 없습니다.");
+        const openQloopMode = input.qloopModel === "open" ? 1 : 0;
+        await updateLearningSession(input.sessionId, { openQloopMode });
+        return { success: true, qloopModel: input.qloopModel };
+      }),
     // 세션 종료
     complete: protectedProcedure
       .input(z.object({ sessionId: z.number() }))

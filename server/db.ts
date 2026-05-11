@@ -268,6 +268,7 @@ export async function updateLearningSession(
     summary: string;
     reportSent: number;
     completedAt: Date;
+    openQloopMode: number;
   }>
 ) {
   const db = await getDb();
