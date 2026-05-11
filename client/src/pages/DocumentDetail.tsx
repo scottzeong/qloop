@@ -1386,11 +1386,11 @@ export default function DocumentDetail() {
 
       {/* 평가 선택 모달 */}
       <Dialog open={showEvalModal} onOpenChange={(open) => { if (!open) { setShowEvalModal(false); setPendingTopic(null); } }}>
-        <DialogContent className="max-w-lg border-2 border-black rounded-none p-0">
-          <DialogHeader className="px-6 py-4 border-b border-black">
+        <DialogContent className="max-w-lg border-2 border-black rounded-none p-0 flex flex-col max-h-[90vh]">
+          <DialogHeader className="px-6 py-4 border-b border-black shrink-0">
             <DialogTitle className="text-sm font-black uppercase tracking-widest">평가 설정</DialogTitle>
           </DialogHeader>
-          <div className="px-6 py-5 space-y-5">
+          <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
             {/* 구조 미리보기 */}
             {pendingTopic && (
               <div className="border border-black/10 bg-black/[0.02] px-4 py-3 space-y-2">

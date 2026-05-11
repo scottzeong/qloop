@@ -303,3 +303,12 @@
 - [x] SocraticProfile.tsx: 모델별 세션 수 비교 바 차트 추가 (Core/Curated/Open)
 - [x] SocraticProfile.tsx: 모델별 평균 점수 비교 차트 추가
 - [x] server/routers.ts: session.getModelStats 프로시저 추가 (openQloopMode별 집계)
+
+## v4.22 평가 팝업 스크롤 + 그룹 통합분석 + 인라인 편집
+- [x] DocumentDetail.tsx: 평가 모달에 max-h + overflow-y-auto 스크롤 처리
+- [x] GroupDetail.tsx: 평가 모달에 max-h + overflow-y-auto 스크롤 처리
+- [x] GroupDetail.tsx: 그룹 이름/설명 인라인 편집 (연필 아이콘 클릭 → 편집 모드)
+- [x] server/routers.ts: group.update 프로시저 이미 존재 (950~962줄)
+- [x] server/routers.ts: group.analyze 프로시저 이미 존재 (979줄~, 문서 통합 분석)
+- [x] GroupDetail.tsx: 통합 분석 버튼 및 분석 결과 표시 UI 추가 (목차/개념맵/학습경로)
+- [x] DB: documentGroups 테이블에 structure JSON 콼럼 이미 존재

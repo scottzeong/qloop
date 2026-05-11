@@ -6,7 +6,8 @@ import React, { useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft, Folder, FileText, BookOpen, ChevronRight,
-  BarChart2, LogOut, AlertCircle, CheckCircle2, Lock, GitBranch, Map, Route
+  BarChart2, LogOut, AlertCircle, CheckCircle2, Lock, GitBranch, Map, Route,
+  Pencil, Check, X
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -40,6 +41,47 @@ export default function GroupDetail() {
   const [selectedPolicyId, setSelectedPolicyId] = useState<number | null>(null);
   const [starting, setStarting] = useState(false);
   const [qloopModel, setQloopModel] = useState<"core" | "curated" | "open">("core");
+
+  // 그룹 이름/설명 인라인 편집 state
+  const [isEditingGroup, setIsEditingGroup] = useState(false);
+  const [editGroupName, setEditGroupName] = useState("");
+  const [editGroupDescription, setEditGroupDescription] = useState("");
+
+  const updateGroupMutation = trpc.group.update.useMutation({
+    onSuccess: () => {
+      refetch();
+      setIsEditingGroup(false);
+      toast.success("그룹 정보가 수정되었습니다.");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const handleStartEditGroup = () => {
+    setEditGroupName(groupDetail?.name ?? "");
+    setEditGroupDescription(groupDetail?.description ?? "");
+    setIsEditingGroup(true);
+  };
+
+  const handleSaveGroup = () => {
+    if (!editGroupName.trim()) { toast.error("그룹 이름을 입력해주세요."); return; }
+    updateGroupMutation.mutate({ groupId, name: editGroupName.trim(), description: editGroupDescription.trim() });
+  };
+
+  const handleCancelEditGroup = () => {
+    setIsEditingGroup(false);
+  };
+
+  // 통합 분석 state
+  const [showGroupAnalysis, setShowGroupAnalysis] = useState(false);
+
+  const analyzeGroupMutation = trpc.group.analyze.useMutation({
+    onSuccess: () => {
+      refetch();
+      setShowGroupAnalysis(true);
+      toast.success("통합 분석이 완료되었습니다.");
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   // 구조 미리보기 state (문서별): docId -> 선택된 구조 키
   const [previewStructureByDoc, setPreviewStructureByDoc] = useState<Record<number, "tree" | "conceptMap" | "learningPath" | null>>({});
@@ -159,12 +201,67 @@ export default function GroupDetail() {
           <>
             {/* Group header */}
             <div className="border-b-2 border-black pb-8 mb-10">
-              <div className="flex items-center gap-3 mb-2">
-                <Folder size={20} className="text-[var(--swiss-red)]" />
-                <h1 className="text-3xl font-black">{groupDetail.name}</h1>
-              </div>
-              {groupDetail.description && (
-                <p className="text-sm text-gray-500 mt-2">{groupDetail.description}</p>
+              {isEditingGroup ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Folder size={20} className="text-[var(--swiss-red)] flex-shrink-0" />
+                    <input
+                      type="text"
+                      value={editGroupName}
+                      onChange={(e) => setEditGroupName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleSaveGroup(); if (e.key === "Escape") handleCancelEditGroup(); }}
+                      className="text-3xl font-black border-b-2 border-black focus:outline-none flex-1 bg-transparent"
+                      autoFocus
+                      placeholder="그룹 이름"
+                    />
+                  </div>
+                  <textarea
+                    value={editGroupDescription}
+                    onChange={(e) => setEditGroupDescription(e.target.value)}
+                    className="w-full text-sm text-gray-600 border border-black/30 focus:border-black focus:outline-none p-2 resize-none"
+                    rows={2}
+                    placeholder="그룹 설명 (선택사항)"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleSaveGroup}
+                      disabled={updateGroupMutation.isPending}
+                      className="flex items-center gap-1 bg-black text-white px-4 py-1.5 text-xs font-bold uppercase tracking-widest hover:bg-[var(--swiss-red)] transition-colors disabled:opacity-50"
+                    >
+                      <Check size={12} /> 저장
+                    </button>
+                    <button
+                      onClick={handleCancelEditGroup}
+                      className="flex items-center gap-1 border border-black/30 px-4 py-1.5 text-xs font-bold uppercase tracking-widest hover:border-black transition-colors"
+                    >
+                      <X size={12} /> 취소
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3 mb-2 group">
+                    <Folder size={20} className="text-[var(--swiss-red)]" />
+                    <h1 className="text-3xl font-black">{groupDetail.name}</h1>
+                    <button
+                      onClick={handleStartEditGroup}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-[var(--swiss-red)]"
+                      title="그룹 이름/설명 수정"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                  </div>
+                  {groupDetail.description ? (
+                    <p className="text-sm text-gray-500 mt-2">{groupDetail.description}</p>
+                  ) : (
+                    <button
+                      onClick={handleStartEditGroup}
+                      className="text-xs text-gray-300 mt-2 hover:text-gray-500 transition-colors italic"
+                    >
+                      + 그룹 설명 추가
+                    </button>
+                  )}
+                </>
               )}
               <div className="flex items-center gap-4 mt-4">
                 <span className="swiss-label">{groupDetail.documents?.length ?? 0}개 문서</span>
@@ -178,6 +275,119 @@ export default function GroupDetail() {
                   {groupDetail.analysisStatus === "done" ? "분석 완료" : "미분석"}
                 </span>
               </div>
+            </div>
+
+            {/* 통합 분석 섹션 */}
+            <div className="mb-10">
+              <div className="flex items-center justify-between mb-4">
+                <div className="swiss-label">통합 분석</div>
+                <div className="flex items-center gap-3">
+                  {!!groupDetail.structure && (
+                    <button
+                      onClick={() => setShowGroupAnalysis(v => !v)}
+                      className="text-xs font-bold underline hover:text-[var(--swiss-red)] transition-colors"
+                    >
+                      {showGroupAnalysis ? "분석 결과 접기" : "분석 결과 보기"}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => analyzeGroupMutation.mutate({ groupId })}
+                    disabled={analyzeGroupMutation.isPending || groupDetail.analysisStatus === "analyzing"}
+                    className="flex items-center gap-2 bg-black text-white px-4 py-2 text-xs font-bold uppercase tracking-widest hover:bg-[var(--swiss-red)] transition-colors disabled:opacity-50"
+                  >
+                    {analyzeGroupMutation.isPending || groupDetail.analysisStatus === "analyzing" ? (
+                      <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> 분석 중...</>
+                    ) : (
+                      <><GitBranch size={12} /> {groupDetail.structure ? "재분석" : "통합 분석 시작"}</>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {!groupDetail.structure && !analyzeGroupMutation.isPending && groupDetail.analysisStatus !== "analyzing" && groupDetail.analysisStatus !== "done" && (
+                <div className="border border-dashed border-black/20 p-8 text-center">
+                  <GitBranch size={28} className="mx-auto mb-3 text-gray-200" />
+                  <p className="text-sm text-gray-400 mb-1">그룹 내 모든 문서를 통합 분석하여</p>
+                  <p className="text-xs text-gray-300">단일 목차 · 개념맵 · 학습경로를 생성합니다</p>
+                </div>
+              )}
+
+              {(analyzeGroupMutation.isPending || groupDetail.analysisStatus === "analyzing") && (
+                <div className="border border-black/10 p-8 text-center">
+                  <div className="w-6 h-6 border-2 border-black border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                  <p className="text-sm font-bold">그룹 내 문서를 통합 분석 중...</p>
+                  <p className="text-xs text-gray-400 mt-1">AI가 모든 문서를 함께 분석하고 있습니다. 잠시 기다려주세요.</p>
+                </div>
+              )}
+
+              {showGroupAnalysis && !!groupDetail.structure && (() => {
+                const gs = groupDetail.structure as any;
+                return (
+                  <div className="border-2 border-black p-6 space-y-6">
+                    {gs.summary && (
+                      <div>
+                        <div className="swiss-label mb-2">요약</div>
+                        <p className="text-sm text-gray-600">{gs.summary}</p>
+                      </div>
+                    )}
+                    {gs.chapters && gs.chapters.length > 0 && (
+                      <div>
+                        <div className="swiss-label mb-3">통합 목차 트리</div>
+                        <div className="space-y-2">
+                          {gs.chapters.map((ch: any, i: number) => (
+                            <div key={i} className="border border-black/10 p-3">
+                              <div className="font-bold text-sm">{ch.title}</div>
+                              {ch.topics && ch.topics.length > 0 && (
+                                <div className="mt-2 space-y-1 pl-4">
+                                  {ch.topics.map((t: any, j: number) => (
+                                    <div key={j} className="text-xs text-gray-500 flex items-center gap-2">
+                                      <ChevronRight size={10} className="flex-shrink-0" />
+                                      {t.title}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {gs.conceptMap && gs.conceptMap.length > 0 && (
+                      <div>
+                        <div className="swiss-label mb-3">개념 맵</div>
+                        <div className="flex flex-wrap gap-2">
+                          {gs.conceptMap.map((c: any, i: number) => (
+                            <div key={i} className="border border-black/20 px-3 py-1.5 text-xs">
+                              <span className="font-bold">{c.concept}</span>
+                              {c.relatedConcepts && c.relatedConcepts.length > 0 && (
+                                <span className="text-gray-400 ml-1">→ {c.relatedConcepts.slice(0, 3).join(", ")}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {gs.learningPath && gs.learningPath.length > 0 && (
+                      <div>
+                        <div className="swiss-label mb-3">학습 경로</div>
+                        <div className="space-y-2">
+                          {gs.learningPath.map((step: any, i: number) => (
+                            <div key={i} className="flex items-start gap-3">
+                              <div className="w-6 h-6 bg-black text-white text-xs font-bold flex items-center justify-center flex-shrink-0">{step.step ?? i + 1}</div>
+                              <div>
+                                <div className="font-bold text-sm">{step.title}</div>
+                                {step.topics && step.topics.length > 0 && (
+                                  <div className="text-xs text-gray-400 mt-0.5">{step.topics.map((t: any) => t.title).join(" · ")}</div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Documents in group */}
@@ -539,11 +749,11 @@ export default function GroupDetail() {
 
       {/* 평가 선택 모달 */}
       <Dialog open={showEvalModal} onOpenChange={(open) => { if (!open) { setShowEvalModal(false); setPendingTopic(null); } }}>
-        <DialogContent className="max-w-md p-0">
-          <DialogHeader className="px-6 py-4 border-b border-black">
+        <DialogContent className="max-w-md p-0 flex flex-col max-h-[90vh]">
+          <DialogHeader className="px-6 py-4 border-b border-black shrink-0">
             <DialogTitle className="text-sm font-black uppercase tracking-widest">평가 설정</DialogTitle>
           </DialogHeader>
-          <div className="px-6 py-5 space-y-5">
+          <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
             {pendingTopic && (
               <div className="bg-black/5 px-4 py-3">
                 <p className="text-xs text-black/40 font-bold uppercase tracking-widest mb-1">선택된 토픽</p>
