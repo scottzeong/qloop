@@ -337,3 +337,7 @@
 ## v4.25 그룹 내 문서 섹션 삭제 + 세션 대시보드 버튼 버그 수정
 - [x] GroupDetail.tsx: '그룹 내 문서' 섹션 완전 삭제 (div.space-y-3 전체 제거)
 - [x] LearningSession.tsx: 학습그룹 세션에서 대시보드/뒤로가기 버튼이 학습자료 페이지(/documents/...)로 이동하는 버그 수정 → session.groupId 유무로 분기 (그룹이면 /groups/{groupId}, 아니면 /documents/{documentId})
+
+## v4.26 학습그룹 세션 버그 2종 수정
+- [x] 학습그룹 세션 학습기록 미저장 버그 수정 - GroupDetail handleConfirmStart에서 session.start 호출 시 groupId 누락 버그 수정
+- [x] 학습화면 뒤로가기 버튼 경로 버그 근본 수정 - groupId가 DB에 저장되지 않아 null이었던 것이 원인, groupId 전달 수정으로 해결

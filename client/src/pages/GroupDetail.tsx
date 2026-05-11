@@ -29,6 +29,11 @@ export default function GroupDetail() {
     { enabled: isAuthenticated && !isNaN(groupId) }
   );
   const startSessionMutation = trpc.session.start.useMutation();
+  const { data: topicProgressData } = trpc.session.getGroupTopicProgress.useQuery(
+    { groupId },
+    { enabled: isAuthenticated && !isNaN(groupId) }
+  );
+  const topicProgress: Record<string, "completed" | "active"> = topicProgressData ?? {};
   const { data: policies } = trpc.socratic.getPolicies.useQuery(undefined, { enabled: isAuthenticated });
 
   // 평가 선택 모달 state
@@ -116,6 +121,7 @@ export default function GroupDetail() {
         topicId: pendingTopic.id,
         topicTitle: pendingTopic.title,
         topicDescription: "",
+        groupId,
         evaluationEnabled: evalEnabled,
         evaluationPolicyId: evalEnabled ? (selectedPolicyId ?? undefined) : undefined,
         qloopModel,
@@ -379,15 +385,16 @@ export default function GroupDetail() {
                                   {(ch.topics ?? []).map((t: any, j: number) => (
                                     <div key={t.id || j} className="flex items-center justify-between px-4 py-2.5 gap-3 hover:bg-black/[0.02] transition-colors">
                                       <div className="flex items-center gap-2 text-sm text-black/70 flex-1 min-w-0">
-                                        <ChevronRight size={11} className="flex-shrink-0 text-black/30" />
+                                        {(() => { const tid = t.id || `ch${i}_t${j}`; const st = topicProgress[tid]; return st === "completed" ? <span className="w-2 h-2 rounded-full bg-gray-500 flex-shrink-0" title="완료" /> : st === "active" ? <span className="w-2 h-2 rounded-full bg-yellow-400 flex-shrink-0" title="진행중" /> : <ChevronRight size={11} className="flex-shrink-0 text-black/30" />; })()}
                                         <span className="truncate">{t.title}</span>
+                                        {topicProgress[t.id || `ch${i}_t${j}`] === "completed" && <span className="text-xs text-gray-400 flex-shrink-0">완료</span>}
                                       </div>
                                       {firstDoc && (
                                         <button
                                           onClick={() => handleStartLearning(t.id || `ch${i}_t${j}`, t.title, firstDoc.id)}
                                           className="flex-shrink-0 text-xs font-bold px-3 py-1.5 bg-black text-white hover:bg-[var(--swiss-red)] transition-colors"
                                         >
-                                          학습 시작
+                                          {topicProgress[t.id || `ch${i}_t${j}`] === "completed" ? "재학습" : "학습 시작"}
                                         </button>
                                       )}
                                     </div>

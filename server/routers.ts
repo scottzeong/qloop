@@ -39,6 +39,7 @@ import {
   getLearningSessionById,
   getSessionsByUserId,
   getSessionsByDocumentId,
+  getSessionsByGroupId,
   updateLearningSession,
   createSessionMessage,
   getSessionMessages,
@@ -1767,6 +1768,33 @@ Return ONLY valid JSON matching the schema exactly.`;
       .input(z.object({ documentId: z.number() }))
       .query(async ({ ctx, input }) => {
         return getSessionsByDocumentId(input.documentId, ctx.user.id);
+      }),
+    listByGroup: protectedProcedure
+      .input(z.object({ groupId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        return getSessionsByGroupId(input.groupId, ctx.user.id);
+      }),
+    getGroupTopicProgress: protectedProcedure
+      .input(z.object({ groupId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const sessions = await getSessionsByGroupId(input.groupId, ctx.user.id);
+        const progressMap: Record<string, "completed" | "active"> = {};
+        for (const s of sessions) {
+          if (s.startTopicId) {
+            const tid = s.startTopicId;
+            if (s.status === "completed") {
+              progressMap[tid] = "completed";
+            } else if (s.status === "active" && progressMap[tid] !== "completed") {
+              progressMap[tid] = "active";
+            }
+          }
+          if (Array.isArray(s.completedTopics)) {
+            for (const ctid of s.completedTopics as string[]) {
+              progressMap[ctid] = "completed";
+            }
+          }
+        }
+        return progressMap;
       }),
     // 문서별 토픽 완성도 조회 (topicId → status 맵)
     // 완료: 해당 topicId로 completed 세션 존재

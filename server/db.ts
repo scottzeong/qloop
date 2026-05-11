@@ -249,6 +249,15 @@ export async function getSessionsByUserId(userId: number) {
     .orderBy(desc(learningSessions.createdAt));
 }
 
+export async function getSessionsByGroupId(groupId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(learningSessions)
+    .where(and(eq(learningSessions.groupId, groupId), eq(learningSessions.userId, userId)))
+    .orderBy(desc(learningSessions.createdAt));
+}
 export async function getSessionsByDocumentId(documentId: number, userId: number) {
   const db = await getDb();
   if (!db) return [];
