@@ -1,0 +1,1 @@
+ALTER TABLE `documentGroups` ADD `structureLocked` tinyint DEFAULT 0 NOT NULL;

@@ -324,3 +324,12 @@
 - [x] GroupDetail.tsx: 개별 문서 분석 섹션(구조 선택/토픽 표시) 완전 제거 - 문서 목록만 간단히 표시
 - [x] GroupDetail.tsx: 통합 분석 미완료 시 분석 시작 안내 UI 유지
 - [x] GroupDetail.tsx: 통합 분석 완료 시 구조 선택 상태를 documentGroups.selectedStructure에 저장 (group.setGroupStructure 프로시저 추가 및 documentGroups 테이블 selectedStructure 콼럼 추가)
+
+## v4.24 학습그룹 구조 선택 고정(lock) + 학습자료와 동일한 UX
+- [x] GroupDetail.tsx: 구조 선택 확정 시 structureLocked=1 저장 (setGroupStructure 프로시저 수정)
+- [x] GroupDetail.tsx: 구조 고정 후 해당 구조의 토픽 목록 표시 → 학습 시작 버튼 (학습자료와 동일한 UI)
+- [x] GroupDetail.tsx: 구조 고정 후 '구조 변경' 버튼 표시 (unlockGroupStructure 프로시저 호출)
+- [x] server/routers.ts: group.setGroupStructure 프로시저에 structureLocked=1 저장 추가
+- [x] server/routers.ts: group.unlockGroupStructure 프로시저 추가 (structureLocked=0 저장)
+- [x] drizzle/schema.ts + DB: documentGroups 테이블에 structureLocked tinyint 콼럼 추가 완료
+- [x] server/db.ts: updateDocumentGroup에 structureLocked 필드 추가 완료

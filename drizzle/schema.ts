@@ -39,6 +39,8 @@ export const documentGroups = mysqlTable("documentGroups", {
    structure: json("structure"),
   // 통합 분석 후 선택된 학습 구조 (tree/conceptMap/learningPath)
   selectedStructure: mysqlEnum("selectedStructure", ["tree", "conceptMap", "learningPath"]),
+  // 구조 고정 여부 (1=고정, 0=미고정)
+  structureLocked: tinyint("structureLocked").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

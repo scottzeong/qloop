@@ -1180,13 +1180,22 @@ Return ONLY valid JSON matching the schema exactly.`;
           throw e;
         }
       }),
-     // 통합 분석 구조 선택 확정
+     // 통합 분석 구조 선택 확정 (고정)
     setGroupStructure: protectedProcedure
       .input(z.object({ groupId: z.number(), structure: z.enum(["tree", "conceptMap", "learningPath"]) }))
       .mutation(async ({ ctx, input }) => {
         const group = await getDocumentGroupById(input.groupId);
         if (!group || group.userId !== ctx.user.id) throw new Error("그룹을 찾을 수 없습니다.");
-        await updateDocumentGroup(input.groupId, { selectedStructure: input.structure });
+        await updateDocumentGroup(input.groupId, { selectedStructure: input.structure, structureLocked: 1 });
+        return { success: true };
+      }),
+    // 구조 고정 해제 (structureLocked=0, selectedStructure=null)
+    unlockGroupStructure: protectedProcedure
+      .input(z.object({ groupId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const group = await getDocumentGroupById(input.groupId);
+        if (!group || group.userId !== ctx.user.id) throw new Error("그룹을 찾을 수 없습니다.");
+        await updateDocumentGroup(input.groupId, { structureLocked: 0, selectedStructure: null });
         return { success: true };
       }),
   }),

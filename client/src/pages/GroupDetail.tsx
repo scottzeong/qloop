@@ -81,6 +81,11 @@ export default function GroupDetail() {
   });
 
   const setGroupStructureMutation = trpc.group.setGroupStructure.useMutation({
+    onSuccess: () => { refetch(); setGroupPreviewStructure(null); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const unlockGroupStructureMutation = trpc.group.unlockGroupStructure.useMutation({
     onSuccess: () => { refetch(); },
     onError: (e) => toast.error(e.message),
   });
@@ -299,10 +304,11 @@ export default function GroupDetail() {
                 </div>
               )}
 
-              {/* 분석 완료: 3개 구조 카드 선택 → 상세 미리보기 → 학습 시작 */}
+              {/* 분석 완료: 구조 고정 여부에 따라 분기 */}
               {!!groupDetail.structure && !analyzeGroupMutation.isPending && groupDetail.analysisStatus !== "analyzing" && (() => {
                 const gs = groupDetail.structure as any;
                 const selectedGroupStructure = (groupDetail as any).selectedStructure as "tree" | "conceptMap" | "learningPath" | null;
+                const isLocked = (groupDetail as any).structureLocked === 1;
                 const firstDoc = groupDetail.documents?.[0];
 
                 type StructureKey = "tree" | "conceptMap" | "learningPath";
@@ -345,6 +351,137 @@ export default function GroupDetail() {
                       </div>
                     )}
 
+                    {/* ===== 구조 고정 후: 토픽 목록 + 학습 시작 ===== */}
+                    {isLocked && selectedGroupStructure && (
+                      <div className="space-y-4">
+                        {/* 고정 헤더 */}
+                        <div className="flex items-center justify-between">
+                          <span className="flex items-center gap-2 text-xs font-bold">
+                            <Lock size={12} className="text-red-600" />
+                            <span className="uppercase tracking-widest text-black/60">{STRUCTURE_LABELS[selectedGroupStructure]} 고정됨</span>
+                          </span>
+                          <button
+                            onClick={() => unlockGroupStructureMutation.mutate({ groupId })}
+                            disabled={unlockGroupStructureMutation.isPending}
+                            className="text-xs font-bold uppercase tracking-widest text-black/40 hover:text-black transition-colors disabled:opacity-50"
+                          >
+                            구조 변경
+                          </button>
+                        </div>
+
+                        {/* 목차 트리 */}
+                        {selectedGroupStructure === "tree" && gs.chapters && (
+                          <div className="space-y-3">
+                            {gs.chapters.map((ch: any, i: number) => (
+                              <div key={ch.id || i} className="border border-black/10">
+                                <div className="bg-black/5 px-4 py-2 text-xs font-bold uppercase tracking-widest">{ch.title}</div>
+                                <div className="divide-y divide-black/5">
+                                  {(ch.topics ?? []).map((t: any, j: number) => (
+                                    <div key={t.id || j} className="flex items-center justify-between px-4 py-2.5 gap-3 hover:bg-black/[0.02] transition-colors">
+                                      <div className="flex items-center gap-2 text-sm text-black/70 flex-1 min-w-0">
+                                        <ChevronRight size={11} className="flex-shrink-0 text-black/30" />
+                                        <span className="truncate">{t.title}</span>
+                                      </div>
+                                      {firstDoc && (
+                                        <button
+                                          onClick={() => handleStartLearning(t.id || `ch${i}_t${j}`, t.title, firstDoc.id)}
+                                          className="flex-shrink-0 text-xs font-bold px-3 py-1.5 bg-black text-white hover:bg-[var(--swiss-red)] transition-colors"
+                                        >
+                                          학습 시작
+                                        </button>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* 개념 맵 */}
+                        {selectedGroupStructure === "conceptMap" && gs.conceptMap && (
+                          <div className="grid grid-cols-2 gap-2">
+                            {gs.conceptMap.map((c: any, i: number) => (
+                              <div key={c.id || i} className="border border-black/20 p-3 flex items-start justify-between gap-2 hover:border-black transition-colors">
+                                <div className="flex-1 min-w-0">
+                                  <span className="font-bold text-sm block truncate">{c.label || c.concept}</span>
+                                  {(c.connections || c.relatedConcepts) && (
+                                    <span className="text-gray-400 text-xs truncate block">
+                                      → {(c.connections || c.relatedConcepts || []).slice(0, 2).join(", ")}
+                                    </span>
+                                  )}
+                                  {c.description && (
+                                    <span className="text-gray-400 text-xs line-clamp-1 block mt-0.5">{c.description}</span>
+                                  )}
+                                </div>
+                                {firstDoc && (
+                                  <button
+                                    onClick={() => handleStartLearning(c.id || `concept_${i}`, c.label || c.concept, firstDoc.id)}
+                                    className="flex-shrink-0 text-xs font-bold px-2 py-1 bg-black text-white hover:bg-[var(--swiss-red)] transition-colors"
+                                  >
+                                    학습 시작
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* 학습 경로 */}
+                        {selectedGroupStructure === "learningPath" && gs.learningPath && (
+                          <div className="space-y-2">
+                            {gs.learningPath.map((step: any, i: number) => (
+                              <div key={step.id || step.step || i} className="border border-black/10">
+                                <div className="flex items-center gap-3 px-4 py-3 hover:bg-black/[0.02] transition-colors">
+                                  <div className="w-7 h-7 bg-black text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+                                    {step.step ?? step.order ?? i + 1}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-bold text-sm truncate">{step.title}</div>
+                                    {step.description && (
+                                      <div className="text-xs text-gray-500 truncate">{step.description}</div>
+                                    )}
+                                  </div>
+                                  {firstDoc && (
+                                    <button
+                                      onClick={() => {
+                                        const topicId = step.topicIds?.[0] || step.topics?.[0]?.id || step.id || `step_${step.step ?? i + 1}`;
+                                        const topicTitle = step.topics?.[0]?.title || step.title;
+                                        handleStartLearning(topicId, topicTitle, firstDoc.id);
+                                      }}
+                                      className="flex-shrink-0 text-xs font-bold px-3 py-1.5 bg-black text-white hover:bg-[var(--swiss-red)] transition-colors"
+                                    >
+                                      학습 시작
+                                    </button>
+                                  )}
+                                </div>
+                                {step.topics && step.topics.length > 0 && (
+                                  <div className="divide-y divide-black/5 border-t border-black/5">
+                                    {step.topics.map((t: any, j: number) => (
+                                      <div key={t.id || j} className="flex items-center justify-between px-4 py-2 gap-3 pl-14 hover:bg-black/[0.01] transition-colors">
+                                        <span className="text-xs text-black/60 flex-1 min-w-0 truncate">{t.title}</span>
+                                        {firstDoc && (
+                                          <button
+                                            onClick={() => handleStartLearning(t.id || `step${i}_t${j}`, t.title, firstDoc.id)}
+                                            className="flex-shrink-0 text-xs font-bold px-2 py-0.5 bg-black/10 text-black hover:bg-black hover:text-white transition-colors"
+                                          >
+                                            학습
+                                          </button>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ===== 구조 미고정: 3개 카드 선택 ===== */}
+                    {!isLocked && (
+                      <>
                     {/* 구조 선택 카드 3개 */}
                     <div className="mb-2">
                       <div className="flex items-center justify-between mb-3">
@@ -518,7 +655,9 @@ export default function GroupDetail() {
                     )}
 
                     {!groupPreviewStructure && (
-                      <p className="text-xs text-black/30 text-center mt-3">위 카드를 클릭하면 구조를 미리볼 수 있습니다.</p>
+                      <p className="text-xs text-black/30 text-center mt-3">위 카드를 클릭하면 구조를 미리보달 수 있습니다.</p>
+                    )}
+                      </>
                     )}
                   </div>
                 );
