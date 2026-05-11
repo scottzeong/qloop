@@ -333,3 +333,7 @@
 - [x] server/routers.ts: group.unlockGroupStructure 프로시저 추가 (structureLocked=0 저장)
 - [x] drizzle/schema.ts + DB: documentGroups 테이블에 structureLocked tinyint 콼럼 추가 완료
 - [x] server/db.ts: updateDocumentGroup에 structureLocked 필드 추가 완료
+
+## v4.25 그룹 내 문서 섹션 삭제 + 세션 대시보드 버튼 버그 수정
+- [x] GroupDetail.tsx: '그룹 내 문서' 섹션 완전 삭제 (div.space-y-3 전체 제거)
+- [x] LearningSession.tsx: 학습그룹 세션에서 대시보드/뒤로가기 버튼이 학습자료 페이지(/documents/...)로 이동하는 버그 수정 → session.groupId 유무로 분기 (그룹이면 /groups/{groupId}, 아니면 /documents/{documentId})

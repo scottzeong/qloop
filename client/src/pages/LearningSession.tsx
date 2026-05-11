@@ -258,10 +258,10 @@ export default function LearningSession() {
         <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => navigate(`/documents/${session.documentId}`)}
+              onClick={() => navigate((session as any).groupId ? `/groups/${(session as any).groupId}` : `/documents/${session.documentId}`)}
               className="flex items-center gap-2 swiss-label hover:text-black transition-colors"
             >
-              <ArrowLeft size={12} /> 문서로 돌아가기
+              <ArrowLeft size={12} /> {(session as any).groupId ? '그룹으로 돌아가기' : '문서로 돌아가기'}
             </button>
             <div className="w-px h-4 bg-black" />
             <div className="flex items-center gap-2">
@@ -497,10 +497,10 @@ export default function LearningSession() {
                   <p className="text-xs text-gray-500">왼쪽 패널에서 학습 요약을 확인하세요.</p>
                 </div>
                 <button
-                  onClick={() => navigate(`/documents/${session.documentId}`)}
+                  onClick={() => navigate((session as any).groupId ? `/groups/${(session as any).groupId}` : `/documents/${session.documentId}`)}
                   className="ml-auto bg-black text-white px-6 py-3 text-xs font-bold tracking-wide hover:bg-[var(--swiss-red)] transition-colors"
                 >
-                  다른 토픽 학습하기
+                  {(session as any).groupId ? '그룹으로 돌아가기' : '다른 토픽 학습하기'}
                 </button>
               </div>
             </div>

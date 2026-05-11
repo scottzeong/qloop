@@ -6,7 +6,7 @@ import { useLocation, useParams } from "wouter";
 import React, { useState } from "react";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Folder, FileText, ChevronRight,
+  ArrowLeft, Folder, ChevronRight,
   BarChart2, LogOut, AlertCircle, CheckCircle2, Lock, GitBranch, Map, Route,
   Pencil, Check, X
 } from "lucide-react";
@@ -664,49 +664,7 @@ export default function GroupDetail() {
               })()}
             </div>
 
-            {/* 그룹 내 문서 목록 (간단히 표시) */}
-            <div className="space-y-3">
-              <div className="swiss-label mb-4">그룹 내 문서</div>
-              {!groupDetail.documents || groupDetail.documents.length === 0 ? (
-                <div className="border border-gray-200 p-12 text-center">
-                  <FileText size={32} className="mx-auto mb-3 text-gray-200" />
-                  <p className="text-sm text-gray-400">그룹에 문서가 없습니다.</p>
-                  <button
-                    onClick={() => navigate("/dashboard")}
-                    className="mt-4 text-sm font-bold underline hover:text-[var(--swiss-red)] transition-colors"
-                  >
-                    대시보드에서 파일 추가하기
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {groupDetail.documents.map((doc: any) => (
-                    <div key={doc.id} className="flex items-center justify-between border border-black/20 px-4 py-3 hover:border-black transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-2 h-2 flex-shrink-0 rounded-full ${doc.analysisStatus === "done" ? "bg-red-600" : "bg-gray-300"}`} />
-                        <span className="font-bold text-sm">{doc.title}</span>
-                        {doc.fileType && (
-                          <span className="text-xs font-bold px-2 py-0.5 bg-gray-100 text-gray-500">
-                            {doc.fileType.toUpperCase()}
-                          </span>
-                        )}
-                        {doc.analysisStatus !== "done" && (
-                          <span className="flex items-center gap-1 text-xs text-gray-400">
-                            <AlertCircle size={11} /> 미분석
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => navigate(`/documents/${doc.id}`)}
-                        className="flex items-center gap-1 text-xs swiss-label hover:text-black transition-colors flex-shrink-0"
-                      >
-                        문서 열기 <ChevronRight size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+
           </>
         )}
       </main>
