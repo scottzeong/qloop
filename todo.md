@@ -275,22 +275,31 @@
 
 ## v4.19 QLoop 모델 3종 + Knowledge Library 단일 뷰
 
-- [ ] KnowledgeLibrary.tsx: 관리자/학습자 구분 제거, 단일 뷰로 통합 (본인 파일 업로드+관리)
-- [ ] KnowledgeLibrary.tsx: isAdmin 분기 로직 제거, 모든 사용자가 동일한 업로드/관리 UI 사용
-- [ ] DB: learningSessions 테이블에 qloopModel 필드 추가 (core/curated/open)
-- [ ] server/routers.ts: session.start에 qloopModel 파라미터 추가
-- [ ] server/routers.ts: generateFirstQuestion/generateNextMessage에서 qloopModel 분기 처리
+- [x] KnowledgeLibrary.tsx: 관리자/학습자 구분 제거, 단일 뷰로 통합 (본인 파일 업로드+관리)
+- [x] KnowledgeLibrary.tsx: isAdmin 분기 로직 제거, 모든 사용자가 동일한 업로드/관리 UI 사용
+- [x] DB: learningSessions 테이블에 qloopModel 필드 추가 (core/curated/open) - openQloopMode로 통합 (0=core, 1=open, 2=curated)
+- [x] server/routers.ts: session.start에 qloopModel 파라미터 추가
+- [x] server/routers.ts: generateFirstQuestion/generateNextMessage에서 qloopModel 분기 처리
   - core: 업로드 자료만 사용
   - curated: 업로드 자료 + 본인 Library 전체 자동 참조
   - open: curated + 인터넷 검색 컨텍스트
-- [ ] server/routers.ts: sendMessage에서 qloopModel 변경 허용 (세션 중 변경 지원)
-- [ ] DocumentDetail.tsx: 평가 모달의 Library 개별 선택 UI 제거 (Curated에서 자동 전체 참조)
-- [ ] DocumentDetail.tsx: QLoop 모델 선택 카드 UI 추가 (Core/Curated/Open 3종 설명 포함)
-- [ ] LearningSession.tsx: 세션 중 QLoop 모델 변경 버튼/드롭다운 추가
-- [ ] LearningSession.tsx: 모델 변경 시 즉시 반영 (다음 질문부터 새 모델 적용)
+- [x] server/routers.ts: sendMessage에서 qloopModel 변경 허용 (세션 중 변경 지원)
+- [x] DocumentDetail.tsx: 평가 모달의 Library 개별 선택 UI 제거 (Curated에서 자동 전체 참조)
+- [x] DocumentDetail.tsx: QLoop 모델 선택 카드 UI 추가 (Core/Curated/Open 3종 설명 포함)
+- [x] LearningSession.tsx: 세션 중 QLoop 모델 변경 버튼/드롭다운 추가
+- [x] LearningSession.tsx: 모델 변경 시 즉시 반영 (다음 질문부터 새 모델 적용)
 
 ## v4.20 QLoop 모델 UX 개선 3종
 
 - [x] LearningSession.tsx: Curated/Open 모델로 변경 시 "다음 질문부터 Knowledge Library가 참조됩니다" 안내 토스트 메시지 추가
 - [x] SessionHistory.tsx: 세션 카드에 QLoop 모델 배지 표시 (Core/Curated/Open)
 - [x] KnowledgeLibrary.tsx: Library 카드에 추출 텍스트 미리보기 접기/펼치기 기능 추가
+
+## v4.21 QLoop UI 정리 및 기능 확장
+
+- [x] DocumentDetail.tsx: Open QLoop ON/OFF 토글 버튼 완전 제거
+- [x] GroupDetail.tsx: 학습 시작 모달에 QLoop 모델 선택 카드 추가 (Core/Curated/Open)
+- [x] GroupDetail.tsx: session.start에 qloopModel 파라미터 전달
+- [x] SocraticProfile.tsx: 모델별 세션 수 비교 바 차트 추가 (Core/Curated/Open)
+- [x] SocraticProfile.tsx: 모델별 평균 점수 비교 차트 추가
+- [x] server/routers.ts: session.getModelStats 프로시저 추가 (openQloopMode별 집계)

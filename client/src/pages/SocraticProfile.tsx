@@ -51,6 +51,10 @@ export default function SocraticProfile() {
     { enabled: isAuthenticated, staleTime: 0, refetchOnMount: "always" }
   );
 
+  const { data: modelStats } = trpc.session.getModelStats.useQuery(
+    undefined,
+    { enabled: isAuthenticated, staleTime: 0, refetchOnMount: "always" }
+  );
   const isLoading = profileLoading || evalsLoading;
 
   if (!isAuthenticated) {
@@ -243,6 +247,99 @@ export default function SocraticProfile() {
           </div>
         )}
 
+        {/* QLoop 모델별 학습 통계 */}
+        {modelStats && (
+          <div className="border border-gray-200 p-6 mb-10">
+            <div className="flex items-center gap-2 mb-6">
+              <TrendingUp size={14} />
+              <span className="swiss-label">QLoop 모델별 학습 통계</span>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              {/* Core QLoop */}
+              <div className="border-2 border-black p-4">
+                <div className="text-xs font-black uppercase tracking-widest mb-3 text-black">Core QLoop</div>
+                <div className="flex items-end gap-2 mb-2">
+                  <div className="text-3xl font-black">{modelStats.core.count}</div>
+                  <div className="text-xs text-gray-400 mb-1">세션</div>
+                </div>
+                <div className="text-xs text-gray-500 mb-2">평균 점수</div>
+                {modelStats.core.avgScore !== null ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-gray-100 h-2">
+                      <div className="h-2 bg-black transition-all duration-700" style={{ width: `${modelStats.core.avgScore}%` }} />
+                    </div>
+                    <span className="text-xs font-bold w-8 text-right">{modelStats.core.avgScore}</span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-300">평가 데이터 없음</div>
+                )}
+              </div>
+              {/* Curated QLoop */}
+              <div className="border-2 border-red-600 p-4">
+                <div className="text-xs font-black uppercase tracking-widest mb-3 text-red-600">Curated QLoop</div>
+                <div className="flex items-end gap-2 mb-2">
+                  <div className="text-3xl font-black">{modelStats.curated.count}</div>
+                  <div className="text-xs text-gray-400 mb-1">세션</div>
+                </div>
+                <div className="text-xs text-gray-500 mb-2">평균 점수</div>
+                {modelStats.curated.avgScore !== null ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-gray-100 h-2">
+                      <div className="h-2 bg-red-600 transition-all duration-700" style={{ width: `${modelStats.curated.avgScore}%` }} />
+                    </div>
+                    <span className="text-xs font-bold w-8 text-right">{modelStats.curated.avgScore}</span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-300">평가 데이터 없음</div>
+                )}
+              </div>
+              {/* Open QLoop */}
+              <div className="border-2 border-blue-600 p-4">
+                <div className="text-xs font-black uppercase tracking-widest mb-3 text-blue-600">Open QLoop</div>
+                <div className="flex items-end gap-2 mb-2">
+                  <div className="text-3xl font-black">{modelStats.open.count}</div>
+                  <div className="text-xs text-gray-400 mb-1">세션</div>
+                </div>
+                <div className="text-xs text-gray-500 mb-2">평균 점수</div>
+                {modelStats.open.avgScore !== null ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-gray-100 h-2">
+                      <div className="h-2 bg-blue-600 transition-all duration-700" style={{ width: `${modelStats.open.avgScore}%` }} />
+                    </div>
+                    <span className="text-xs font-bold w-8 text-right">{modelStats.open.avgScore}</span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-300">평가 데이터 없음</div>
+                )}
+              </div>
+            </div>
+            {/* 비교 바 차트 */}
+            {(modelStats.core.count + modelStats.curated.count + modelStats.open.count) > 0 && (
+              <div className="mt-6 pt-5 border-t border-gray-100">
+                <div className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">세션 수 비교</div>
+                <div className="space-y-3">
+                  {[
+                    { label: "Core QLoop", count: modelStats.core.count, color: "bg-black" },
+                    { label: "Curated QLoop", count: modelStats.curated.count, color: "bg-red-600" },
+                    { label: "Open QLoop", count: modelStats.open.count, color: "bg-blue-600" },
+                  ].map(({ label, count, color }) => {
+                    const total = modelStats.core.count + modelStats.curated.count + modelStats.open.count;
+                    const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                    return (
+                      <div key={label} className="flex items-center gap-3">
+                        <div className="w-28 text-xs text-gray-600 flex-shrink-0">{label}</div>
+                        <div className="flex-1 bg-gray-100 h-3">
+                          <div className={`h-3 ${color} transition-all duration-700`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <div className="text-xs font-bold w-12 text-right">{count}회 ({pct}%)</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         {/* 질문유형별 평가 이력 */}
         {Object.keys(evalsByType).length > 0 && (
           <div className="border border-gray-200 p-6">

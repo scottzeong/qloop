@@ -1622,9 +1622,32 @@ export const appRouter = router({
             }
           }
         }
-        return progressMap;
+         return progressMap;
       }),
+    // QLoop 모델별 세션 통계 (Core/Curated/Open 세션 수 + 평균 점수)
+    getModelStats: protectedProcedure.query(async ({ ctx }) => {
+      const sessions = await getSessionsByUserId(ctx.user.id);
+      const modelMap: Record<string, { count: number; totalScore: number; scoredCount: number }> = {
+        core: { count: 0, totalScore: 0, scoredCount: 0 },
+        curated: { count: 0, totalScore: 0, scoredCount: 0 },
+        open: { count: 0, totalScore: 0, scoredCount: 0 },
+      };
+      for (const s of sessions) {
+        const mode = (s as any).openQloopMode as number ?? 0;
+        const key = mode === 1 ? "open" : mode === 2 ? "curated" : "core";
+        modelMap[key].count++;
+        const score = (s as any).evaluationScore as number | null;
+        if (score !== null && score !== undefined) {
+          modelMap[key].totalScore += score;
+          modelMap[key].scoredCount++;
+        }
+      }
+      return {
+        core: { count: modelMap.core.count, avgScore: modelMap.core.scoredCount > 0 ? Math.round(modelMap.core.totalScore / modelMap.core.scoredCount) : null },
+        curated: { count: modelMap.curated.count, avgScore: modelMap.curated.scoredCount > 0 ? Math.round(modelMap.curated.totalScore / modelMap.curated.scoredCount) : null },
+        open: { count: modelMap.open.count, avgScore: modelMap.open.scoredCount > 0 ? Math.round(modelMap.open.totalScore / modelMap.open.scoredCount) : null },
+      };
+    }),
   }),
 });
-
 export type AppRouter = typeof appRouter;

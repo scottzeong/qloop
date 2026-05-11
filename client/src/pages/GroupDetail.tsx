@@ -39,6 +39,7 @@ export default function GroupDetail() {
   const [evalEnabled, setEvalEnabled] = useState<boolean | null>(null);
   const [selectedPolicyId, setSelectedPolicyId] = useState<number | null>(null);
   const [starting, setStarting] = useState(false);
+  const [qloopModel, setQloopModel] = useState<"core" | "curated" | "open">("core");
 
   // 구조 미리보기 state (문서별): docId -> 선택된 구조 키
   const [previewStructureByDoc, setPreviewStructureByDoc] = useState<Record<number, "tree" | "conceptMap" | "learningPath" | null>>({});
@@ -59,6 +60,7 @@ export default function GroupDetail() {
     setPendingTopic({ id: topicId, title: topicTitle, documentId });
     setEvalEnabled(null);
     setSelectedPolicyId(null);
+    setQloopModel("core");
     setShowEvalModal(true);
   };
 
@@ -82,6 +84,7 @@ export default function GroupDetail() {
         topicDescription: "",
         evaluationEnabled: evalEnabled,
         evaluationPolicyId: evalEnabled ? (selectedPolicyId ?? undefined) : undefined,
+        qloopModel,
       });
       navigate(`/sessions/${sessionId}`);
     } catch (e: unknown) {
@@ -547,6 +550,54 @@ export default function GroupDetail() {
                 <p className="text-sm font-bold">{pendingTopic.title}</p>
               </div>
             )}
+            {/* QLoop 모델 선택 */}
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-black/50 mb-3">QLoop 모델 선택</p>
+              <div className="space-y-2">
+                <button
+                  onClick={() => setQloopModel("core")}
+                  className={`w-full border-2 p-3 text-left transition-colors ${qloopModel === "core" ? "border-black bg-black text-white" : "border-black/20 hover:border-black"}`}
+                >
+                  <div className="flex items-start gap-2">
+                    <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex-shrink-0 flex items-center justify-center ${qloopModel === "core" ? "border-white" : "border-black/30"}`}>
+                      {qloopModel === "core" && <div className="w-2 h-2 rounded-full bg-white" />}
+                    </div>
+                    <div>
+                      <div className="text-sm font-black">Core QLoop</div>
+                      <div className={`text-xs mt-0.5 ${qloopModel === "core" ? "opacity-70" : "text-black/40"}`}>업로드한 학습자료와 학습그룹만으로 학습</div>
+                    </div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setQloopModel("curated")}
+                  className={`w-full border-2 p-3 text-left transition-colors ${qloopModel === "curated" ? "border-red-600 bg-red-600 text-white" : "border-black/20 hover:border-red-400"}`}
+                >
+                  <div className="flex items-start gap-2">
+                    <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex-shrink-0 flex items-center justify-center ${qloopModel === "curated" ? "border-white" : "border-black/30"}`}>
+                      {qloopModel === "curated" && <div className="w-2 h-2 rounded-full bg-white" />}
+                    </div>
+                    <div>
+                      <div className="text-sm font-black">Curated QLoop</div>
+                      <div className={`text-xs mt-0.5 ${qloopModel === "curated" ? "opacity-70" : "text-black/40"}`}>Core QLoop + Knowledge Library 전체 자동 참조</div>
+                    </div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setQloopModel("open")}
+                  className={`w-full border-2 p-3 text-left transition-colors ${qloopModel === "open" ? "border-blue-600 bg-blue-600 text-white" : "border-black/20 hover:border-blue-400"}`}
+                >
+                  <div className="flex items-start gap-2">
+                    <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex-shrink-0 flex items-center justify-center ${qloopModel === "open" ? "border-white" : "border-black/30"}`}>
+                      {qloopModel === "open" && <div className="w-2 h-2 rounded-full bg-white" />}
+                    </div>
+                    <div>
+                      <div className="text-sm font-black">Open QLoop</div>
+                      <div className={`text-xs mt-0.5 ${qloopModel === "open" ? "opacity-70" : "text-black/40"}`}>Curated QLoop + 인터넷 검색으로 최신 정보까지 참조</div>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-black/50 mb-3">평가 여부 선택 <span className="text-red-600">*필수</span></p>
               <div className="grid grid-cols-2 gap-3">

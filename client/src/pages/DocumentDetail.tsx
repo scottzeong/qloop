@@ -1065,8 +1065,6 @@ export default function DocumentDetail() {
           </div>
           {/* 언어 배지 + 학습 언어 변경 */}
           <LanguageBadge doc={doc} docId={docId} />
-          {/* Open QLoop 토글 */}
-          <OpenQloopToggle documentId={docId} />
           {/* 학습 구조 상태 표시 */}
           {(doc as any).structureLocked === 1 && (
             <div className="flex items-center gap-1.5 text-xs font-bold text-black/50 border border-black/20 px-2 py-1">
