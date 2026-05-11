@@ -341,3 +341,7 @@
 ## v4.26 학습그룹 세션 버그 2종 수정
 - [x] 학습그룹 세션 학습기록 미저장 버그 수정 - GroupDetail handleConfirmStart에서 session.start 호출 시 groupId 누락 버그 수정
 - [x] 학습화면 뒤로가기 버튼 경로 버그 근본 수정 - groupId가 DB에 저장되지 않아 null이었던 것이 원인, groupId 전달 수정으로 해결
+
+## v4.27 학습그룹 진행중 버튼 + Learning History 필터
+- [x] GroupDetail.tsx: 진행중 토픽 버튼을 '진행중' 스타일(노란색 테두리)로 표시, 완료는 '재학습' 버튼 (목차/개념맵/학습경로 모두 적용)
+- [x] SessionHistory.tsx: active/completed 세션만 표시 (paused 등 제외)

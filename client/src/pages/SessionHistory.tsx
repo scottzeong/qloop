@@ -33,12 +33,15 @@ export default function SessionHistory() {
     { enabled: !!selectedSession }
   );
 
-  const completedSessions = sessions?.filter((s) => s.status === "completed") ?? [];
-  const activeSessions = sessions?.filter((s) => s.status === "active") ?? [];
+  // active/completed 세션만 표시 기준으로 통일
+  const visibleSessions = sessions?.filter((s) => s.status === "active" || s.status === "completed") ?? [];
+  const completedSessions = visibleSessions.filter((s) => s.status === "completed");
+  const activeSessions = visibleSessions.filter((s) => s.status === "active");
 
   const sortedSessions = useMemo(() => {
     if (!sessions) return [];
-    const arr = [...sessions];
+    // active(진행중)와 completed(완료) 세션만 표시
+    const arr = sessions.filter((s) => s.status === "active" || s.status === "completed");
     if (sortMode === "time") {
       return arr.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     } else if (sortMode === "progress") {
@@ -103,7 +106,7 @@ export default function SessionHistory() {
             {/* Stats row */}
             <div className="grid grid-cols-3 gap-0 mb-10">
               <div className="border border-black p-6 border-r-0">
-                <div className="text-4xl font-black mb-1">{sessions?.length ?? 0}</div>
+                <div className="text-4xl font-black mb-1">{visibleSessions.length}</div>
                 <div className="swiss-label">전체 세션</div>
               </div>
               <div className="border border-black p-6 border-r-0">
@@ -114,14 +117,14 @@ export default function SessionHistory() {
               </div>
               <div className="border border-black p-6">
                 <div className="text-4xl font-black mb-1">
-                  {sessions?.reduce((acc, s) => acc + (s.answeredQuestions ?? 0), 0) ?? 0}
+                  {visibleSessions.reduce((acc, s) => acc + (s.answeredQuestions ?? 0), 0)}
                 </div>
                 <div className="swiss-label">총 답변 수</div>
               </div>
             </div>
 
             {/* Session list */}
-            {!sessions || sessions.length === 0 ? (
+            {visibleSessions.length === 0 ? (
               <div className="border-2 border-dashed border-gray-200 p-16 text-center">
                 <BookOpen size={32} className="mx-auto mb-4 text-gray-200" />
                 <div className="swiss-label mb-2">학습 기록이 없습니다</div>

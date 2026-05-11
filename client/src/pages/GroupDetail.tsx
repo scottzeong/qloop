@@ -389,14 +389,18 @@ export default function GroupDetail() {
                                         <span className="truncate">{t.title}</span>
                                         {topicProgress[t.id || `ch${i}_t${j}`] === "completed" && <span className="text-xs text-gray-400 flex-shrink-0">완료</span>}
                                       </div>
-                                      {firstDoc && (
+                                      {firstDoc && (() => { const tid2 = t.id || `ch${i}_t${j}`; const st2 = topicProgress[tid2]; return (
                                         <button
-                                          onClick={() => handleStartLearning(t.id || `ch${i}_t${j}`, t.title, firstDoc.id)}
-                                          className="flex-shrink-0 text-xs font-bold px-3 py-1.5 bg-black text-white hover:bg-[var(--swiss-red)] transition-colors"
+                                          onClick={() => handleStartLearning(tid2, t.title, firstDoc.id)}
+                                          className={`flex-shrink-0 text-xs font-bold px-3 py-1.5 transition-colors ${
+                                            st2 === "active" ? "border-2 border-yellow-400 text-yellow-600 bg-yellow-50 hover:bg-yellow-100" :
+                                            st2 === "completed" ? "bg-gray-200 text-gray-600 hover:bg-gray-300" :
+                                            "bg-black text-white hover:bg-[var(--swiss-red)]"
+                                          }`}
                                         >
-                                          {topicProgress[t.id || `ch${i}_t${j}`] === "completed" ? "재학습" : "학습 시작"}
+                                          {st2 === "active" ? "진행중" : st2 === "completed" ? "재학습" : "학습 시작"}
                                         </button>
-                                      )}
+                                      ); })()}
                                     </div>
                                   ))}
                                 </div>
@@ -421,14 +425,18 @@ export default function GroupDetail() {
                                     <span className="text-gray-400 text-xs line-clamp-1 block mt-0.5">{c.description}</span>
                                   )}
                                 </div>
-                                {firstDoc && (
+                                {firstDoc && (() => { const cid = c.id || `concept_${i}`; const st = topicProgress[cid]; return (
                                   <button
-                                    onClick={() => handleStartLearning(c.id || `concept_${i}`, c.label || c.concept, firstDoc.id)}
-                                    className="flex-shrink-0 text-xs font-bold px-2 py-1 bg-black text-white hover:bg-[var(--swiss-red)] transition-colors"
+                                    onClick={() => handleStartLearning(cid, c.label || c.concept, firstDoc.id)}
+                                    className={`flex-shrink-0 text-xs font-bold px-2 py-1 transition-colors ${
+                                      st === "active" ? "border-2 border-yellow-400 text-yellow-600 bg-yellow-50 hover:bg-yellow-100" :
+                                      st === "completed" ? "bg-gray-200 text-gray-600 hover:bg-gray-300" :
+                                      "bg-black text-white hover:bg-[var(--swiss-red)]"
+                                    }`}
                                   >
-                                    학습 시작
+                                    {st === "active" ? "진행중" : st === "completed" ? "재학습" : "학습 시작"}
                                   </button>
-                                )}
+                                ); })()}
                               </div>
                             ))}
                           </div>
@@ -449,32 +457,36 @@ export default function GroupDetail() {
                                       <div className="text-xs text-gray-500 truncate">{step.description}</div>
                                     )}
                                   </div>
-                                  {firstDoc && (
+                                  {firstDoc && (() => { const sid = step.topicIds?.[0] || step.topics?.[0]?.id || step.id || `step_${step.step ?? i + 1}`; const st = topicProgress[sid]; return (
                                     <button
-                                      onClick={() => {
-                                        const topicId = step.topicIds?.[0] || step.topics?.[0]?.id || step.id || `step_${step.step ?? i + 1}`;
-                                        const topicTitle = step.topics?.[0]?.title || step.title;
-                                        handleStartLearning(topicId, topicTitle, firstDoc.id);
-                                      }}
-                                      className="flex-shrink-0 text-xs font-bold px-3 py-1.5 bg-black text-white hover:bg-[var(--swiss-red)] transition-colors"
+                                      onClick={() => { const topicTitle = step.topics?.[0]?.title || step.title; handleStartLearning(sid, topicTitle, firstDoc.id); }}
+                                      className={`flex-shrink-0 text-xs font-bold px-3 py-1.5 transition-colors ${
+                                        st === "active" ? "border-2 border-yellow-400 text-yellow-600 bg-yellow-50 hover:bg-yellow-100" :
+                                        st === "completed" ? "bg-gray-200 text-gray-600 hover:bg-gray-300" :
+                                        "bg-black text-white hover:bg-[var(--swiss-red)]"
+                                      }`}
                                     >
-                                      학습 시작
+                                      {st === "active" ? "진행중" : st === "completed" ? "재학습" : "학습 시작"}
                                     </button>
-                                  )}
+                                  ); })()}
                                 </div>
                                 {step.topics && step.topics.length > 0 && (
                                   <div className="divide-y divide-black/5 border-t border-black/5">
                                     {step.topics.map((t: any, j: number) => (
                                       <div key={t.id || j} className="flex items-center justify-between px-4 py-2 gap-3 pl-14 hover:bg-black/[0.01] transition-colors">
                                         <span className="text-xs text-black/60 flex-1 min-w-0 truncate">{t.title}</span>
-                                        {firstDoc && (
+                                        {firstDoc && (() => { const stid = t.id || `step${i}_t${j}`; const sst = topicProgress[stid]; return (
                                           <button
-                                            onClick={() => handleStartLearning(t.id || `step${i}_t${j}`, t.title, firstDoc.id)}
-                                            className="flex-shrink-0 text-xs font-bold px-2 py-0.5 bg-black/10 text-black hover:bg-black hover:text-white transition-colors"
+                                            onClick={() => handleStartLearning(stid, t.title, firstDoc.id)}
+                                            className={`flex-shrink-0 text-xs font-bold px-2 py-0.5 transition-colors ${
+                                              sst === "active" ? "border border-yellow-400 text-yellow-600 bg-yellow-50" :
+                                              sst === "completed" ? "bg-gray-200 text-gray-500" :
+                                              "bg-black/10 text-black hover:bg-black hover:text-white"
+                                            }`}
                                           >
-                                            학습
+                                            {sst === "active" ? "진행중" : sst === "completed" ? "재학습" : "학습"}
                                           </button>
-                                        )}
+                                        ); })()}
                                       </div>
                                     ))}
                                   </div>
