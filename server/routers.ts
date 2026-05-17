@@ -1296,6 +1296,15 @@ Return ONLY valid JSON matching the schema exactly.`;
       .mutation(async ({ ctx, input }) => {
         const doc = await getDocumentById(input.documentId);
         if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
+        // 그룹 소속 문서인 경우 그룹 구조 완전 초기화 (자료 변경 시 기존 통합 분석 결과가 일관성 없어짐)
+        if (doc.groupId) {
+          await updateDocumentGroup(doc.groupId, {
+            selectedStructure: null,
+            structureLocked: 0,
+            structure: null,
+            analysisStatus: "pending",
+          });
+        }
         await deleteDocument(input.documentId);
         return { success: true };
       }),

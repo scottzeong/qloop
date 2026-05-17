@@ -706,7 +706,7 @@ function GroupRow({
                     <FileTypeBadge fileType={doc.fileType ?? undefined} />
                   </div>
                   <button
-                    onClick={(e) => onDeleteDoc(doc.id, e)}
+                    onClick={(e) => { e.stopPropagation(); onDeleteDoc(doc.id, e); }}
                     className={`p-1 transition-colors ${
                       deletingDocId === doc.id ? "text-red-600" : "text-gray-300 hover:text-red-500"
                     }`}
