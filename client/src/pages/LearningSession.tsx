@@ -235,9 +235,12 @@ export default function LearningSession() {
   };
 
   const completedTopics = Array.isArray(session?.completedTopics) ? session.completedTopics : [];
-  const progress = session?.totalQuestions
-    ? Math.round(((session.answeredQuestions ?? 0) / session.totalQuestions) * 100)
-    : 0;
+  // 최소 질문 수(24)를 기준으로 진도율 계산 (100% 초과 불가)
+  const MIN_QUESTIONS = 24;
+  const progress = Math.min(
+    Math.round(((session?.answeredQuestions ?? 0) / MIN_QUESTIONS) * 100),
+    100
+  );
   const isCompleted = session?.status === "completed";
 
   if (!session) {

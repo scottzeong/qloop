@@ -345,3 +345,8 @@
 ## v4.27 학습그룹 진행중 버튼 + Learning History 필터
 - [x] GroupDetail.tsx: 진행중 토픽 버튼을 '진행중' 스타일(노란색 테두리)로 표시, 완료는 '재학습' 버튼 (목차/개념맵/학습경로 모두 적용)
 - [x] SessionHistory.tsx: active/completed 세션만 표시 (paused 등 제외)
+
+## v4.28 진도율 수정 + 그룹 세부자료 UI + 질문 프롬프트 개선
+- [x] 진도율 계산 로직: MIN_QUESTIONS=24 기준으로 진도율 계산 (answeredQuestions/24*100, 100% 초과 불가) - LearningSession.tsx 수정
+- [x] 그룹 세부자료: Dashboard.tsx에서 클릭 비활성화 (cursor-pointer 제거, onClick 제거), 삭제 버튼만 활성화 유지
+- [x] 학습 세션 질문 프롬프트: 학습자 답변 반복/확인 문장 금지, 핵심 키워드 언급 및 구체적 질문 방식으로 개선 - routers.ts 수정

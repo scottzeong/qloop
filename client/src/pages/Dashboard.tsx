@@ -694,8 +694,7 @@ function GroupRow({
               {groupDetail.documents.map((doc: GroupDoc) => (
                 <div
                   key={doc.id}
-                  className="flex items-center justify-between px-8 py-3 border-b border-gray-200 last:border-b-0 hover:bg-white transition-colors cursor-pointer"
-                  onClick={() => navigate(`/documents/${doc.id}`)}
+                  className="flex items-center justify-between px-8 py-3 border-b border-gray-200 last:border-b-0 transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <div
