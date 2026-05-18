@@ -23,6 +23,16 @@ import {
   Settings,
   Library,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const ALLOWED_TYPES: Record<string, string> = {
   "application/pdf": "PDF",
@@ -66,9 +76,10 @@ export default function Dashboard() {
   const [expandedGroupId, setExpandedGroupId] = useState<number | null>(null);
   const [uploadingToGroupId, setUploadingToGroupId] = useState<number | null>(null);
 
-  // 삭제 확인 상태
-  const [deletingDocId, setDeletingDocId] = useState<number | null>(null);
-  const [deletingGroupId, setDeletingGroupId] = useState<number | null>(null);
+  // 삭제 확인 팝업 상태
+  const [deleteDocConfirm, setDeleteDocConfirm] = useState<{ id: number; title: string } | null>(null);
+  const [deleteGroupConfirm, setDeleteGroupConfirm] = useState<{ id: number; name: string } | null>(null);
+  const [deleteGroupDocConfirm, setDeleteGroupDocConfirm] = useState<{ id: number; title: string } | null>(null);
 
   const utils = trpc.useUtils();
 
@@ -169,41 +180,43 @@ export default function Dashboard() {
     [handleFile]
   );
 
-  const handleDeleteDoc = async (docId: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (deletingDocId === docId) {
-      try {
-        await deleteDocMutation.mutateAsync({ documentId: docId });
-        toast.success("문서가 삭제되었습니다.");
-        await refetchDocs();
-        await refetchGroups();
-      } catch {
-        toast.error("삭제 실패");
-      } finally {
-        setDeletingDocId(null);
-      }
-    } else {
-      setDeletingDocId(docId);
-      setTimeout(() => setDeletingDocId(null), 3000);
+  // 삭제 실행 함수들
+  const confirmDeleteDoc = async (docId: number) => {
+    try {
+      await deleteDocMutation.mutateAsync({ documentId: docId });
+      toast.success("학습자료와 관련 학습이력이 삭제되었습니다.");
+      await refetchDocs();
+      await refetchGroups();
+    } catch {
+      toast.error("삭제 실패");
+    } finally {
+      setDeleteDocConfirm(null);
     }
   };
 
-  const handleDeleteGroup = async (groupId: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (deletingGroupId === groupId) {
-      try {
-        await deleteGroupMutation.mutateAsync({ groupId });
-        toast.success("그룹이 삭제되었습니다.");
-        await refetchGroups();
-        if (expandedGroupId === groupId) setExpandedGroupId(null);
-      } catch {
-        toast.error("삭제 실패");
-      } finally {
-        setDeletingGroupId(null);
-      }
-    } else {
-      setDeletingGroupId(groupId);
-      setTimeout(() => setDeletingGroupId(null), 3000);
+  const confirmDeleteGroup = async (groupId: number) => {
+    try {
+      await deleteGroupMutation.mutateAsync({ groupId });
+      toast.success("학습그룹과 관련 학습이력이 삭제되었습니다.");
+      await refetchGroups();
+      if (expandedGroupId === groupId) setExpandedGroupId(null);
+    } catch {
+      toast.error("삭제 실패");
+    } finally {
+      setDeleteGroupConfirm(null);
+    }
+  };
+
+  const confirmDeleteGroupDoc = async (docId: number) => {
+    try {
+      await deleteDocMutation.mutateAsync({ documentId: docId });
+      toast.success("자료와 관련 학습이력이 삭제되었습니다.");
+      await refetchDocs();
+      await refetchGroups();
+    } catch {
+      toast.error("삭제 실패");
+    } finally {
+      setDeleteGroupDocConfirm(null);
     }
   };
 
@@ -266,6 +279,75 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
+      {/* 삭제 확인 팝업 - 학습자료 */}
+      <AlertDialog open={!!deleteDocConfirm} onOpenChange={(open) => !open && setDeleteDocConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>학습자료 삭제</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>"{deleteDocConfirm?.title}"</strong>을(를) 삭제하시겠습니까?<br />
+              <span className="text-red-600 font-medium">관련 학습이력도 모두 함께 삭제됩니다.</span>
+              <br />이 작업은 되돌릴 수 없습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteDocConfirm && confirmDeleteDoc(deleteDocConfirm.id)}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 삭제 확인 팝업 - 학습그룹 */}
+      <AlertDialog open={!!deleteGroupConfirm} onOpenChange={(open) => !open && setDeleteGroupConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>학습그룹 삭제</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>"{deleteGroupConfirm?.name}"</strong> 그룹을 삭제하시겠습니까?<br />
+              <span className="text-red-600 font-medium">그룹의 모든 학습이력도 함께 삭제됩니다.</span>
+              <br />이 작업은 되돌릴 수 없습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteGroupConfirm && confirmDeleteGroup(deleteGroupConfirm.id)}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 삭제 확인 팝업 - 그룹 내 자료 */}
+      <AlertDialog open={!!deleteGroupDocConfirm} onOpenChange={(open) => !open && setDeleteGroupDocConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>자료 삭제</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>"{deleteGroupDocConfirm?.title}"</strong>을(를) 삭제하시겠습니까?<br />
+              <span className="text-red-600 font-medium">관련 학습이력도 모두 함께 삭제됩니다.</span>
+              <br />그룹 구조 분석도 초기화됩니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteGroupDocConfirm && confirmDeleteGroupDoc(deleteGroupDocConfirm.id)}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Header */}
       <header className="border-b-2 border-black bg-white z-50">
         <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
@@ -299,13 +381,13 @@ export default function Dashboard() {
                 <Settings size={12} /> NEURAL SYSTEM SET
               </button>
             )}
-            <div className="flex items-center gap-3 border-l border-black pl-6">
-              <span className="text-sm font-medium">{user?.name}</span>
+            <div className="flex items-center gap-3 pl-6 border-l border-gray-200">
+              <span className="text-xs font-bold">{user?.name}</span>
               <button
-                onClick={() => logout()}
+                onClick={logout}
                 className="swiss-label hover:text-black transition-colors flex items-center gap-1"
               >
-                <LogOut size={11} /> 로그아웃
+                <LogOut size={12} /> 로그아웃
               </button>
             </div>
           </nav>
@@ -313,97 +395,93 @@ export default function Dashboard() {
       </header>
 
       <main className="flex-1 max-w-7xl mx-auto px-8 py-12 w-full">
-        <div className="grid grid-cols-12 gap-0">
-          {/* Left: Upload + Docs + Groups */}
-          <div className="col-span-8 pr-12 border-r border-black">
-
+        <div className="grid grid-cols-12 gap-12">
+          {/* Left: Upload + Groups + Docs */}
+          <div className="col-span-8">
             {/* Upload area */}
-            <div className="mb-12">
+            <div className="mb-10">
               <div className="swiss-label mb-4">학습자료 업로드</div>
               <div
-                className={`border-2 ${dragging ? "border-[var(--swiss-red)] bg-red-50" : "border-black"} border-dashed p-12 text-center cursor-pointer transition-colors relative`}
+                className={`border-2 border-dashed transition-colors cursor-pointer p-12 text-center ${
+                  dragging ? "border-black bg-gray-50" : "border-gray-300 hover:border-black"
+                }`}
                 onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
                 onDragLeave={() => setDragging(false)}
                 onDrop={onDrop}
-                onClick={() => !uploading && fileInputRef.current?.click()}
+                onClick={() => fileInputRef.current?.click()}
               >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept={FILE_ACCEPT}
-                  className="hidden"
-                  onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-                />
                 {uploading ? (
-                  <div className="space-y-4">
-                    <div className="swiss-label">분석 중...</div>
+                  <div className="space-y-3">
                     <div className="w-full bg-gray-100 h-1">
                       <div
-                        className="h-1 swiss-red-bg transition-all duration-500"
+                        className="h-1 swiss-red-bg transition-all duration-300"
                         style={{ width: `${uploadProgress}%` }}
                       />
                     </div>
-                    <div className="text-sm text-gray-500">{uploadProgress}%</div>
+                    <p className="text-xs text-gray-500">업로드 및 분석 중... {uploadProgress}%</p>
                   </div>
                 ) : (
                   <>
-                    <Upload size={32} className="mx-auto mb-4 text-gray-300" />
+                    <Upload size={24} className="mx-auto mb-3 text-gray-300" />
                     <p className="text-sm font-bold mb-1">파일을 드래그하거나 클릭하여 업로드</p>
-                    <div className="flex items-center justify-center gap-2 mt-2">
-                      {["PDF", "DOC", "DOCX", "PPT", "PPTX"].map((t) => (
-                        <span key={t} className="text-xs font-bold px-2 py-0.5 border border-gray-300 text-gray-400">{t}</span>
-                      ))}
-                    </div>
-                    <p className="text-xs text-gray-400 mt-2">최대 20MB</p>
+                    <p className="text-xs text-gray-400">PDF / DOC / DOCX / PPT / PPTX · 최대 20MB</p>
                   </>
                 )}
               </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={FILE_ACCEPT}
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFile(file);
+                  e.target.value = "";
+                }}
+              />
             </div>
 
-            {/* Document Groups */}
-            <div className="mb-12">
+            {/* Groups section */}
+            <div className="mb-10">
               <div className="flex items-center justify-between mb-4">
                 <div className="swiss-label">학습그룹</div>
                 <button
                   onClick={() => setShowCreateGroup(!showCreateGroup)}
-                  className="flex items-center gap-1 text-xs font-bold border border-black px-3 py-1.5 hover:bg-black hover:text-white transition-colors"
+                  className="flex items-center gap-1 text-xs font-bold hover:text-[var(--swiss-red)] transition-colors"
                 >
-                  <FolderPlus size={12} /> 그룹 만들기
+                  <FolderPlus size={14} /> 그룹 만들기
                 </button>
               </div>
 
-              {/* Create group form */}
               {showCreateGroup && (
-                <div className="border-2 border-black p-6 mb-4 bg-gray-50">
-                  <div className="swiss-label mb-3">새 그룹</div>
+                <div className="border-2 border-black p-5 mb-4 space-y-3">
                   <input
                     type="text"
-                    placeholder="그룹 이름 (필수)"
+                    placeholder="그룹 이름"
                     value={newGroupName}
                     onChange={(e) => setNewGroupName(e.target.value)}
-                    className="w-full border border-black px-4 py-2 text-sm mb-2 focus:outline-none focus:border-[var(--swiss-red)]"
+                    className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-black"
                     onKeyDown={(e) => e.key === "Enter" && handleCreateGroup()}
                   />
                   <input
                     type="text"
-                    placeholder="설명 (선택)"
+                    placeholder="설명 (선택사항)"
                     value={newGroupDesc}
                     onChange={(e) => setNewGroupDesc(e.target.value)}
-                    className="w-full border border-black px-4 py-2 text-sm mb-4 focus:outline-none focus:border-[var(--swiss-red)]"
+                    className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-black"
                   />
                   <div className="flex gap-2">
                     <button
                       onClick={handleCreateGroup}
-                      disabled={!newGroupName.trim()}
-                      className="flex-1 bg-black text-white py-2 text-sm font-bold hover:bg-[var(--swiss-red)] transition-colors disabled:opacity-40"
+                      className="bg-black text-white px-4 py-2 text-xs font-bold hover:bg-[var(--swiss-red)] transition-colors"
                     >
                       생성
                     </button>
                     <button
-                      onClick={() => { setShowCreateGroup(false); setNewGroupName(""); setNewGroupDesc(""); }}
-                      className="px-4 py-2 border border-black text-sm hover:bg-gray-100 transition-colors"
+                      onClick={() => setShowCreateGroup(false)}
+                      className="border border-gray-300 px-4 py-2 text-xs font-bold hover:border-black transition-colors"
                     >
-                      <X size={14} />
+                      취소
                     </button>
                   </div>
                 </div>
@@ -411,7 +489,6 @@ export default function Dashboard() {
 
               {!groups || groups.length === 0 ? (
                 <div className="border border-gray-200 p-8 text-center">
-                  <Folder size={28} className="mx-auto mb-2 text-gray-200" />
                   <p className="text-sm text-gray-400">그룹이 없습니다. 여러 파일을 묶어 함께 학습하세요.</p>
                 </div>
               ) : (
@@ -423,16 +500,14 @@ export default function Dashboard() {
                       isLast={i === groups.length - 1}
                       isExpanded={expandedGroupId === group.id}
                       onToggle={() => setExpandedGroupId(expandedGroupId === group.id ? null : group.id)}
-                      onDelete={(e) => handleDeleteGroup(group.id, e)}
+                      onDelete={(e) => { e.stopPropagation(); setDeleteGroupConfirm({ id: group.id, name: group.name }); }}
                       onAnalyze={(e) => handleAnalyzeGroup(group.id, e)}
                       onAddFile={(e) => {
                         e.stopPropagation();
                         groupFileInputRef.current?.setAttribute("data-group-id", String(group.id));
                         groupFileInputRef.current?.click();
                       }}
-                      onDeleteDoc={(docId, e) => handleDeleteDoc(docId, e)}
-                      deletingDocId={deletingDocId}
-                      isDeleting={deletingGroupId === group.id}
+                      onDeleteDoc={(docId, docTitle) => setDeleteGroupDocConfirm({ id: docId, title: docTitle })}
                       isAnalyzing={analyzeGroupMutation.isPending}
                       navigate={navigate}
                     />
@@ -447,59 +522,63 @@ export default function Dashboard() {
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
-                  const gid = Number(groupFileInputRef.current?.getAttribute("data-group-id"));
-                  if (file && gid) handleFile(file, gid);
-                  if (e.target) e.target.value = "";
+                  const groupId = Number(groupFileInputRef.current?.getAttribute("data-group-id"));
+                  if (file && groupId) handleFile(file, groupId);
+                  e.target.value = "";
                 }}
               />
             </div>
 
-            {/* Standalone Documents list */}
+            {/* Standalone docs section */}
             <div>
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-4">
                 <div className="swiss-label">학습자료</div>
-                <span className="text-xs text-gray-400">{documents?.length ?? 0}개</span>
+                <span className="text-xs text-gray-400">{documents?.filter((d) => !d.groupId).length ?? 0}개</span>
               </div>
-              {!documents || documents.length === 0 ? (
-                <div className="border border-gray-200 p-12 text-center">
-                  <FileText size={32} className="mx-auto mb-3 text-gray-200" />
-                  <p className="text-sm text-gray-400">아직 업로드된 문서가 없습니다.</p>
+              {!documents || documents.filter((d) => !d.groupId).length === 0 ? (
+                <div className="border border-gray-200 p-8 text-center">
+                  <FileText size={24} className="mx-auto mb-2 text-gray-200" />
+                  <p className="text-sm text-gray-400">업로드된 학습자료가 없습니다.</p>
                 </div>
               ) : (
                 <div className="space-y-0">
-                  {documents.map((doc, i) => (
-                    <div
-                      key={doc.id}
-                      className={`flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition-colors ${i < documents.length - 1 ? "border-b border-gray-100" : ""} border border-black`}
-                      onClick={() => navigate(`/documents/${doc.id}`)}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div
-                          className={`w-2 h-2 flex-shrink-0 ${doc.analysisStatus === "done" ? "swiss-red-bg" : doc.analysisStatus === "analyzing" ? "bg-yellow-400" : "bg-gray-300"}`}
-                        />
-                        <div>
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <p className="text-sm font-bold">{doc.title}</p>
-                            <FileTypeBadge fileType={doc.fileType} />
+                  {documents
+                    .filter((d) => !d.groupId)
+                    .map((doc, i, arr) => (
+                      <div
+                        key={doc.id}
+                        className={`flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition-colors border border-black ${i > 0 ? "border-t-0" : ""}`}
+                        onClick={() => navigate(`/documents/${doc.id}`)}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-2 h-2 flex-shrink-0 ${
+                              doc.analysisStatus === "done" ? "swiss-red-bg" : doc.analysisStatus === "analyzing" ? "bg-yellow-400" : "bg-gray-300"
+                            }`}
+                          />
+                          <div>
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <p className="text-sm font-bold">{doc.title}</p>
+                              <FileTypeBadge fileType={doc.fileType} />
+                            </div>
+                            <p className="text-xs text-gray-400">
+                              {doc.analysisStatus === "done" ? "분석 완료" : doc.analysisStatus === "analyzing" ? "분석 중..." : "대기 중"} ·{" "}
+                              {new Date(doc.createdAt).toLocaleDateString("ko-KR")}
+                            </p>
                           </div>
-                          <p className="text-xs text-gray-400">
-                            {doc.analysisStatus === "done" ? "분석 완료" : doc.analysisStatus === "analyzing" ? "분석 중..." : "대기 중"} ·{" "}
-                            {new Date(doc.createdAt).toLocaleDateString("ko-KR")}
-                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setDeleteDocConfirm({ id: doc.id, title: doc.title }); }}
+                            className="p-1.5 transition-colors text-gray-300 hover:text-red-500"
+                            title="삭제"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                          <ChevronRight size={16} className="text-gray-300" />
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={(e) => handleDeleteDoc(doc.id, e)}
-                          className={`p-1.5 transition-colors ${deletingDocId === doc.id ? "text-red-600 bg-red-50" : "text-gray-300 hover:text-red-500"}`}
-                          title={deletingDocId === doc.id ? "한 번 더 클릭하면 삭제됩니다" : "삭제"}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                        <ChevronRight size={16} className="text-gray-300" />
-                      </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               )}
             </div>
@@ -605,8 +684,6 @@ function GroupRow({
   onAnalyze,
   onAddFile,
   onDeleteDoc,
-  deletingDocId,
-  isDeleting,
   isAnalyzing,
   navigate,
 }: {
@@ -617,9 +694,7 @@ function GroupRow({
   onDelete: (e: React.MouseEvent) => void;
   onAnalyze: (e: React.MouseEvent) => void;
   onAddFile: (e: React.MouseEvent) => void;
-  onDeleteDoc: (docId: number, e: React.MouseEvent) => void;
-  deletingDocId: number | null;
-  isDeleting: boolean;
+  onDeleteDoc: (docId: number, docTitle: string) => void;
   isAnalyzing: boolean;
   navigate: (path: string) => void;
 }) {
@@ -678,8 +753,8 @@ function GroupRow({
           </button>
           <button
             onClick={onDelete}
-            className={`p-1.5 transition-colors ${isDeleting ? "text-red-600 bg-red-50" : "text-gray-300 hover:text-red-500"}`}
-            title={isDeleting ? "한 번 더 클릭하면 삭제됩니다" : "그룹 삭제"}
+            className="p-1.5 transition-colors text-gray-300 hover:text-red-500"
+            title="그룹 삭제"
           >
             <Trash2 size={13} />
           </button>
@@ -706,11 +781,9 @@ function GroupRow({
                     <FileTypeBadge fileType={doc.fileType ?? undefined} />
                   </div>
                   <button
-                    onClick={(e) => { e.stopPropagation(); onDeleteDoc(doc.id, e); }}
-                    className={`p-1 transition-colors ${
-                      deletingDocId === doc.id ? "text-red-600" : "text-gray-300 hover:text-red-500"
-                    }`}
-                    title={deletingDocId === doc.id ? "한 번 더 클릭하면 삭제됩니다" : "삭제"}
+                    onClick={(e) => { e.stopPropagation(); onDeleteDoc(doc.id, doc.title); }}
+                    className="p-1 transition-colors text-gray-300 hover:text-red-500"
+                    title="삭제"
                   >
                     <Trash2 size={12} />
                   </button>

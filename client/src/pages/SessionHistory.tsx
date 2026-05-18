@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
-import { ArrowLeft, BookOpen, CheckCircle, Clock, Play, ArrowUpDown } from "lucide-react";
+import { ArrowLeft, BookOpen, CheckCircle, Clock, Play, ArrowUpDown, Award } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { useState, useMemo } from "react";
 
@@ -12,6 +12,14 @@ const SORT_LABELS: Record<SortMode, string> = {
   progress: "진도율",
   toc: "목차순",
 };
+
+// LearningSession과 동일한 최소 질문 수 기준
+const MIN_QUESTIONS = 24;
+
+/** 세션의 진도율을 MIN_QUESTIONS 기준으로 계산 (100% 초과 불가) */
+function calcProgress(answeredQuestions: number | null | undefined): number {
+  return Math.min(Math.round(((answeredQuestions ?? 0) / MIN_QUESTIONS) * 100), 100);
+}
 
 export default function SessionHistory() {
   const [, navigate] = useLocation();
@@ -38,6 +46,9 @@ export default function SessionHistory() {
   const completedSessions = visibleSessions.filter((s) => s.status === "completed");
   const activeSessions = visibleSessions.filter((s) => s.status === "active");
 
+  // 100% 완료 세션 수 (진도율 기준)
+  const fullyCompletedCount = visibleSessions.filter((s) => calcProgress(s.answeredQuestions) >= 100).length;
+
   const sortedSessions = useMemo(() => {
     if (!sessions) return [];
     // active(진행중)와 completed(완료) 세션만 표시
@@ -46,8 +57,8 @@ export default function SessionHistory() {
       return arr.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     } else if (sortMode === "progress") {
       return arr.sort((a, b) => {
-        const pa = a.totalQuestions ? Math.round(((a.answeredQuestions ?? 0) / a.totalQuestions) * 100) : 0;
-        const pb = b.totalQuestions ? Math.round(((b.answeredQuestions ?? 0) / b.totalQuestions) * 100) : 0;
+        const pa = calcProgress(a.answeredQuestions);
+        const pb = calcProgress(b.answeredQuestions);
         return pb - pa;
       });
     } else {
@@ -88,6 +99,10 @@ export default function SessionHistory() {
           </div>
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
+              <Award size={12} style={{ color: "var(--swiss-red)" }} />
+              <span className="swiss-label">학습완료 {fullyCompletedCount}개</span>
+            </div>
+            <div className="flex items-center gap-2">
               <div className="w-2 h-2 swiss-red-bg" />
               <span className="swiss-label">완료 {completedSessions.length}개</span>
             </div>
@@ -104,7 +119,7 @@ export default function SessionHistory() {
           {/* Session list */}
           <div className={`${selectedSession ? "col-span-5 pr-8 border-r border-black" : "col-span-12"}`}>
             {/* Stats row */}
-            <div className="grid grid-cols-3 gap-0 mb-10">
+            <div className="grid grid-cols-4 gap-0 mb-10">
               <div className="border border-black p-6 border-r-0">
                 <div className="text-4xl font-black mb-1">{visibleSessions.length}</div>
                 <div className="swiss-label">전체 세션</div>
@@ -114,6 +129,12 @@ export default function SessionHistory() {
                   {completedSessions.length}
                 </div>
                 <div className="swiss-label">완료 세션</div>
+              </div>
+              <div className="border border-black p-6 border-r-0">
+                <div className="text-4xl font-black mb-1" style={{ color: "var(--swiss-red)" }}>
+                  {fullyCompletedCount}
+                </div>
+                <div className="swiss-label">학습완료</div>
               </div>
               <div className="border border-black p-6">
                 <div className="text-4xl font-black mb-1">
@@ -162,9 +183,8 @@ export default function SessionHistory() {
                 <div className="space-y-0">
                   {sortedSessions.map((s, i) => {
                     const isSelected = selectedSession === s.id;
-                    const progress = s.totalQuestions
-                      ? Math.round(((s.answeredQuestions ?? 0) / s.totalQuestions) * 100)
-                      : 0;
+                    const progress = calcProgress(s.answeredQuestions);
+                    const isFullyCompleted = progress >= 100;
 
                     return (
                       <div
@@ -177,9 +197,21 @@ export default function SessionHistory() {
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex items-start gap-3 flex-1">
-                            <div className={`w-2 h-2 mt-1.5 flex-shrink-0 ${s.status === "completed" ? "swiss-red-bg" : s.status === "active" ? "bg-yellow-400" : "bg-gray-300"}`} />
+                            <div className={`w-2 h-2 mt-1.5 flex-shrink-0 ${
+                              isFullyCompleted ? "swiss-red-bg" :
+                              s.status === "completed" ? "swiss-red-bg" :
+                              s.status === "active" ? "bg-yellow-400" : "bg-gray-300"
+                            }`} />
                             <div className="flex-1">
-                              <p className="text-sm font-bold mb-1">{s.startTopicTitle || "학습 세션"}</p>
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="text-sm font-bold">{s.startTopicTitle || "학습 세션"}</p>
+                                {/* 학습완료 배지 */}
+                                {isFullyCompleted && (
+                                  <span className="flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 swiss-red-bg text-white">
+                                    <Award size={9} /> 학습완료
+                                  </span>
+                                )}
+                              </div>
                               <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-1">
                                   <Clock size={10} className="text-gray-400" />
@@ -223,19 +255,20 @@ export default function SessionHistory() {
                         </div>
 
                         {/* Progress bar */}
-                        {s.totalQuestions ? (
-                          <div className="mt-3 pl-5">
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 bg-gray-100 h-0.5">
-                                <div
-                                  className="h-0.5 swiss-red-bg transition-all"
-                                  style={{ width: `${progress}%` }}
-                                />
-                              </div>
-                              <span className="text-xs text-gray-400">{progress}%</span>
+                        <div className="mt-3 pl-5">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 bg-gray-100 h-0.5">
+                              <div
+                                className="h-0.5 swiss-red-bg transition-all"
+                                style={{ width: `${progress}%` }}
+                              />
                             </div>
+                            <span className={`text-xs font-bold ${isFullyCompleted ? "" : "text-gray-400"}`}
+                              style={isFullyCompleted ? { color: "var(--swiss-red)" } : {}}>
+                              {progress}%
+                            </span>
                           </div>
-                        ) : null}
+                        </div>
                       </div>
                     );
                   })}
@@ -253,7 +286,14 @@ export default function SessionHistory() {
               <div className="border-2 border-black p-6 mb-6">
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h2 className="text-xl font-black mb-1">{selectedSessionData.startTopicTitle}</h2>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h2 className="text-xl font-black">{selectedSessionData.startTopicTitle}</h2>
+                      {calcProgress(selectedSessionData.answeredQuestions) >= 100 && (
+                        <span className="flex items-center gap-1 text-xs font-bold px-2 py-0.5 swiss-red-bg text-white">
+                          <Award size={11} /> 학습완료
+                        </span>
+                      )}
+                    </div>
                     <p className="swiss-label">
                       {new Date(selectedSessionData.createdAt).toLocaleDateString("ko-KR", {
                         year: "numeric",
@@ -269,20 +309,28 @@ export default function SessionHistory() {
 
                 <div className="grid grid-cols-3 gap-0">
                   <div className="border-r border-gray-200 pr-4">
-                    <div className="text-2xl font-black">{selectedSessionData.totalQuestions ?? 0}</div>
-                    <div className="swiss-label">총 질문</div>
+                    <div className="text-2xl font-black">{selectedSessionData.answeredQuestions ?? 0}</div>
+                    <div className="swiss-label">답변 수</div>
                   </div>
                   <div className="border-r border-gray-200 px-4">
-                    <div className="text-2xl font-black">{selectedSessionData.answeredQuestions ?? 0}</div>
-                    <div className="swiss-label">답변 완료</div>
+                    <div className="text-2xl font-black">{MIN_QUESTIONS}</div>
+                    <div className="swiss-label">목표 답변</div>
                   </div>
                   <div className="pl-4">
                     <div className="text-2xl font-black" style={{ color: "var(--swiss-red)" }}>
-                      {selectedSessionData.totalQuestions
-                        ? Math.round(((selectedSessionData.answeredQuestions ?? 0) / selectedSessionData.totalQuestions) * 100)
-                        : 0}%
+                      {calcProgress(selectedSessionData.answeredQuestions)}%
                     </div>
                     <div className="swiss-label">진도율</div>
+                  </div>
+                </div>
+
+                {/* 진도 바 */}
+                <div className="mt-4">
+                  <div className="flex-1 bg-gray-100 h-1.5">
+                    <div
+                      className="h-1.5 swiss-red-bg transition-all"
+                      style={{ width: `${calcProgress(selectedSessionData.answeredQuestions)}%` }}
+                    />
                   </div>
                 </div>
               </div>
@@ -299,11 +347,14 @@ export default function SessionHistory() {
                 </div>
               )}
 
-              {/* Message history */}
-              {selectedMessages && selectedMessages.length > 0 && (
+              {/* Message history - 학습 내용 조회 */}
+              {selectedMessages && selectedMessages.length > 0 ? (
                 <div>
-                  <div className="swiss-label mb-3">대화 기록</div>
-                  <div className="border border-black max-h-96 overflow-y-auto">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="swiss-label">학습 대화 기록</div>
+                    <span className="text-xs text-gray-400">{selectedMessages.length}개 메시지</span>
+                  </div>
+                  <div className="border border-black max-h-[480px] overflow-y-auto">
                     {selectedMessages.map((msg, i) => (
                       <div
                         key={msg.id}
@@ -319,6 +370,11 @@ export default function SessionHistory() {
                       </div>
                     ))}
                   </div>
+                </div>
+              ) : (
+                <div className="border border-gray-200 p-8 text-center">
+                  <BookOpen size={20} className="mx-auto mb-2 text-gray-200" />
+                  <p className="text-xs text-gray-400">대화 기록이 없습니다.</p>
                 </div>
               )}
             </div>

@@ -360,3 +360,11 @@
 - [x] server/routers.ts: document.delete 프로시저에서 해당 문서의 learningSessions 연쇄 삭제
 - [x] server/routers.ts: group.delete 프로시저에서 해당 그룹의 learningSessions 연쇄 삭제
 - [x] server/db.ts: deleteSessionsByDocumentId, deleteSessionsByGroupId 함수 추가
+
+## v4.31 삭제 확인 팝업 + 완료 세션 학습완료 표시
+
+- [x] Dashboard.tsx: 학습자료/그룹/그룹내문서 삭제 시 AlertDialog 확인 팝업 (관련 학습이력도 삭제된다는 안내 포함)
+- [x] DocumentDetail.tsx: window.confirm → AlertDialog 팝업으로 교체
+- [x] SessionHistory.tsx: 진도율 계산을 MIN_QUESTIONS(24) 기준으로 수정 (LearningSession과 동일하게)
+- [x] SessionHistory.tsx: 진도율 100%인 세션에 '학습완료' 배지 표시 (completed 상태와 별도로)
+- [x] SessionHistory.tsx: 완료 세션 클릭 시 우측 패널에 학습 내용(대화 기록) 조회 가능하도록 UI 개선

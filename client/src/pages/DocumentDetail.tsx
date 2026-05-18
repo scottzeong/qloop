@@ -5,6 +5,16 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, Trash2, Lock, RotateCcw, CheckCircle2, AlertCircle, Search, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type {
   DocumentStructure,
   TopicNode,
@@ -895,6 +905,7 @@ export default function DocumentDetail() {
   const [evalEnabled, setEvalEnabled] = useState<boolean | null>(null);
   // QLoop 모델 선택 state
   const [qloopModel, setQloopModel] = useState<"core" | "curated" | "open">("core");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const deleteDocMutation = trpc.document.delete.useMutation();
   const analyzeMutation = trpc.document.analyze.useMutation({
@@ -1089,21 +1100,41 @@ export default function DocumentDetail() {
             </button>
           )}
           <button
-            onClick={async () => {
-              if (!window.confirm(`"${doc.title}" 문서를 삭제하시겠습니까?\n관련 학습 세션도 모두 삭제됩니다.`)) return;
-              try {
-                await deleteDocMutation.mutateAsync({ documentId: docId });
-                toast.success("문서가 삭제되었습니다.");
-                navigate("/dashboard");
-              } catch {
-                toast.error("삭제에 실패했습니다.");
-              }
-            }}
+            onClick={() => setShowDeleteConfirm(true)}
             className="flex items-center gap-1 text-xs font-bold text-black/30 hover:text-red-600 transition-colors px-2 py-1.5"
             title="문서 삭제"
           >
             <Trash2 size={13} />
           </button>
+          <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>학습자료 삭제</AlertDialogTitle>
+                <AlertDialogDescription>
+                  <strong>"{doc.title}"</strong>을(를) 삭제하시겠습니까?<br />
+                  <span className="text-red-600 font-medium">관련 학습이력도 모두 함께 삭제됩니다.</span>
+                  <br />이 작업은 되돌릴 수 없습니다.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>취소</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={async () => {
+                    try {
+                      await deleteDocMutation.mutateAsync({ documentId: docId });
+                      toast.success("학습자료와 관련 학습이력이 삭제되었습니다.");
+                      navigate("/dashboard");
+                    } catch {
+                      toast.error("삭제에 실패했습니다.");
+                    }
+                  }}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  삭제
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </header>
 
