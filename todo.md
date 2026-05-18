@@ -354,3 +354,9 @@
 ## v4.29 그룹 세부자료 삭제 버튼 버그 수정 + 구조 초기화
 - [x] Dashboard.tsx: 그룹 내 세부자료 삭제 버튼 작동 안 하는 버그 수정 - onClick에 e.stopPropagation() 명시적 추가 (그룹 헤더 onToggle 이벤트 버블링 차단)
 - [x] server/routers.ts: document.delete 프로시저에서 그룹 소속 문서(doc.groupId 있는 경우) 삭제 시 그룹 selectedStructure=null, structureLocked=0 자동 초기화
+
+## v4.30 세션 완료 후 계속 버튼 숨기기 + 자료 삭제 시 학습이력 연쇄 삭제
+- [x] LearningSession.tsx: 세션 status가 'completed'일 때 '계속' 버튼 숨기기 (완료 후 재학습 불가)
+- [x] server/routers.ts: document.delete 프로시저에서 해당 문서의 learningSessions 연쇄 삭제
+- [x] server/routers.ts: group.delete 프로시저에서 해당 그룹의 learningSessions 연쇄 삭제
+- [x] server/db.ts: deleteSessionsByDocumentId, deleteSessionsByGroupId 함수 추가

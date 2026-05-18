@@ -131,9 +131,18 @@ export async function deleteDocumentGroup(id: number) {
     }
     await db.delete(learningSessions).where(eq(learningSessions.documentId, doc.id));
   }
-  // 3) 문서 삭제
+  // 3) 그룹 세션(그룹으로 시작한 통합 학습 세션) 연쇄 삭제
+  const groupSessions = await db
+    .select({ id: learningSessions.id })
+    .from(learningSessions)
+    .where(eq(learningSessions.groupId, id));
+  for (const session of groupSessions) {
+    await db.delete(sessionMessages).where(eq(sessionMessages.sessionId, session.id));
+  }
+  await db.delete(learningSessions).where(eq(learningSessions.groupId, id));
+  // 4) 문서 삭제
   await db.delete(documents).where(eq(documents.groupId, id));
-  // 4) 그룹 삭제
+  // 5) 그룹 삭제
   await db.delete(documentGroups).where(eq(documentGroups.id, id));
 }
 

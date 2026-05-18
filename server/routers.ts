@@ -1701,42 +1701,46 @@ Return ONLY valid JSON matching the schema exactly.`;
         return { success: true, qloopModel: input.qloopModel };
       }),
     // 세션 종료
-    complete: protectedProcedure
+       complete: protectedProcedure
       .input(z.object({ sessionId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const session = await getLearningSessionById(input.sessionId);
         if (!session || session.userId !== ctx.user.id) throw new Error("세션을 찾을 수 없습니다.");
-
-        const doc = await getDocumentById(session.documentId);
-        if (!doc) throw new Error("문서를 찾을 수 없습니다.");
-
+        // 그룹 세션 또는 개별 문서 세션 모두 지원
+        const doc = session.documentId ? await getDocumentById(session.documentId) : null;
+        const group = session.groupId ? await getDocumentGroupById(session.groupId) : null;
+        const titleForSummary = group?.name ?? doc?.title ?? "학습 자료";
         const allMessages = await getSessionMessages(input.sessionId);
-        const summary = await generateSessionSummary(
-          doc.title,
-          session.startTopicTitle || "",
-          allMessages.map((m) => ({ role: m.role, content: m.content }))
-        );
-
+        // 요약 생성 실패 시에도 세션은 반드시 completed 처리
+        let summary = "";
+        try {
+          summary = await generateSessionSummary(
+            titleForSummary,
+            session.startTopicTitle || "",
+            allMessages.map((m) => ({ role: m.role, content: m.content }))
+          );
+        } catch (summaryErr) {
+          console.warn("[QLoop] 요약 생성 실패 (세션은 완료 처리):", summaryErr);
+          summary = "학습 요약을 생성하지 못했습니다.";
+        }
         await updateLearningSession(input.sessionId, {
           status: "completed",
           summary,
           completedAt: new Date(),
         });
-
         // 학습 완료 알림
         const msgCount = allMessages.length;
         const answerCount = allMessages.filter((m) => m.role === "user").length;
         const notificationContent = [
           `📚 **학습 세션 완료**`,
           ``,
-          `**문서:** ${doc.title}`,
+          `**${group ? "그룹" : "문서"}:** ${titleForSummary}`,
           `**토픽:** ${session.startTopicTitle}`,
           `**총 메시지:** ${msgCount}개 (답변 ${answerCount}개)`,
           ``,
           `**학습 요약:**`,
           summary.slice(0, 500) + (summary.length > 500 ? "..." : ""),
         ].join("\n");
-
         try {
           await notifyOwner({
             title: `[QLoop] 학습 완료: ${session.startTopicTitle}`,
@@ -1745,7 +1749,6 @@ Return ONLY valid JSON matching the schema exactly.`;
         } catch (notifyErr) {
           console.warn("[QLoop] 학습 완료 알림 전송 실패:", notifyErr);
         }
-
         return { summary };
       }),
 
