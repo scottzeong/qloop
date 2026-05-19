@@ -9,9 +9,32 @@ import { createProviderAdapter } from "../ai/aiRouter";
 import type { ProviderName } from "../ai/types";
 
 const PROVIDER_MODELS: Record<ProviderName, string[]> = {
-  openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
-  gemini: ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash"],
-  claude: ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229", "claude-3-haiku-20240307"],
+  // OpenAI: GPT-5.x 최신 모델 우선, GPT-4.1 시리즈 포함
+  openai: [
+    "gpt-5.5",
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "gpt-4.1-nano",
+    "gpt-4o",
+    "gpt-4o-mini",
+  ],
+  // Gemini: 2.5 시리즈 최신 stable 우선
+  gemini: [
+    "gemini-2.5-pro",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash",
+  ],
+  // Claude: 4.x 최신 시리즈 우선
+  claude: [
+    "claude-opus-4-7",
+    "claude-sonnet-4-6",
+    "claude-haiku-4-5",
+    "claude-opus-4-6",
+    "claude-sonnet-4-5",
+  ],
 };
 
 export const aiConnectionRouter = router({

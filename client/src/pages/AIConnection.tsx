@@ -50,7 +50,7 @@ const PROVIDER_INFO: Record<
     color: "text-emerald-700",
     bg: "bg-emerald-50",
     border: "border-emerald-200",
-    description: "GPT-4o, GPT-4o-mini 등 OpenAI의 최신 모델을 사용합니다.",
+    description: "GPT-5.5, GPT-5.4-mini 등 OpenAI의 최신 모델을 사용합니다.",
     keyHint: "sk-... 형태의 API Key",
   },
   gemini: {
@@ -58,7 +58,7 @@ const PROVIDER_INFO: Record<
     color: "text-blue-700",
     bg: "bg-blue-50",
     border: "border-blue-200",
-    description: "Gemini 1.5 Pro, Flash 등 Google의 최신 모델을 사용합니다.",
+    description: "Gemini 2.5 Pro, Flash 등 Google의 최신 모델을 사용합니다.",
     keyHint: "AIza... 형태의 API Key",
   },
   claude: {
@@ -66,7 +66,7 @@ const PROVIDER_INFO: Record<
     color: "text-orange-700",
     bg: "bg-orange-50",
     border: "border-orange-200",
-    description: "Claude 3.5 Sonnet, Haiku 등 Anthropic의 최신 모델을 사용합니다.",
+    description: "Claude Opus 4.7, Sonnet 4.6 등 Anthropic의 최신 모델을 사용합니다.",
     keyHint: "sk-ant-... 형태의 API Key",
   },
 };
