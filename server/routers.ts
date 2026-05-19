@@ -7,10 +7,12 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { invokeLLM, type Message } from "./_core/llm";
+import { aiInvoke } from "./ai/aiRouter";
 import { storagePut, storageGetSignedUrl } from "./storage";
 import { notifyOwner } from "./_core/notification";
 import { socraticRouter } from "./routers/socratic";
 import { libraryRouter } from "./routers/library";
+import { aiConnectionRouter } from "./routers/aiConnection";
 import { getDb } from "./db";
 import {
   questions,
@@ -192,7 +194,8 @@ async function extractTextFromOfficeFile(fileUrl: string, mimeType: string): Pro
 async function analyzeDocumentStructure(
   fileUrl: string,
   docTitle: string,
-  mimeType: string = "application/pdf"
+  mimeType: string = "application/pdf",
+  userId: number | null = null
 ): Promise<DocumentStructure & { detectedLanguage?: string }> {
   const systemPrompt = `You are an expert educational content analyzer.
 Analyze the provided document comprehensively and extract its structure in MULTIPLE formats simultaneously.
@@ -247,7 +250,7 @@ Return ONLY valid JSON matching the schema exactly.`;
     userContent = `Please analyze this document titled "${docTitle}".\n\nDocument content:\n${truncated}\n\nReturn the hierarchical structure as JSON.`;
   }
 
-  const response = await invokeLLM({
+  const response = await aiInvoke(userId, {
     messages: [
       { role: "system", content: systemPrompt },
       {
@@ -430,7 +433,7 @@ Return ONLY valid JSON matching the schema exactly.`;
   let detectedLanguage = "ko";
   try {
     const sampleText = parsed.chapters?.[0]?.title || parsed.title || docTitle || "";
-    const langResp = await invokeLLM({
+    const langResp = await aiInvoke(userId, {
       messages: [
         { role: "system", content: "Detect the language of the given text and return ONLY the ISO 639-1 language code (e.g. en, ko, ja, zh, fr, de, es, pt, ar). Return nothing else." },
         { role: "user", content: sampleText },
@@ -545,7 +548,8 @@ async function generateFirstQuestion(
   docTitle: string,
   openQloopMode = false,
   learningLanguage = "ko",
-  libraryContext = ""
+  libraryContext = "",
+  userId: number | null = null
 ): Promise<string> {
   let webContext = "";
   if (openQloopMode) {
@@ -559,7 +563,7 @@ async function generateFirstQuestion(
     : "";
   const langName = LANGUAGE_NAMES[learningLanguage] || "Korean";
   const languageInstruction = `\nIMPORTANT: The document may be written in a foreign language, but you MUST ask your question in ${langName}. The learner will also answer in ${langName}. Do NOT use the source document's language if it differs from ${langName}.`;
-  const response = await invokeLLM({
+  const response = await aiInvoke(userId, {
     messages: [
       {
         role: "system" as const,
@@ -598,6 +602,7 @@ async function runSocraticEvaluation(opts: {
   questionTypeId: number;
   responseText: string;
   sourceContext: string;
+  userId?: number | null;
 }) {
   try {
     const { db, learnerId, sessionId, questionId, questionTypeId, responseText, sourceContext } = opts;
@@ -611,12 +616,11 @@ async function runSocraticEvaluation(opts: {
       return `- ${d.displayName} (가중치: ${w?.weight ?? 0}%): ${d.description}`;
     }).join("\n");
     const prompt = `답변 평가\n질문유형: ${questionType?.displayName ?? ""}\n질문: ${question.questionText}\n학습자 답변: ${responseText}\n평가 요소:\n${dimensionDescriptions}\n\n각 요소 0-5점 평가. JSON만 출력:\n{"dimension_scores":{"accuracy":0,"reasoning":0,"evidence":0,"clarity":0,"depth":0,"application":0},"level":"Developing","strengths":[],"weaknesses":[],"detected_gaps":[],"misconceptions":[],"recommended_followup_question":"","short_feedback":"","evaluation_comment":"","confidence":0.8}`;
-    const response = await invokeLLM({
+    const response = await aiInvoke(opts.userId ?? null, {
       messages: [
         { role: "system" as const, content: "You are a Socratic evaluation engine. Always respond with valid JSON only." },
         { role: "user" as const, content: prompt },
       ] as Message[],
-      response_format: { type: "json_object" as const },
     });
     let evalResult: Record<string, unknown> = {};
     try { evalResult = JSON.parse(response.choices[0].message.content as string); } catch { return; }
@@ -692,7 +696,8 @@ async function generateNextMessage(
   openQloopMode = false,
   answeredQuestions = 0,
   learningLanguage = "ko",
-  libraryContext = ""
+  libraryContext = "",
+  userId: number | null = null
 ): Promise<{ content: string; messageType: string; isTopicComplete: boolean; questionType?: string }> {
   // Open QLoop: 대화 초반(1~3번째 답변)에만 웹 검색 수행 (비용 절감)
   let webContextForNext = "";
@@ -748,7 +753,7 @@ async function generateNextMessage(
 - Use the same language as the conversation (Korean if Korean).${langInstruction2}`;
 
   if (isUserQuestion) {
-    const response = await invokeLLM({
+    const response = await aiInvoke(userId, {
       messages: [
         {
           role: "system" as const,
@@ -769,7 +774,7 @@ ${baseRules}${openQloopInstruction}${libraryContextInstruction}`,
       isTopicComplete: false,
     };
   } else {
-    const response = await invokeLLM({
+    const response = await aiInvoke(userId, {
       messages: [
         {
           role: "system" as const,
@@ -855,11 +860,11 @@ Return a JSON with:
 async function generateSessionSummary(
   docTitle: string,
   topicTitle: string,
-  messages: Array<{ role: string; content: string }>
+  messages: Array<{ role: string; content: string }>,
+  userId: number | null = null
 ): Promise<string> {
   const historyText = messages.map((m) => `[${m.role === "ai" ? "AI" : "학습자"}]: ${m.content}`).join("\n");
-
-  const response = await invokeLLM({
+  const response = await aiInvoke(userId, {
     messages: [
       {
         role: "system",
@@ -887,6 +892,7 @@ export const appRouter = router({
   system: systemRouter,
   socratic: socraticRouter,
   library: libraryRouter,
+  aiConnection: aiConnectionRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -1049,7 +1055,7 @@ Return ONLY valid JSON matching the schema exactly.`;
             analysisContent = contentParts;
           }
 
-          const response = await invokeLLM({
+          const response = await aiInvoke(ctx.user.id, {
             messages: [
               { role: "system", content: groupSystemPrompt },
               { role: "user" as const, content: analysisContent },
@@ -1255,7 +1261,7 @@ Return ONLY valid JSON matching the schema exactly.`;
           const mimeForAnalysis = doc.fileType === "pdf" ? "application/pdf" : doc.fileType === "doc" ? "application/msword" : doc.fileType === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : doc.fileType === "ppt" ? "application/vnd.ms-powerpoint" : doc.fileType === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/pdf";
           // 단계 2: structuring (AI 구조 분석 중)
           await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "structuring");
-          const structureResult = await analyzeDocumentStructure(signedUrl, doc.title, mimeForAnalysis);
+          const structureResult = await analyzeDocumentStructure(signedUrl, doc.title, mimeForAnalysis, ctx.user.id);
           const { detectedLanguage, ...structure } = structureResult;
           // 원문 언어 저장
           if (detectedLanguage) {
@@ -1362,7 +1368,7 @@ Return ONLY valid JSON matching the schema exactly.`;
           const signedUrl = await storageGetSignedUrl(actualKey);
           const mimeForAnalysis = doc.fileType === "pdf" ? "application/pdf" : doc.fileType === "doc" ? "application/msword" : doc.fileType === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : doc.fileType === "ppt" ? "application/vnd.ms-powerpoint" : doc.fileType === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/pdf";
           await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "structuring");
-          const structureResult = await analyzeDocumentStructure(signedUrl, doc.title, mimeForAnalysis);
+          const structureResult = await analyzeDocumentStructure(signedUrl, doc.title, mimeForAnalysis, ctx.user.id);
           const { detectedLanguage, ...structure } = structureResult;
           // 원문 언어 저장
           if (detectedLanguage) {
@@ -1450,7 +1456,8 @@ Return ONLY valid JSON matching the schema exactly.`;
           doc.title,
           openQloopMode, // open=true
           learningLang,
-          libraryContext
+          libraryContext,
+          ctx.user.id
         );
 
         await createSessionMessage({
@@ -1546,7 +1553,8 @@ Return ONLY valid JSON matching the schema exactly.`;
           sessionOpenQloop,
           currentAnsweredForTier,
           docLearningLang,
-          libraryContext
+          libraryContext,
+          ctx.user.id
         );
 
         // AI 메시지 저장
@@ -1578,6 +1586,7 @@ Return ONLY valid JSON matching the schema exactly.`;
                     questionTypeId: prevQ.questionTypeId,
                     responseText: input.content,
                     sourceContext: `${doc.title} > ${session.startTopicTitle}`,
+                    userId: ctx.user.id,
                   }).catch(console.warn);
                 }
               }
@@ -1665,7 +1674,8 @@ Return ONLY valid JSON matching the schema exactly.`;
           const summary = await generateSessionSummary(
             doc.title,
             session.startTopicTitle || "",
-            allMessages.map((m) => ({ role: m.role, content: m.content }))
+            allMessages.map((m) => ({ role: m.role, content: m.content })),
+            ctx.user.id
           );
 
           await updateLearningSession(input.sessionId, {
@@ -1717,7 +1727,8 @@ Return ONLY valid JSON matching the schema exactly.`;
           summary = await generateSessionSummary(
             titleForSummary,
             session.startTopicTitle || "",
-            allMessages.map((m) => ({ role: m.role, content: m.content }))
+            allMessages.map((m) => ({ role: m.role, content: m.content })),
+            ctx.user.id
           );
         } catch (summaryErr) {
           console.warn("[QLoop] 요약 생성 실패 (세션은 완료 처리):", summaryErr);

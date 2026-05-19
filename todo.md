@@ -368,3 +368,20 @@
 - [x] SessionHistory.tsx: 진도율 계산을 MIN_QUESTIONS(24) 기준으로 수정 (LearningSession과 동일하게)
 - [x] SessionHistory.tsx: 진도율 100%인 세션에 '학습완료' 배지 표시 (completed 상태와 별도로)
 - [x] SessionHistory.tsx: 완료 세션 클릭 시 우측 패널에 학습 내용(대화 기록) 조회 가능하도록 UI 개선
+
+## v4.32 AI Connection 기능 구현
+- [x] drizzle/schema.ts: ai_connections 테이블 추가 (userId, providerName, apiKeyEncrypted, apiKeyMasked, selectedModel, isDefault, connectionStatus)
+- [x] DB 마이그레이션 실행 (webdev_execute_sql로 직접 생성)
+- [x] server/ai/types.ts: AIProvider 공통 인터페이스 정의
+- [x] server/ai/providers/openaiProvider.ts: OpenAI Provider Adapter
+- [x] server/ai/providers/geminiProvider.ts: Gemini Provider Adapter
+- [x] server/ai/providers/claudeProvider.ts: Claude Provider Adapter
+- [x] server/ai/crypto.ts: API Key 암호화/복호화 유틸리티
+- [x] server/ai/aiRouter.ts: AI 라우터 (사용자 설정 우선순위 로직 - 개인 Provider 우선, 없으면 기본 AI)
+- [x] server/routers/aiConnection.ts: AI Connection tRPC 라우터 (list/save/delete/test/setDefault/updateModel)
+- [x] server/routers.ts: 기존 invokeLLM 호출을 aiInvoke로 교체 (analyzeDocumentStructure, generateFirstQuestion, generateNextMessage, runSocraticEvaluation, generateSessionSummary, 그룹 분석)
+- [x] server/routers/socratic.ts: invokeLLM → aiInvoke 교체 (3곳)
+- [x] server/routers/library.ts: invokeLLM → aiInvoke 교체
+- [x] client/src/pages/AIConnection.tsx: AI Connection 관리 페이지 구현 (Provider 선택, API Key 입력, 모델 선택, 연결 테스트, 기본 설정)
+- [x] client/src/App.tsx: /ai-connection 라우트 추가
+- [x] client/src/pages/Dashboard.tsx: AI CONNECTION 메뉴 추가

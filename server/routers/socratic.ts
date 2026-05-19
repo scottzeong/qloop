@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { invokeLLM, type Message } from "../_core/llm";
+import { aiInvoke } from "../ai/aiRouter";
 import {
   questionTypes,
   evaluationDimensions,
@@ -341,12 +342,11 @@ export const socraticRouter = router({
   "why_this_question": "이 질문을 선택한 이유"
 }`;
 
-      const response = await invokeLLM({
+      const response = await aiInvoke(ctx.user.id, {
         messages: [
           { role: "system" as const, content: "You are a Socratic Question Generator. Always respond with valid JSON only." },
           { role: "user" as const, content: prompt },
         ] as Message[],
-        response_format: { type: "json_object" as const },
       });
 
       let parsed: any = {};
@@ -444,12 +444,11 @@ ${dimensionDescriptions}
   "confidence": 0.0
 }`;
 
-      const response = await invokeLLM({
+      const response = await aiInvoke(ctx.user.id, {
         messages: [
           { role: "system" as const, content: "You are a Socratic evaluation engine. Always respond with valid JSON only." },
           { role: "user" as const, content: prompt },
         ] as Message[],
-        response_format: { type: "json_object" as const },
       });
 
       let eval_result: any = {};
@@ -596,12 +595,11 @@ ${dimensionDescriptions}
   "dimension_status": {"accuracy": "강점|양호|보완 필요|집중 연습 필요", ...}
 }`;
 
-      const feedbackResponse = await invokeLLM({
+      const feedbackResponse = await aiInvoke(ctx.user.id, {
         messages: [
           { role: "system" as const, content: "You are a learning coach. Always respond with valid JSON only." },
           { role: "user" as const, content: feedbackPrompt },
         ] as Message[],
-        response_format: { type: "json_object" as const },
       });
 
       let learnerFeedback: any = {};

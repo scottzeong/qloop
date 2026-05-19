@@ -13,6 +13,7 @@ import GroupDetail from "./pages/GroupDetail";
 import SocraticProfile from "./pages/SocraticProfile";
 import AdminSocratic from "./pages/AdminSocratic";
 import KnowledgeLibrary from "./pages/KnowledgeLibrary";
+import AIConnection from "./pages/AIConnection";
 
 function Router() {
   return (
@@ -26,6 +27,7 @@ function Router() {
       <Route path="/profile/socratic" component={SocraticProfile} />
       <Route path="/admin/socratic" component={AdminSocratic} />
       <Route path="/library" component={KnowledgeLibrary} />
+      <Route path="/ai-connection" component={AIConnection} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

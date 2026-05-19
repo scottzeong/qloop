@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `aiConnections` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `userId` int NOT NULL,\n  `providerName` enum('openai','gemini','claude') NOT NULL,\n  `apiKeyEncrypted` text NOT NULL,\n  `apiKeyMasked` varchar(32) NOT NULL,\n  `selectedModel` varchar(128) NOT NULL,\n  `isDefault` int NOT NULL DEFAULT 0,\n  `connectionStatus` enum('connected','failed','untested') NOT NULL DEFAULT 'untested',\n  `createdAt` timestamp NOT NULL DEFAULT (now()),\n  `updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n  CONSTRAINT `aiConnections_id` PRIMARY KEY(`id`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user PBmX1TLNWYzhjh7.96966ba0982e --database NvrzUNjEMAuyrZ6SHXrcZ8 --execute CREATE TABLE IF NOT EXISTS `aiConnections` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `userId` int NOT NULL,\n  `providerName` enum('openai','gemini','claude') NOT NULL,\n  `apiKeyEncrypted` text NOT NULL,\n  `apiKeyMasked` varchar(32) NOT NULL,\n  `selectedModel` varchar(128) NOT NULL,\n  `isDefault` int NOT NULL DEFAULT 0,\n  `connectionStatus` enum('connected','failed','untested') NOT NULL DEFAULT 'untested',\n  `createdAt` timestamp NOT NULL DEFAULT (now()),\n  `updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n  CONSTRAINT `aiConnections_id` PRIMARY KEY(`id`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1905
+}

@@ -9,6 +9,7 @@ import {
 import { eq, and, desc, like, or, inArray } from "drizzle-orm";
 import { storagePut, storageGetSignedUrl } from "../storage";
 import { invokeLLM, type Message } from "../_core/llm";
+import { aiInvoke } from "../ai/aiRouter";
 import mammoth from "mammoth";
 import { parseOffice } from "officeparser";
 import WordExtractor from "word-extractor";
@@ -59,7 +60,7 @@ async function extractTextFromFile(fileUrl: string, mimeType: string): Promise<s
 
 // ─── AI 문서 요약 추출 (Library 컨텍스트용, 간략 버전) ────────────────────────
 
-async function extractLibraryContext(fileUrl: string, docTitle: string, mimeType: string): Promise<string> {
+async function extractLibraryContext(fileUrl: string, docTitle: string, mimeType: string, userId: number | null = null): Promise<string> {
   const isPdf = mimeType === "application/pdf";
   let userContent: Message["content"];
 
@@ -77,7 +78,7 @@ async function extractLibraryContext(fileUrl: string, docTitle: string, mimeType
     userContent = `Please extract the key concepts, main topics, and important facts from this document titled "${docTitle}".\n\nDocument content:\n${truncated}\n\nProvide a comprehensive summary for learning context.`;
   }
 
-  const response = await invokeLLM({
+  const response = await aiInvoke(userId, {
     messages: [
       {
         role: "system",
@@ -234,7 +235,7 @@ export const libraryRouter = router({
       let extractedText: string | null = null;
       try {
         const signedUrl = await storageGetSignedUrl(key);
-        extractedText = await extractLibraryContext(signedUrl, titleWithoutExt, input.mimeType);
+        extractedText = await extractLibraryContext(signedUrl, titleWithoutExt, input.mimeType, ctx.user.id);
       } catch (_) {
         // 추출 실패 시 null로 저장 (업로드는 계속 진행)
       }
@@ -292,7 +293,7 @@ export const libraryRouter = router({
       let extractedText: string | null = null;
       try {
         const signedUrl = await storageGetSignedUrl(key);
-        extractedText = await extractLibraryContext(signedUrl, titleWithoutExt, input.mimeType);
+        extractedText = await extractLibraryContext(signedUrl, titleWithoutExt, input.mimeType, ctx.user.id);
       } catch (_) {}
       const [result] = await db.insert(knowledgeLibrary).values({
         storageKey: key, storageUrl: url, fileType, fileSize: input.fileSize,

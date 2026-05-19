@@ -367,3 +367,22 @@ export const knowledgeLibrary = mysqlTable("knowledgeLibrary", {
 });
 export type KnowledgeLibraryItem = typeof knowledgeLibrary.$inferSelect;
 export type InsertKnowledgeLibraryItem = typeof knowledgeLibrary.$inferInsert;
+
+// ─── AI Connections ────────────────────────────────────────────────────────────
+// 사용자별 AI Provider API Key 및 설정 저장 (API Key는 AES-256-GCM으로 암호화)
+export const aiConnections = mysqlTable("aiConnections", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  providerName: mysqlEnum("providerName", ["openai", "gemini", "claude"]).notNull(),
+  // AES-256-GCM 암호화된 API Key (hex 인코딩: iv:authTag:ciphertext)
+  apiKeyEncrypted: text("apiKeyEncrypted").notNull(),
+  // 마스킹된 키 미리보기 (예: sk-****abcd)
+  apiKeyMasked: varchar("apiKeyMasked", { length: 32 }).notNull(),
+  selectedModel: varchar("selectedModel", { length: 128 }).notNull(),
+  isDefault: int("isDefault").default(0).notNull(), // 1 = 기본 Provider
+  connectionStatus: mysqlEnum("connectionStatus", ["connected", "failed", "untested"]).default("untested").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type AiConnection = typeof aiConnections.$inferSelect;
+export type InsertAiConnection = typeof aiConnections.$inferInsert;

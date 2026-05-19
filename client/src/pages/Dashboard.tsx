@@ -22,6 +22,7 @@ import {
   Brain,
   Settings,
   Library,
+  Cpu,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -366,6 +367,12 @@ export default function Dashboard() {
               className="swiss-label hover:text-black transition-colors flex items-center gap-1"
             >
               <Library size={12} /> Knowledge Library
+            </button>
+            <button
+              onClick={() => navigate("/ai-connection")}
+              className="swiss-label hover:text-black transition-colors flex items-center gap-1"
+            >
+              <Cpu size={12} /> AI CONNECTION
             </button>
             <button
               onClick={() => navigate("/profile/socratic")}
