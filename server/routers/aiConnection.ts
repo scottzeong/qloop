@@ -164,8 +164,9 @@ export const aiConnectionRouter = router({
 
       try {
         const adapter = createProviderAdapter(existing[0].providerName as ProviderName, decrypted, existing[0].selectedModel);
-        success = await adapter.testConnection();
-        if (!success) errorMessage = "Provider API error: 응답이 예상과 다릅니다.";
+        const result = await adapter.testConnectionWithDetail();
+        success = result.success;
+        if (!success) errorMessage = result.error ?? "연결 테스트 실패";
       } catch (e) {
         errorMessage = e instanceof Error ? e.message : "알 수 없는 오류";
       }

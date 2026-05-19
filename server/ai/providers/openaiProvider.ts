@@ -74,16 +74,18 @@ export class OpenAIProvider implements AIProviderAdapter {
     return this.generateText({ prompt: userContent, systemPrompt });
   }
 
-  async testConnection(): Promise<boolean> {
+  async testConnectionWithDetail(): Promise<import("../types").TestConnectionResult> {
     try {
       const result = await this.callAPI({
         messages: [{ role: "user", content: "Say hello" }],
         max_tokens: 10,
       });
-      // API 호출 성공 + 응답이 비어있지 않으면 연결 성공
-      return typeof result === "string" && result.length > 0;
-    } catch {
-      return false;
+      if (typeof result === "string" && result.length > 0) {
+        return { success: true };
+      }
+      return { success: false, error: "API 응답이 비어있습니다." };
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : "알 수 없는 오류" };
     }
   }
 }

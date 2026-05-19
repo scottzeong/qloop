@@ -28,12 +28,17 @@ export interface EvaluateAnswerParams {
   referenceMaterial?: string;
 }
 
+export interface TestConnectionResult {
+  success: boolean;
+  error?: string;
+}
+
 export interface AIProviderAdapter {
   generateText(params: GenerateTextParams): Promise<string>;
   generateStructuredOutput(params: GenerateStructuredOutputParams): Promise<unknown>;
   evaluateAnswer(params: EvaluateAnswerParams): Promise<string>;
-  /** 연결 테스트: "connection_success" 응답 여부 확인 */
-  testConnection(): Promise<boolean>;
+  /** 연결 테스트: 성공 여부 및 에러 메시지 반환 */
+  testConnectionWithDetail(): Promise<TestConnectionResult>;
 }
 
 export interface AICallParams {
