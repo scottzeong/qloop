@@ -56,8 +56,12 @@ export const aiConnectionRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB 연결 실패" });
 
-      const encrypted = encryptApiKey(input.apiKey);
-      const masked = maskApiKey(input.apiKey);
+      // API Key 앞뒤 공백/줄바꿈 제거 및 ASCII 범위 외 문자 제거
+      const cleanApiKey = input.apiKey.trim().replace(/[^\x20-\x7E]/g, "");
+      if (!cleanApiKey) throw new TRPCError({ code: "BAD_REQUEST", message: "유효하지 않은 API Key 형식입니다." });
+
+      const encrypted = encryptApiKey(cleanApiKey);
+      const masked = maskApiKey(cleanApiKey);
 
       // 기존 연결 확인
       const existing = await db
@@ -156,8 +160,10 @@ export const aiConnectionRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "연결을 찾을 수 없습니다." });
       }
 
-      const decrypted = decryptApiKey(existing[0].apiKeyEncrypted);
-      if (!decrypted) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "API Key 복호화 실패" });
+      const rawDecrypted = decryptApiKey(existing[0].apiKeyEncrypted);
+      if (!rawDecrypted) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "API Key 복호화 실패" });
+      // 복호화 후에도 비ASCII 문자 제거 (구 DB 데이터 호환성)
+      const decrypted = rawDecrypted.trim().replace(/[^\x20-\x7E]/g, "");
 
       let success = false;
       let errorMessage: string | null = null;
