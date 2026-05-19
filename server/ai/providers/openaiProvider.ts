@@ -36,7 +36,7 @@ export class OpenAIProvider implements AIProviderAdapter {
     return this.callAPI({
       messages,
       temperature: params.temperature ?? 0.7,
-      max_tokens: params.maxTokens ?? 4096,
+      max_completion_tokens: params.maxTokens ?? 4096,
     });
   }
 
@@ -56,7 +56,7 @@ export class OpenAIProvider implements AIProviderAdapter {
         },
       },
       temperature: params.temperature ?? 0.3,
-      max_tokens: params.maxTokens ?? 8192,
+      max_completion_tokens: params.maxTokens ?? 8192,
     });
 
     return JSON.parse(content);
@@ -78,7 +78,7 @@ export class OpenAIProvider implements AIProviderAdapter {
     try {
       const result = await this.callAPI({
         messages: [{ role: "user", content: "Say hello" }],
-        max_tokens: 10,
+        max_completion_tokens: 10,
       });
       if (typeof result === "string" && result.length > 0) {
         return { success: true };
