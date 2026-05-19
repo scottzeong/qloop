@@ -82,9 +82,9 @@ export class GeminiProvider implements AIProviderAdapter {
   async testConnection(): Promise<boolean> {
     try {
       const result = await this.callAPI([
-        { role: "user", parts: [{ text: "Reply only with: connection_success" }] }
-      ]);
-      return result.toLowerCase().includes("connection_success");
+        { role: "user", parts: [{ text: "Say hello" }] }
+      ], { maxOutputTokens: 10 });
+      return typeof result === "string" && result.length > 0;
     } catch {
       return false;
     }

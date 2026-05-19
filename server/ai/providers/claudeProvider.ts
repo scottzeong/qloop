@@ -85,11 +85,11 @@ export class ClaudeProvider implements AIProviderAdapter {
   async testConnection(): Promise<boolean> {
     try {
       const result = await this.callAPI(
-        [{ role: "user", content: "Reply only with: connection_success" }],
+        [{ role: "user", content: "Say hello" }],
         undefined,
-        { max_tokens: 20 }
+        { max_tokens: 10 }
       );
-      return result.toLowerCase().includes("connection_success");
+      return typeof result === "string" && result.length > 0;
     } catch {
       return false;
     }

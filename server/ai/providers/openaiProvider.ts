@@ -77,10 +77,11 @@ export class OpenAIProvider implements AIProviderAdapter {
   async testConnection(): Promise<boolean> {
     try {
       const result = await this.callAPI({
-        messages: [{ role: "user", content: 'Reply only with: connection_success' }],
-        max_tokens: 20,
+        messages: [{ role: "user", content: "Say hello" }],
+        max_tokens: 10,
       });
-      return result.toLowerCase().includes("connection_success");
+      // API 호출 성공 + 응답이 비어있지 않으면 연결 성공
+      return typeof result === "string" && result.length > 0;
     } catch {
       return false;
     }
