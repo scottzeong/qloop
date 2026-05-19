@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
+import { createCipheriv, createDecipheriv, randomBytes, createHash } from "crypto";
 
 const ALGORITHM = "aes-256-gcm";
 const KEY_LENGTH = 32; // 256 bits
@@ -11,7 +11,6 @@ function getEncryptionKey(): Buffer {
   const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error("JWT_SECRET 환경변수가 설정되지 않았습니다.");
   // JWT_SECRET을 SHA-256으로 해시하여 32바이트 키 생성
-  const { createHash } = require("crypto");
   return createHash("sha256").update(secret).digest();
 }
 
