@@ -42,7 +42,14 @@ export default function PageHeader({
     { path: "/profile/socratic", icon: <Brain size={12} />, label: "QLOOP PROFILE" },
   ];
 
+  const adminNavItem = { path: "/admin/socratic", icon: <Settings size={12} />, label: "NEURAL SYSTEM SET" };
+
   const isActive = (path: string) => location === path || location.startsWith(path + "/");
+
+  // 세부 페이지 여부: 대시보드가 아닌 네비게이션 메뉴 페이지 또는 title이 있는 페이지
+  const isDashboard = location === "/dashboard";
+  const isNavPage = navItems.some((item) => isActive(item.path)) || (user?.role === "admin" && isActive(adminNavItem.path));
+  const isSubPage = !isDashboard && !isNavPage; // 세부 페이지 (title 있는 페이지)
 
   return (
     <header
@@ -57,72 +64,88 @@ export default function PageHeader({
             onClick={() => navigate("/dashboard")}
           >
             <img
-              src="/manus-storage/Logo-QLoop_277bc2d4.png"
+              src="/manus-storage/QLoop_n_14e252ea.png"
               alt="QLoop"
-              className="h-7 w-auto"
+              className="h-8 w-auto"
             />
           </div>
 
-          {/* 브레드크럼 구분선 + 뒤로가기 */}
-          {title && (
+          {/* 세부 페이지: DASHBOARD 뒤로가기 + 페이지명 */}
+          {isSubPage && title && (
             <>
               <div className="w-px h-4 bg-black/20" />
               <button
                 onClick={() => navigate(backTo)}
-                className="flex items-center gap-1 swiss-label text-black/40 hover:text-black transition-colors"
+                className="flex items-center gap-1.5 swiss-label text-black/50 hover:text-black transition-colors"
               >
                 <ArrowLeft size={11} />
-                {backLabel}
+                {backLabel === "대시보드" ? "DASHBOARD" : backLabel.toUpperCase()}
               </button>
               <div className="w-px h-4 bg-black/20" />
               <span className="text-sm font-bold truncate max-w-xs">{title}</span>
             </>
           )}
+
+          {/* 네비게이션 메뉴 페이지: DASHBOARD 뒤로가기만 */}
+          {isNavPage && (
+            <>
+              <div className="w-px h-4 bg-black/20" />
+              <button
+                onClick={() => navigate("/dashboard")}
+                className="flex items-center gap-1.5 swiss-label text-black/50 hover:text-black transition-colors"
+              >
+                <ArrowLeft size={11} />
+                DASHBOARD
+              </button>
+            </>
+          )}
         </div>
 
         {/* 우측: 메뉴 + 사용자 정보 */}
-        <div className="flex items-center gap-5">
-          {/* 메인 네비게이션 메뉴 */}
-          <nav className="flex items-center gap-5">
-            {navItems.map((item) => (
-              <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                className={`swiss-label flex items-center gap-1 transition-colors ${
-                  isActive(item.path)
-                    ? "text-black border-b-2 border-black pb-0.5"
-                    : "text-black/50 hover:text-black"
-                }`}
-              >
-                {item.icon}
-                {item.label}
-              </button>
-            ))}
-            {user?.role === "admin" && (
-              <button
-                onClick={() => navigate("/admin/socratic")}
-                className={`swiss-label flex items-center gap-1 transition-colors ${
-                  isActive("/admin/socratic")
-                    ? "text-red-600 border-b-2 border-red-600 pb-0.5"
-                    : "text-red-400 hover:text-red-600"
-                }`}
-              >
-                <Settings size={12} />
-                NEURAL SYSTEM SET
-              </button>
-            )}
-          </nav>
+        <div className="flex items-center gap-1">
+          {/* 메인 네비게이션 메뉴 - 대시보드 또는 네비게이션 메뉴 페이지에서만 표시 */}
+          {(isDashboard || isNavPage) && (
+            <nav className="flex items-center">
+              {navItems.map((item) => (
+                <button
+                  key={item.path}
+                  onClick={() => navigate(item.path)}
+                  className={`swiss-label flex items-center gap-1.5 px-3 py-1.5 transition-colors ${
+                    isActive(item.path)
+                      ? "bg-black text-white"
+                      : "text-black/50 hover:text-black hover:bg-black/5"
+                  }`}
+                >
+                  {item.icon}
+                  {item.label}
+                </button>
+              ))}
+              {user?.role === "admin" && (
+                <button
+                  onClick={() => navigate(adminNavItem.path)}
+                  className={`swiss-label flex items-center gap-1.5 px-3 py-1.5 transition-colors ${
+                    isActive(adminNavItem.path)
+                      ? "bg-red-600 text-white"
+                      : "text-red-400 hover:text-red-600 hover:bg-red-50"
+                  }`}
+                >
+                  {adminNavItem.icon}
+                  {adminNavItem.label}
+                </button>
+              )}
+            </nav>
+          )}
 
           {/* 커스텀 액션 영역 */}
           {actions && (
             <>
-              <div className="w-px h-4 bg-black/20" />
+              <div className="w-px h-4 bg-black/20 mx-2" />
               {actions}
             </>
           )}
 
           {/* 사용자 정보 + 로그아웃 */}
-          <div className="flex items-center gap-3 pl-4 border-l border-black/20">
+          <div className="flex items-center gap-3 pl-4 ml-2 border-l border-black/20">
             <span className="text-xs font-bold text-black/70">{user?.name}</span>
             <button
               onClick={() => logout()}

@@ -397,3 +397,9 @@
 - [x] AIConnection.tsx: PageHeader 적용
 - [x] DocumentDetail.tsx: PageHeader 적용 (액션 버튼 actions prop으로)
 - [x] LearningSession.tsx: PageHeader 적용 (진도/모델/종료 actions prop으로)
+
+## v4.34 로고 교체 + 네비게이션 UX 개선
+- [x] 새 QLoop 로고(QLoop_n.png) webdev 스토리지 업로드 및 PageHeader 교체
+- [x] PageHeader: 대시보드/네비메뉴 페이지에서 선택된 메뉴 흑백 반전(bg-black text-white) 표시
+- [x] PageHeader: 네비메뉴 페이지(LEARNING HISTORY 등)에서 메뉴 외 추가정보 숨기고 ← DASHBOARD 버튼만 표시
+- [x] PageHeader: 세부 페이지(DocumentDetail 등)에서 ← DASHBOARD 브레드크럼 유지
