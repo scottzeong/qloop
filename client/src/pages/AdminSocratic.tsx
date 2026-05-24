@@ -571,7 +571,7 @@ export default function AdminSocratic() {
 
   return (
     <div className="min-h-screen bg-white">
-      <PageHeader title="NEURAL SYSTEM SET" actions={<span className="text-xs text-gray-400 font-bold">Admin</span>} />
+      <PageHeader title="NEURAL SYSTEM SET" />
 
       <div className="max-w-6xl mx-auto px-8 py-8">
         {/* Tabs */}

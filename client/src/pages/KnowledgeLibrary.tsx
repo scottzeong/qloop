@@ -170,7 +170,7 @@ export default function KnowledgeLibrary() {
     <div className="min-h-screen bg-white">
       <PageHeader
         title="KNOWLEDGE LIBRARY"
-        actions={<Badge variant="secondary" className="text-xs">{myItems.length}개 등록됨</Badge>}
+
       />
 
       <div className="max-w-5xl mx-auto px-6 py-8">

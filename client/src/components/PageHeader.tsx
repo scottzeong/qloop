@@ -66,7 +66,7 @@ export default function PageHeader({
             <img
               src="/manus-storage/QLoop_n_14e252ea.png"
               alt="QLoop"
-              className="h-8 w-auto"
+              className="h-16 w-auto"
             />
           </div>
 
@@ -103,38 +103,36 @@ export default function PageHeader({
 
         {/* 우측: 메뉴 + 사용자 정보 */}
         <div className="flex items-center gap-1">
-          {/* 메인 네비게이션 메뉴 - 대시보드 또는 네비게이션 메뉴 페이지에서만 표시 */}
-          {(isDashboard || isNavPage) && (
-            <nav className="flex items-center">
-              {navItems.map((item) => (
-                <button
-                  key={item.path}
-                  onClick={() => navigate(item.path)}
-                  className={`swiss-label flex items-center gap-1.5 px-3 py-1.5 transition-colors ${
-                    isActive(item.path)
-                      ? "bg-black text-white"
-                      : "text-black/50 hover:text-black hover:bg-black/5"
-                  }`}
-                >
-                  {item.icon}
-                  {item.label}
-                </button>
-              ))}
-              {user?.role === "admin" && (
-                <button
-                  onClick={() => navigate(adminNavItem.path)}
-                  className={`swiss-label flex items-center gap-1.5 px-3 py-1.5 transition-colors ${
-                    isActive(adminNavItem.path)
-                      ? "bg-red-600 text-white"
-                      : "text-red-400 hover:text-red-600 hover:bg-red-50"
-                  }`}
-                >
-                  {adminNavItem.icon}
-                  {adminNavItem.label}
-                </button>
-              )}
-            </nav>
-          )}
+          {/* 메인 네비게이션 메뉴 - 항상 표시 */}
+          <nav className="flex items-center">
+            {navItems.map((item) => (
+              <button
+                key={item.path}
+                onClick={() => navigate(item.path)}
+                className={`swiss-label flex items-center gap-1.5 px-3 py-2 transition-colors relative ${
+                  isActive(item.path)
+                    ? "text-black after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-black"
+                    : "text-black/50 hover:text-black"
+                }`}
+              >
+                {item.icon}
+                {item.label}
+              </button>
+            ))}
+            {user?.role === "admin" && (
+              <button
+                onClick={() => navigate(adminNavItem.path)}
+                className={`swiss-label flex items-center gap-1.5 px-3 py-2 transition-colors relative ${
+                  isActive(adminNavItem.path)
+                    ? "text-red-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-red-600"
+                    : "text-red-400 hover:text-red-600"
+                }`}
+              >
+                {adminNavItem.icon}
+                {adminNavItem.label}
+              </button>
+            )}
+          </nav>
 
           {/* 커스텀 액션 영역 */}
           {actions && (

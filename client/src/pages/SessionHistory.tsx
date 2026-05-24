@@ -87,22 +87,6 @@ export default function SessionHistory() {
     <div className="min-h-screen bg-white flex flex-col">
       <PageHeader
         title="LEARNING HISTORY"
-        actions={
-          <div className="flex items-center gap-5">
-            <div className="flex items-center gap-1.5">
-              <Award size={11} style={{ color: "var(--swiss-red)" }} />
-              <span className="swiss-label">학습완료 {fullyCompletedCount}개</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 swiss-red-bg" />
-              <span className="swiss-label">완료 {completedSessions.length}개</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 bg-yellow-400" />
-              <span className="swiss-label">진행 중 {activeSessions.length}개</span>
-            </div>
-          </div>
-        }
       />
 
       <main className="flex-1 max-w-7xl mx-auto px-8 py-12 w-full">
