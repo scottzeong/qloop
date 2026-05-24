@@ -75,7 +75,7 @@ export default function Home() {
         </div>
 
         {/* Process section */}
-        <section className="max-w-7xl mx-auto px-8 py-20">
+        <section className="max-w-7xl mx-auto px-8 py-8">
           <div className="grid grid-cols-4 gap-0">
             {[
               { step: "01", title: "자료 업로드", desc: "학습할 자료를 드래그 앤 드롭으로 업로드합니다." },
@@ -83,11 +83,11 @@ export default function Home() {
               { step: "03", title: "문답 학습", desc: "AI의 질문에 답하며 토픽을 완전히 이해해 나갑니다." },
               { step: "04", title: "진도 리포트", desc: "학습 완료 후 요약과 진도 리포트를 확인합니다." },
             ].map((p, i) => (
-              <div key={p.step} className={`p-8 ${i < 3 ? "border-r border-black" : ""}`}>
-                <div className="text-5xl font-black text-gray-100 mb-4">{p.step}</div>
-                <div className="swiss-rule-red mb-4" style={{ width: "1.5rem" }} />
-                <h3 className="text-base font-bold mb-2">{p.title}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">{p.desc}</p>
+              <div key={p.step} className={`p-5 ${i < 3 ? "border-r border-black" : ""}`}>
+                <div className="text-3xl font-black text-gray-100 mb-2">{p.step}</div>
+                <div className="swiss-rule-red mb-3" style={{ width: "1.5rem" }} />
+                <h3 className="text-sm font-bold mb-1">{p.title}</h3>
+                <p className="text-xs text-gray-500 leading-relaxed">{p.desc}</p>
               </div>
             ))}
           </div>
