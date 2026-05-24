@@ -4,6 +4,7 @@ import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import PageHeader from "@/components/PageHeader";
 import {
   Cpu,
   Plus,
@@ -15,7 +16,6 @@ import {
   Loader2,
   Eye,
   EyeOff,
-  ArrowLeft,
   Zap,
   Shield,
   ChevronDown,
@@ -164,26 +164,7 @@ export default function AIConnection() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
-      <header className="border-b-2 border-black bg-white z-50">
-        <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate("/dashboard")}
-              className="flex items-center gap-1 text-xs font-bold hover:text-black transition-colors"
-            >
-              <ArrowLeft size={14} />
-              DASHBOARD
-            </button>
-            <div className="w-px h-4 bg-gray-300" />
-            <div className="flex items-center gap-2">
-              <Cpu size={16} />
-              <span className="text-xs font-bold tracking-widest">AI CONNECTION</span>
-            </div>
-          </div>
-          <span className="text-xs text-gray-500">{user.name}</span>
-        </div>
-      </header>
+      <PageHeader title="AI CONNECTION" />
 
       <main className="max-w-5xl mx-auto px-8 py-12">
         {/* 페이지 설명 */}

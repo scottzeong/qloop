@@ -5,9 +5,10 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation, useParams } from "wouter";
 import React, { useState } from "react";
 import { toast } from "sonner";
+import PageHeader from "@/components/PageHeader";
 import {
-  ArrowLeft, Folder, ChevronRight,
-  BarChart2, LogOut, AlertCircle, CheckCircle2, Lock, GitBranch, Map, Route,
+  Folder, ChevronRight,
+  AlertCircle, CheckCircle2, Lock, GitBranch, Map, Route,
   Pencil, Check, X
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -157,34 +158,10 @@ export default function GroupDetail() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      {/* Header */}
-      <header className="border-b-2 border-black bg-white z-50">
-        <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center cursor-pointer" onClick={() => navigate("/")}>
-            <img src="/manus-storage/Logo-QLoop_277bc2d4.png" alt="QLoop" className="h-8 w-auto" />
-          </div>
-          <nav className="flex items-center gap-6">
-            <button onClick={() => navigate("/history")} className="swiss-label hover:text-black transition-colors flex items-center gap-1">
-              <BarChart2 size={12} /> LEARNING HISTORY
-            </button>
-            <div className="flex items-center gap-3 border-l border-black pl-6">
-              <span className="text-sm font-medium">{user?.name}</span>
-              <button onClick={() => logout()} className="swiss-label hover:text-black transition-colors flex items-center gap-1">
-                <LogOut size={11} /> 로그아웃
-              </button>
-            </div>
-          </nav>
-        </div>
-      </header>
+      <PageHeader title={groupDetail?.name ?? "그룹"} />
 
       <main className="flex-1 max-w-7xl mx-auto px-8 py-12 w-full">
-        {/* Back button */}
-        <button
-          onClick={() => navigate("/dashboard")}
-          className="flex items-center gap-2 swiss-label hover:text-black transition-colors mb-8"
-        >
-          <ArrowLeft size={14} /> 대시보드로 돌아가기
-        </button>
+
 
         {isLoading ? (
           <div className="flex items-center gap-3">

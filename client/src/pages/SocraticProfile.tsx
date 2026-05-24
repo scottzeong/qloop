@@ -1,7 +1,8 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
-import { ArrowLeft, Brain, Target, TrendingUp, Award, ChevronDown, ChevronUp } from "lucide-react";
+import PageHeader from "@/components/PageHeader";
+import { Brain, Target, TrendingUp, Award, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 
 const DIMENSION_LABELS: Record<string, string> = {
@@ -104,24 +105,7 @@ export default function SocraticProfile() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
-      <header className="border-b-2 border-black sticky top-0 bg-white z-50">
-        <div className="max-w-5xl mx-auto px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate("/dashboard")}
-              className="flex items-center gap-2 swiss-label hover:text-black transition-colors"
-            >
-              <ArrowLeft size={12} /> 대시보드
-            </button>
-            <div className="w-px h-4 bg-black" />
-            <div className="flex items-center gap-2">
-              <Brain size={14} className="text-red-600" />
-              <span className="text-sm font-bold">QLOOP PROFILE</span>
-            </div>
-          </div>
-        </div>
-      </header>
+      <PageHeader title="QLOOP PROFILE" />
 
       <div className="max-w-5xl mx-auto px-8 py-10">
 

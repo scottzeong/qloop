@@ -3,7 +3,8 @@ import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Trash2, Lock, RotateCcw, CheckCircle2, AlertCircle, Search, X } from "lucide-react";
+import PageHeader from "@/components/PageHeader";
+import { Trash2, Lock, RotateCcw, CheckCircle2, AlertCircle, Search, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -1055,88 +1056,72 @@ export default function DocumentDetail() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      {/* 헤더 */}
-      <header className="border-b-2 border-black sticky top-0 bg-white z-50">
-        <div className="max-w-7xl mx-auto px-8 py-4 flex items-center gap-4">
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-black/40 hover:text-black transition-colors"
-          >
-            <ArrowLeft size={12} /> 대시보드
-          </button>
-          <div className="w-px h-4 bg-black" />
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <div className="w-3 h-3 bg-red-600 flex-shrink-0" />
-            <span className="text-sm font-bold truncate">{doc.title}</span>
-            {structure?.documentType && (
-              <span className="text-xs text-black/30 flex-shrink-0">
-                — {docTypeLabel[structure.documentType] ?? structure.documentType}
-              </span>
+      <PageHeader
+        title={doc.title}
+        actions={
+          <div className="flex items-center gap-2">
+            <LanguageBadge doc={doc} docId={docId} />
+            {(doc as any).structureLocked === 1 && (
+              <div className="flex items-center gap-1.5 text-xs font-bold text-black/50 border border-black/20 px-2 py-1">
+                <Lock size={10} />
+                <span>{(doc as any).selectedStructure === 'tree' ? '목차 트리' : (doc as any).selectedStructure === 'conceptMap' ? '개념 맵' : '학습 경로'} 고정됨</span>
+              </div>
             )}
-          </div>
-          {/* 언어 배지 + 학습 언어 변경 */}
-          <LanguageBadge doc={doc} docId={docId} />
-          {/* 학습 구조 상태 표시 */}
-          {(doc as any).structureLocked === 1 && (
-            <div className="flex items-center gap-1.5 text-xs font-bold text-black/50 border border-black/20 px-2 py-1">
-              <Lock size={10} />
-              <span>{(doc as any).selectedStructure === 'tree' ? '목차 트리' : (doc as any).selectedStructure === 'conceptMap' ? '개념 맵' : '학습 경로'} 고정됨</span>
-            </div>
-          )}
-          {doc.analysisStatus === "done" && !isAnalyzing && (
+            {doc.analysisStatus === "done" && !isAnalyzing && (
+              <button
+                onClick={() => {
+                  if ((doc as any).structureLocked === 1) {
+                    if (!window.confirm("재분석하면 학습 구조 선택이 초기화됩니다.\n계속하시겠습니까?")) return;
+                    reanalyzeMutation.mutate({ documentId: docId });
+                  } else {
+                    analyzeMutation.mutate({ documentId: docId });
+                  }
+                }}
+                disabled={reanalyzeMutation.isPending}
+                className="flex items-center gap-1 text-xs font-bold uppercase tracking-widest border border-black/30 px-3 py-1.5 hover:border-black transition-colors disabled:opacity-50"
+              >
+                <RotateCcw size={10} /> 재분석
+              </button>
+            )}
             <button
-              onClick={() => {
-                if ((doc as any).structureLocked === 1) {
-                  if (!window.confirm("재분석하면 학습 구조 선택이 초기화됩니다.\n계속하시겠습니까?")) return;
-                  reanalyzeMutation.mutate({ documentId: docId });
-                } else {
-                  analyzeMutation.mutate({ documentId: docId });
-                }
-              }}
-              disabled={reanalyzeMutation.isPending}
-              className="flex items-center gap-1 text-xs font-bold uppercase tracking-widest border border-black/30 px-3 py-1.5 hover:border-black transition-colors disabled:opacity-50"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="flex items-center gap-1 text-xs font-bold text-black/30 hover:text-red-600 transition-colors px-2 py-1.5"
+              title="문서 삭제"
             >
-              <RotateCcw size={10} /> 재분석
+              <Trash2 size={13} />
             </button>
-          )}
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="flex items-center gap-1 text-xs font-bold text-black/30 hover:text-red-600 transition-colors px-2 py-1.5"
-            title="문서 삭제"
-          >
-            <Trash2 size={13} />
-          </button>
-          <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>학습자료 삭제</AlertDialogTitle>
-                <AlertDialogDescription>
-                  <strong>"{doc.title}"</strong>을(를) 삭제하시겠습니까?<br />
-                  <span className="text-red-600 font-medium">관련 학습이력도 모두 함께 삭제됩니다.</span>
-                  <br />이 작업은 되돌릴 수 없습니다.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>취소</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={async () => {
-                    try {
-                      await deleteDocMutation.mutateAsync({ documentId: docId });
-                      toast.success("학습자료와 관련 학습이력이 삭제되었습니다.");
-                      navigate("/dashboard");
-                    } catch {
-                      toast.error("삭제에 실패했습니다.");
-                    }
-                  }}
-                  className="bg-red-600 hover:bg-red-700 text-white"
-                >
-                  삭제
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      </header>
+            <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>학습자료 삭제</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    <strong>"{doc.title}"</strong>을(를) 삭제하시겠습니까?<br />
+                    <span className="text-red-600 font-medium">관련 학습이력도 모두 함께 삭제됩니다.</span>
+                    <br />이 작업은 되돌릴 수 없습니다.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>취소</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={async () => {
+                      try {
+                        await deleteDocMutation.mutateAsync({ documentId: docId });
+                        toast.success("학습자료와 관련 학습이력이 삭제되었습니다.");
+                        navigate("/dashboard");
+                      } catch {
+                        toast.error("삭제에 실패했습니다.");
+                      }
+                    }}
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                  >
+                    삭제
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        }
+      />
 
       <main className="flex-1 max-w-7xl mx-auto px-8 py-10 w-full">
         {/* 분석 전 */}

@@ -3,7 +3,8 @@ import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { toast } from "sonner";
-import { Send, ArrowLeft, CheckCircle, HelpCircle, MessageSquare, BookOpen } from "lucide-react";
+import PageHeader from "@/components/PageHeader";
+import { Send, CheckCircle, HelpCircle, MessageSquare, BookOpen } from "lucide-react";
 import { Streamdown } from "streamdown";
 
 type MessageType = "question" | "answer" | "feedback" | "user_question" | "ai_answer" | "system";
@@ -256,22 +257,11 @@ export default function LearningSession() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      {/* Header */}
-      <header className="border-b-2 border-black sticky top-0 bg-white z-50">
-        <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate((session as any).groupId ? `/groups/${(session as any).groupId}` : `/documents/${session.documentId}`)}
-              className="flex items-center gap-2 swiss-label hover:text-black transition-colors"
-            >
-              <ArrowLeft size={12} /> {(session as any).groupId ? '그룹으로 돌아가기' : '문서로 돌아가기'}
-            </button>
-            <div className="w-px h-4 bg-black" />
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 swiss-red-bg flex-shrink-0" />
-              <span className="text-sm font-bold truncate max-w-xs">{session.startTopicTitle}</span>
-            </div>
-          </div>
+      <PageHeader
+        title={session.startTopicTitle ?? ""}
+        backTo={(session as any).groupId ? `/groups/${(session as any).groupId}` : `/documents/${session.documentId}`}
+        backLabel={(session as any).groupId ? "그룹으로 돌아가기" : "문서로 돌아가기"}
+        actions={
           <div className="flex items-center gap-6">
             {/* Progress */}
             <div className="flex items-center gap-3">
@@ -352,8 +342,8 @@ export default function LearningSession() {
               </button>
             )}
           </div>
-        </div>
-      </header>
+        }
+      />
 
       <div className="flex-1 flex max-w-7xl mx-auto w-full">
         {/* Left sidebar - progress tracker */}

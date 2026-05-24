@@ -1,7 +1,8 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
-import { ArrowLeft, BookOpen, CheckCircle, Clock, Play, ArrowUpDown, Award } from "lucide-react";
+import PageHeader from "@/components/PageHeader";
+import { BookOpen, CheckCircle, Clock, Play, ArrowUpDown, Award } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { useState, useMemo } from "react";
 
@@ -84,35 +85,25 @@ export default function SessionHistory() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      {/* Header */}
-      <header className="border-b-2 border-black sticky top-0 bg-white z-50">
-        <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate("/dashboard")}
-              className="flex items-center gap-2 swiss-label hover:text-black transition-colors"
-            >
-              <ArrowLeft size={12} /> 대시보드
-            </button>
-            <div className="w-px h-4 bg-black" />
-            <span className="text-sm font-bold">학습 히스토리</span>
-          </div>
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <Award size={12} style={{ color: "var(--swiss-red)" }} />
+      <PageHeader
+        title="LEARNING HISTORY"
+        actions={
+          <div className="flex items-center gap-5">
+            <div className="flex items-center gap-1.5">
+              <Award size={11} style={{ color: "var(--swiss-red)" }} />
               <span className="swiss-label">학습완료 {fullyCompletedCount}개</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <div className="w-2 h-2 swiss-red-bg" />
               <span className="swiss-label">완료 {completedSessions.length}개</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <div className="w-2 h-2 bg-yellow-400" />
               <span className="swiss-label">진행 중 {activeSessions.length}개</span>
             </div>
           </div>
-        </div>
-      </header>
+        }
+      />
 
       <main className="flex-1 max-w-7xl mx-auto px-8 py-12 w-full">
         <div className="grid grid-cols-12 gap-0">

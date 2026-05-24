@@ -385,3 +385,15 @@
 - [x] client/src/pages/AIConnection.tsx: AI Connection 관리 페이지 구현 (Provider 선택, API Key 입력, 모델 선택, 연결 테스트, 기본 설정)
 - [x] client/src/App.tsx: /ai-connection 라우트 추가
 - [x] client/src/pages/Dashboard.tsx: AI CONNECTION 메뉴 추가
+
+## v4.33 네비게이션 디자인 통일 (PageHeader 공통 컴포넌트)
+- [x] client/src/components/PageHeader.tsx: 공통 PageHeader 컴포넌트 생성 (로고+메뉴+브레드크럼+사용자정보 통합)
+- [x] Dashboard.tsx: PageHeader 적용
+- [x] GroupDetail.tsx: PageHeader 적용 (뒤로가기 버튼 제거)
+- [x] SessionHistory.tsx: PageHeader 적용 (통계 actions prop으로)
+- [x] SocraticProfile.tsx: PageHeader 적용
+- [x] AdminSocratic.tsx: PageHeader 적용
+- [x] KnowledgeLibrary.tsx: PageHeader 적용
+- [x] AIConnection.tsx: PageHeader 적용
+- [x] DocumentDetail.tsx: PageHeader 적용 (액션 버튼 actions prop으로)
+- [x] LearningSession.tsx: PageHeader 적용 (진도/모델/종료 actions prop으로)

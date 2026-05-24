@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import PageHeader from "@/components/PageHeader";
 import {
-  BookOpen, Search, Tag, ArrowLeft, Library,
+  BookOpen, Search, Tag, Library,
   Trash2, Upload, FileText,
   Loader2, CheckCircle2, X, ChevronDown, ChevronUp,
 } from "lucide-react";
@@ -166,16 +167,11 @@ export default function KnowledgeLibrary() {
   });
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* 헤더 */}
-      <header className="border-b border-border px-6 py-4 flex items-center gap-3">
-        <button onClick={() => navigate("/dashboard")} className="text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <Library className="w-6 h-6 text-red-600" />
-        <h1 className="text-xl font-bold">Knowledge Library</h1>
-        <Badge variant="secondary" className="text-xs">{myItems.length}개 등록됨</Badge>
-      </header>
+    <div className="min-h-screen bg-white">
+      <PageHeader
+        title="KNOWLEDGE LIBRARY"
+        actions={<Badge variant="secondary" className="text-xs">{myItems.length}개 등록됨</Badge>}
+      />
 
       <div className="max-w-5xl mx-auto px-6 py-8">
         {/* 안내 배너 */}

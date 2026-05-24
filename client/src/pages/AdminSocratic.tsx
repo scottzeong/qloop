@@ -3,7 +3,8 @@ import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Settings, Layers, Grid3X3, BookOpen, Save, ChevronDown, ChevronUp } from "lucide-react";
+import PageHeader from "@/components/PageHeader";
+import { Settings, Layers, Grid3X3, BookOpen, Save, ChevronDown, ChevronUp } from "lucide-react";
 
 type Tab = "question_types" | "dimensions" | "weights" | "policies";
 
@@ -570,22 +571,7 @@ export default function AdminSocratic() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
-      <header className="border-b-2 border-black sticky top-0 bg-white z-50">
-        <div className="max-w-6xl mx-auto px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate("/dashboard")}
-              className="flex items-center gap-2 swiss-label hover:text-black transition-colors"
-            >
-              <ArrowLeft size={12} /> 대시보드
-            </button>
-            <div className="w-px h-4 bg-black" />
-            <span className="text-sm font-bold">뉴럴시스템 관리</span>
-          </div>
-          <span className="text-xs text-gray-400">Admin</span>
-        </div>
-      </header>
+      <PageHeader title="NEURAL SYSTEM SET" actions={<span className="text-xs text-gray-400 font-bold">Admin</span>} />
 
       <div className="max-w-6xl mx-auto px-8 py-8">
         {/* Tabs */}
