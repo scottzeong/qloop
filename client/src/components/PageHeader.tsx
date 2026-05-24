@@ -124,8 +124,8 @@ export default function PageHeader({
                 onClick={() => navigate(adminNavItem.path)}
                 className={`swiss-label flex items-center gap-1.5 px-3 py-2 transition-colors relative ${
                   isActive(adminNavItem.path)
-                    ? "text-red-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-red-600"
-                    : "text-red-400 hover:text-red-600"
+                    ? "text-black after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-black"
+                    : "text-black/50 hover:text-black"
                 }`}
               >
                 {adminNavItem.icon}
@@ -146,7 +146,7 @@ export default function PageHeader({
           <div className="flex items-center gap-3 pl-4 ml-2 border-l border-black/20">
             <span className="text-xs font-bold text-black/70">{user?.name}</span>
             <button
-              onClick={() => logout()}
+              onClick={async () => { await logout(); window.location.href = "https://www.qloop.kr"; }}
               className="swiss-label text-black/40 hover:text-black transition-colors flex items-center gap-1"
             >
               <LogOut size={11} />

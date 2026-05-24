@@ -14,21 +14,20 @@ export default function Home() {
   }, [loading, isAuthenticated, navigate]);
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="bg-white flex flex-col" style={{ minHeight: "960px" }}>
       {/* Header */}
       <header className="border-b-2 border-black">
         <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
           <div className="flex items-center">
-            <img src="/manus-storage/Logo-QLoop_277bc2d4.png" alt="QLoop" className="h-9 w-auto" />
+            <img src="/manus-storage/QLoop_n_14e252ea.png" alt="QLoop" className="h-12 w-auto" />
           </div>
           <nav className="flex items-center gap-8">
-            <span className="swiss-label">Core QLoop</span>
             {!loading && !isAuthenticated && (
               <a
                 href={getLoginUrl()}
                 className="bg-black text-white px-5 py-2 text-sm font-bold tracking-wide hover:bg-[var(--swiss-red)] transition-colors"
               >
-                시작하기
+                Log in
               </a>
             )}
           </nav>
@@ -45,7 +44,7 @@ export default function Home() {
           </div>
 
           {/* Center column — headline */}
-          <div className="col-span-7 pr-16">
+          <div className="col-span-10 pr-16">
             <div className="swiss-label mb-6">NEURAL TUTORING SYSTEM</div>
             <h1 className="text-4xl font-black leading-[1.1] tracking-tight mb-8">
               학습자료를 올리면<br />
@@ -68,25 +67,6 @@ export default function Home() {
               </div>
             </div>
           </div>
-
-          {/* Right column — feature list */}
-          <div className="col-span-3 border-l border-black pl-8">
-            <div className="swiss-label mb-6">핵심 기능</div>
-            {[
-              { num: "01", title: "PDF 구조 분석", desc: "AI가 문서를 챕터·토픽·개념으로 분해" },
-              { num: "02", title: "순차적 문답", desc: "소크라테스식 질문으로 깊은 이해 유도" },
-              { num: "03", title: "양방향 대화", desc: "학습자도 AI에게 역질문 가능" },
-              { num: "04", title: "진도 추적", desc: "완료 토픽과 현재 위치 실시간 표시" },
-            ].map((f) => (
-              <div key={f.num} className="mb-8">
-                <div className="flex items-baseline gap-3 mb-1">
-                  <span className="text-xs font-bold" style={{ color: "var(--swiss-red)" }}>{f.num}</span>
-                  <span className="text-sm font-bold">{f.title}</span>
-                </div>
-                <p className="text-xs text-gray-500 pl-6">{f.desc}</p>
-              </div>
-            ))}
-          </div>
         </section>
 
         {/* Bottom rule */}
@@ -98,7 +78,7 @@ export default function Home() {
         <section className="max-w-7xl mx-auto px-8 py-20">
           <div className="grid grid-cols-4 gap-0">
             {[
-              { step: "01", title: "PDF 업로드", desc: "학습할 문서를 드래그 앤 드롭으로 업로드합니다." },
+              { step: "01", title: "자료 업로드", desc: "학습할 자료를 드래그 앤 드롭으로 업로드합니다." },
               { step: "02", title: "구조 탐색", desc: "AI가 분석한 계층적 목차를 확인하고 시작 토픽을 선택합니다." },
               { step: "03", title: "문답 학습", desc: "AI의 질문에 답하며 토픽을 완전히 이해해 나갑니다." },
               { step: "04", title: "진도 리포트", desc: "학습 완료 후 요약과 진도 리포트를 확인합니다." },
@@ -118,7 +98,7 @@ export default function Home() {
       <footer className="border-t-2 border-black">
         <div className="max-w-7xl mx-auto px-8 py-6 flex items-center justify-between">
           <div className="flex items-center">
-            <img src="/manus-storage/Logo-QLoop_277bc2d4.png" alt="QLoop" className="h-6 w-auto" />
+            <img src="/manus-storage/QLoop_n_14e252ea.png" alt="QLoop" className="h-8 w-auto" />
           </div>
           <span className="swiss-label">Neural Campus</span>
         </div>
