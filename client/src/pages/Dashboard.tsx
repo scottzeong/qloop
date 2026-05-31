@@ -18,6 +18,7 @@ import {
   Plus,
   X,
   FileType,
+  AlignLeft,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -47,6 +48,7 @@ function FileTypeBadge({ fileType }: { fileType?: string }) {
     docx: "bg-blue-100 text-blue-700",
     ppt: "bg-orange-100 text-orange-700",
     pptx: "bg-orange-100 text-orange-700",
+    text: "bg-green-100 text-green-700",
   };
   const label = (fileType ?? "pdf").toUpperCase();
   const cls = colors[fileType ?? "pdf"] ?? "bg-gray-100 text-gray-700";
@@ -89,8 +91,16 @@ export default function Dashboard() {
     enabled: isAuthenticated,
   });
 
+  // 텍스트 입력 모드 상태
+  const [uploadMode, setUploadMode] = useState<"file" | "text">("file");
+  const [textTitle, setTextTitle] = useState("");
+  const [textContent, setTextContent] = useState("");
+  const [textUploading, setTextUploading] = useState(false);
+
   const uploadMutation = trpc.document.upload.useMutation();
   const analyzeMutation = trpc.document.analyze.useMutation();
+  const uploadTextMutation = trpc.document.uploadText.useMutation();
+  const analyzeTextMutation = trpc.document.analyzeText.useMutation();
   const deleteDocMutation = trpc.document.delete.useMutation();
   const createGroupMutation = trpc.group.create.useMutation();
   const deleteGroupMutation = trpc.group.delete.useMutation();
@@ -175,6 +185,29 @@ export default function Dashboard() {
     },
     [handleFile]
   );
+
+  const handleTextSubmit = useCallback(async () => {
+    if (!textTitle.trim()) { toast.error("제목을 입력해주세요."); return; }
+    if (textContent.trim().length < 10) { toast.error("내용을 10자 이상 입력해주세요."); return; }
+    setTextUploading(true);
+    try {
+      const { documentId } = await uploadTextMutation.mutateAsync({
+        title: textTitle.trim(),
+        text: textContent.trim(),
+      });
+      toast.info("텍스트 분석 중...", { duration: 5000 });
+      await analyzeTextMutation.mutateAsync({ documentId, text: textContent.trim() });
+      toast.success("분석 완료! 문서가 준비되었습니다.");
+      setTextTitle("");
+      setTextContent("");
+      await refetchDocs();
+      navigate(`/documents/${documentId}`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "분석 실패");
+    } finally {
+      setTextUploading(false);
+    }
+  }, [textTitle, textContent, uploadTextMutation, analyzeTextMutation, refetchDocs, navigate]);
 
   // 삭제 실행 함수들
   const confirmDeleteDoc = async (docId: number) => {
@@ -352,45 +385,106 @@ export default function Dashboard() {
           <div className="col-span-8">
             {/* Upload area */}
             <div className="mb-10">
-              <div className="swiss-label mb-4">학습자료 업로드</div>
-              <div
-                className={`border-2 border-dashed transition-colors cursor-pointer p-12 text-center ${
-                  dragging ? "border-black bg-gray-50" : "border-gray-300 hover:border-black"
-                }`}
-                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={onDrop}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {uploading ? (
-                  <div className="space-y-3">
-                    <div className="w-full bg-gray-100 h-1">
-                      <div
-                        className="h-1 swiss-red-bg transition-all duration-300"
-                        style={{ width: `${uploadProgress}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500">업로드 및 분석 중... {uploadProgress}%</p>
-                  </div>
-                ) : (
-                  <>
-                    <Upload size={24} className="mx-auto mb-3 text-gray-300" />
-                    <p className="text-sm font-bold mb-1">파일을 드래그하거나 클릭하여 업로드</p>
-                    <p className="text-xs text-gray-400">PDF / DOC / DOCX / PPT / PPTX · 최대 20MB</p>
-                  </>
-                )}
+              <div className="swiss-label mb-4">학습자료 등록</div>
+              {/* 모드 탭 */}
+              <div className="flex border-b border-gray-200 mb-4">
+                <button
+                  onClick={() => setUploadMode("file")}
+                  className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-colors ${
+                    uploadMode === "file" ? "border-black text-black" : "border-transparent text-gray-400 hover:text-black"
+                  }`}
+                >
+                  <Upload size={13} /> 파일 업로드
+                </button>
+                <button
+                  onClick={() => setUploadMode("text")}
+                  className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-colors ${
+                    uploadMode === "text" ? "border-black text-black" : "border-transparent text-gray-400 hover:text-black"
+                  }`}
+                >
+                  <AlignLeft size={13} /> 텍스트 입력
+                </button>
               </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={FILE_ACCEPT}
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleFile(file);
-                  e.target.value = "";
-                }}
-              />
+
+              {uploadMode === "file" ? (
+                <>
+                  <div
+                    className={`border-2 border-dashed transition-colors cursor-pointer p-12 text-center ${
+                      dragging ? "border-black bg-gray-50" : "border-gray-300 hover:border-black"
+                    }`}
+                    onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                    onDragLeave={() => setDragging(false)}
+                    onDrop={onDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {uploading ? (
+                      <div className="space-y-3">
+                        <div className="w-full bg-gray-100 h-1">
+                          <div
+                            className="h-1 swiss-red-bg transition-all duration-300"
+                            style={{ width: `${uploadProgress}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-gray-500">업로드 및 분석 중... {uploadProgress}%</p>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload size={24} className="mx-auto mb-3 text-gray-300" />
+                        <p className="text-sm font-bold mb-1">파일을 드래그하거나 클릭하여 업로드</p>
+                        <p className="text-xs text-gray-400">PDF / DOC / DOCX / PPT / PPTX · 최대 20MB</p>
+                      </>
+                    )}
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={FILE_ACCEPT}
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleFile(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </>
+              ) : (
+                <div className="border-2 border-gray-200 p-5 space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold mb-1 text-gray-600">제목 <span className="text-red-500">*</span></label>
+                    <input
+                      type="text"
+                      placeholder="학습자료 제목을 입력하세요"
+                      value={textTitle}
+                      onChange={(e) => setTextTitle(e.target.value)}
+                      className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-black"
+                      disabled={textUploading}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold mb-1 text-gray-600">본문 <span className="text-red-500">*</span></label>
+                    <textarea
+                      placeholder="학습할 내용을 여기에 붙여넣으세요. (PDF 텍스트 복사 후 붙여넣기 가능)"
+                      value={textContent}
+                      onChange={(e) => setTextContent(e.target.value)}
+                      rows={8}
+                      className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-black resize-y"
+                      disabled={textUploading}
+                    />
+                    <p className="text-xs text-gray-400 mt-1">{textContent.length.toLocaleString()}자</p>
+                  </div>
+                  <button
+                    onClick={handleTextSubmit}
+                    disabled={textUploading || !textTitle.trim() || textContent.trim().length < 10}
+                    className="bg-black text-white px-5 py-2 text-xs font-bold hover:bg-[var(--swiss-red)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {textUploading ? (
+                      <><span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />분석 중...</>
+                    ) : (
+                      <>분석 시작</>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Groups section */}

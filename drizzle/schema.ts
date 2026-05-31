@@ -53,7 +53,7 @@ export const documents = mysqlTable("documents", {
   userId: int("userId").notNull(),
   groupId: int("groupId"),
   title: varchar("title", { length: 512 }).notNull(),
-  fileType: mysqlEnum("fileType", ["pdf", "doc", "docx", "ppt", "pptx"]).default("pdf").notNull(),
+  fileType: mysqlEnum("fileType", ["pdf", "doc", "docx", "ppt", "pptx", "text"]).default("pdf").notNull(),
   storageKey: varchar("storageKey", { length: 512 }).notNull(),
   storageUrl: varchar("storageUrl", { length: 1024 }).notNull(),
   fileSize: int("fileSize"),

@@ -1,0 +1,1 @@
+ALTER TABLE `documents` MODIFY COLUMN `fileType` enum('pdf','doc','docx','ppt','pptx','text') NOT NULL DEFAULT 'pdf';

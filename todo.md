@@ -416,3 +416,9 @@
 - [x] 실제 오류 로그 추적 및 원인 파악
 - [x] analyzeDocumentStructure 전체 흐름 디버그 로그 추가
 - [x] 오류 원인 수정: PDF 분석 시 response_format 제거 (Forge API는 file_url + json_schema 동시 미지원)
+
+## JSON 파싱 오류 수정 + 텍스트 입력 방식 추가 (v4.43)
+- [x] JSON 파싱: 멀티라인 정규식 s 플래그 추가 및 코드블록 제거 로직 개선 (ES2018 호환 방식으로)
+- [x] 텍스트 직접 입력 방식 추가: 제목 + 본문 텍스트 붙여넣기로 문서 분석
+- [x] DB/서버: document.uploadText + analyzeText 프로시저 추가, fileType enum에 text 추가
+- [x] UI: 업로드 영역에 "파일 업로드 / 텍스트 입력" 탭 추가

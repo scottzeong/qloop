@@ -136,7 +136,7 @@ const ALLOWED_MIME_TYPES = [
 
 type AllowedMime = typeof ALLOWED_MIME_TYPES[number];
 
-const MIME_TO_FILE_TYPE: Record<AllowedMime, "pdf" | "doc" | "docx" | "ppt" | "pptx"> = {
+const MIME_TO_FILE_TYPE: Record<AllowedMime, "pdf" | "doc" | "docx" | "ppt" | "pptx" | "text"> = {
   "application/pdf": "pdf",
   "application/msword": "doc",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
@@ -453,8 +453,19 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
   } else {
     // 문자열 → JSON 파싱
     try {
-      // 마크다운 코드 블록 제거 (```json ... ``` 형태)
-      const stripped = (rawContent as string).replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+        // 마크다운 코드 블록 제거 (```json ... ``` 형태, 멀티라인 대응)
+      let stripped = (rawContent as string).trim();
+      // ```json\n...\n``` 또는 ```\n...\n``` 형태 제거 (s 플래그 사용)
+      stripped = stripped.replace(/^```(?:json)?[\s\S]*?\n/, "").replace(/\n```[\s\S]*$/, "").trim();
+      // 단순 ``` 시작/끝 제거 (\n 없는 경우)
+      if (stripped.startsWith('```')) stripped = stripped.replace(/^```[^\n]*/, '').trim();
+      if (stripped.endsWith('```')) stripped = stripped.replace(/```$/, '').trim();
+      // 시작 { 이전 쌓다리 텍스트 제거 (JSON 시작 위치로 직접 이동)
+      const jsonStart = stripped.indexOf('{');
+      if (jsonStart > 0) stripped = stripped.slice(jsonStart);
+      // 마지막 } 이후 쌓다리 텍스트 제거
+      const jsonEnd = stripped.lastIndexOf('}');
+      if (jsonEnd !== -1 && jsonEnd < stripped.length - 1) stripped = stripped.slice(0, jsonEnd + 1);
       parsed = JSON.parse(stripped) as DocumentStructure;
     } catch (parseErr) {
       console.error(`[ANALYZE] JSON parse error. rawContent=${(rawContent as string).slice(0, 500)}`);
@@ -1290,6 +1301,100 @@ Return ONLY valid JSON matching the schema exactly.`;
           analysisStep: "uploading",
         });
         return { documentId: docId, storageUrl: url };
+      }),
+
+    // 텍스트 직접 입력으로 문서 생성
+    uploadText: protectedProcedure
+      .input(
+        z.object({
+          title: z.string().min(1, "제목을 입력해주세요."),
+          text: z.string().min(10, "내용을 10자 이상 입력해주세요."),
+          groupId: z.number().optional(),
+          learningLanguage: z.string().default("ko"),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const docId = await createDocument({
+          userId: ctx.user.id,
+          groupId: input.groupId ?? null,
+          title: input.title,
+          fileType: "text",
+          storageKey: `text-documents/${ctx.user.id}/${Date.now()}`,
+          storageUrl: "",
+          fileSize: Buffer.byteLength(input.text, "utf8"),
+          analysisStatus: "pending",
+          analysisStep: "uploading",
+          learningLanguage: input.learningLanguage,
+        });
+        return { documentId: docId, storageUrl: "" };
+      }),
+
+    // 텍스트 문서 AI 분석
+    analyzeText: protectedProcedure
+      .input(z.object({ documentId: z.number(), text: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const doc = await getDocumentById(input.documentId);
+        if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
+        await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "structuring");
+        try {
+          // 텍스트를 직접 analyzeDocumentStructure에 전달
+          const truncated = input.text.length > 50000 ? input.text.slice(0, 50000) + "\n...[truncated]" : input.text;
+          const systemPrompt = `You are an expert educational content analyzer.
+Analyze the provided document comprehensively and extract its structure in MULTIPLE formats simultaneously.
+Return a single JSON object containing ALL of the following fields:
+
+1. title (string): Document title
+2. summary (string): Brief summary
+3. documentType (string): One of: textbook, research, manual, report, narrative, reference, other
+4. chapters (array): Hierarchical chapter/topic/subtopic tree. Each chapter: {id, title, order, topics[]}. Each topic: {id, title, description, order, subtopics[]}. Each subtopic: {id, title, description, order}.
+5. conceptMap (array, max 15): Key concept nodes. Each: {id, label, description, type (core/sub/related), connections (array of other node ids)}
+6. keyConceptCards (array, max 20): Important terms. Each: {id, term, definition, example, relatedTerms[], importance (high/medium/low)}
+7. timeline (array): Chronological events IF applicable, else []. Each: {id, period, title, description, significance}
+8. comparisonTables (array): Comparison tables IF applicable, else []. Each: {title, headers[], rows[]}. Each row: {id, subject, values[] (values in same order as headers)}
+9. learningPath (array, 3-6 steps): Recommended learning steps. Each: {id, order, title, description, topicIds[], estimatedMinutes}
+
+Be thorough. Use the same language as the document (Korean if Korean).
+Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
+          const response = await aiInvoke(ctx.user.id, {
+            messages: [
+              { role: "system" as const, content: systemPrompt },
+              { role: "user" as const, content: `Please analyze this document titled "${doc.title}".\n\nDocument content:\n${truncated}\n\nReturn the hierarchical structure as JSON.` },
+            ],
+          });
+          const rawContent = response.choices[0]?.message?.content;
+          if (!rawContent) throw new Error("AI 분석 결과를 받지 못했습니다. (빈 응답)");
+          let parsed: Record<string, unknown>;
+          if (typeof rawContent === "object") {
+            parsed = rawContent as Record<string, unknown>;
+          } else {
+            let stripped = (rawContent as string).trim();
+            stripped = stripped.replace(/^```(?:json)?[\s\S]*?\n/, "").replace(/\n```[\s\S]*$/, "").trim();
+            if (stripped.startsWith('```')) stripped = stripped.replace(/^```[^\n]*/, '').trim();
+            if (stripped.endsWith('```')) stripped = stripped.replace(/```$/, '').trim();
+            const jsonStart = stripped.indexOf('{');
+            if (jsonStart > 0) stripped = stripped.slice(jsonStart);
+            const jsonEnd = stripped.lastIndexOf('}');
+            if (jsonEnd !== -1 && jsonEnd < stripped.length - 1) stripped = stripped.slice(0, jsonEnd + 1);
+            try { parsed = JSON.parse(stripped); } catch {
+              throw new Error(`AI 분석 결과를 파싱하지 못했습니다: ${(rawContent as string).slice(0, 200)}`);
+            }
+          }
+          if (!parsed.title) parsed.title = doc.title;
+          if (!parsed.summary) parsed.summary = "";
+          if (!Array.isArray(parsed.chapters)) parsed.chapters = [];
+          if (!Array.isArray(parsed.conceptMap)) parsed.conceptMap = [];
+          if (!Array.isArray(parsed.keyConceptCards)) parsed.keyConceptCards = [];
+          if (!Array.isArray(parsed.timeline)) parsed.timeline = [];
+          if (!Array.isArray(parsed.comparisonTables)) parsed.comparisonTables = [];
+          if (!Array.isArray(parsed.learningPath)) parsed.learningPath = [];
+          if (!parsed.documentType) parsed.documentType = "other";
+          await updateDocumentAnalysis(input.documentId, "done", parsed, undefined, "done");
+          return { success: true, structure: parsed };
+        } catch (e) {
+          const errMsg = e instanceof Error ? e.message : String(e);
+          await updateDocumentAnalysis(input.documentId, "error", undefined, undefined, "error", errMsg);
+          throw e;
+        }
       }),
 
     // AI 구조 분석 시작
