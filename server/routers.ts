@@ -452,24 +452,38 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
     parsed = rawContent as unknown as DocumentStructure;
   } else {
     // 문자열 → JSON 파싱
+    // stripped를 catch 블록에서도 접근 가능하도록 try 블록 밖에 선언
+    let stripped = (rawContent as string).trim();
+    // 마크다운 코드 블록 제거 (```json ... ``` 형태, 멀티라인 대응)
+    stripped = stripped.replace(/^```(?:json)?[\s\S]*?\n/, "").replace(/\n```[\s\S]*$/, "").trim();
+    if (stripped.startsWith('```')) stripped = stripped.replace(/^```[^\n]*/, '').trim();
+    if (stripped.endsWith('```')) stripped = stripped.replace(/```$/, '').trim();
+    // 시작 { 이전 텍스트 제거
+    const jsonStart = stripped.indexOf('{');
+    if (jsonStart > 0) stripped = stripped.slice(jsonStart);
+    // 마지막 } 이후 텍스트 제거
+    const jsonEnd = stripped.lastIndexOf('}');
+    if (jsonEnd !== -1 && jsonEnd < stripped.length - 1) stripped = stripped.slice(0, jsonEnd + 1);
     try {
-        // 마크다운 코드 블록 제거 (```json ... ``` 형태, 멀티라인 대응)
-      let stripped = (rawContent as string).trim();
-      // ```json\n...\n``` 또는 ```\n...\n``` 형태 제거 (s 플래그 사용)
-      stripped = stripped.replace(/^```(?:json)?[\s\S]*?\n/, "").replace(/\n```[\s\S]*$/, "").trim();
-      // 단순 ``` 시작/끝 제거 (\n 없는 경우)
-      if (stripped.startsWith('```')) stripped = stripped.replace(/^```[^\n]*/, '').trim();
-      if (stripped.endsWith('```')) stripped = stripped.replace(/```$/, '').trim();
-      // 시작 { 이전 쌓다리 텍스트 제거 (JSON 시작 위치로 직접 이동)
-      const jsonStart = stripped.indexOf('{');
-      if (jsonStart > 0) stripped = stripped.slice(jsonStart);
-      // 마지막 } 이후 쌓다리 텍스트 제거
-      const jsonEnd = stripped.lastIndexOf('}');
-      if (jsonEnd !== -1 && jsonEnd < stripped.length - 1) stripped = stripped.slice(0, jsonEnd + 1);
       parsed = JSON.parse(stripped) as DocumentStructure;
     } catch (parseErr) {
-      console.error(`[ANALYZE] JSON parse error. rawContent=${(rawContent as string).slice(0, 500)}`);
-      throw new Error(`AI 분석 결과를 파싱하지 못했습니다: ${(rawContent as string).slice(0, 200)}`);
+      const fullContent = rawContent as string;
+      console.error(`[ANALYZE] JSON parse error. length=${fullContent.length}`);
+      console.error(`[ANALYZE] First 1000: ${fullContent.slice(0, 1000)}`);
+      console.error(`[ANALYZE] Last 500: ${fullContent.slice(-500)}`);
+      // 잘린 JSON 복구 시도: 마지막 완전한 } 위치까지만 파싱
+      try {
+        const lastBrace = stripped.lastIndexOf('}');
+        if (lastBrace > 0) {
+          const truncated = stripped.slice(0, lastBrace + 1);
+          parsed = JSON.parse(truncated) as DocumentStructure;
+          console.log('[ANALYZE] Recovered truncated JSON successfully');
+        } else {
+          throw new Error('no closing brace');
+        }
+      } catch {
+        throw new Error(`AI 분석 결과를 파싱하지 못했습니다: ${fullContent.slice(0, 200)}`);
+      }
     }
   }
 
