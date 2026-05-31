@@ -516,6 +516,90 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
 }
 
 /**
+ * 텍스트 콘텐츠를 직접 분석하는 공통 함수 (fileType=text 문서용)
+ */
+async function analyzeTextContent(
+  text: string,
+  docTitle: string,
+  userId: number | null = null
+): Promise<DocumentStructure & { detectedLanguage?: string }> {
+  const systemPrompt = `You are an expert educational content analyzer.
+Analyze the provided document comprehensively and extract its structure in MULTIPLE formats simultaneously.
+Return a single JSON object containing ALL of the following fields:
+
+1. title (string): Document title
+2. summary (string): Brief summary
+3. documentType (string): One of: textbook, research, manual, report, narrative, reference, other
+4. chapters (array): Hierarchical chapter/topic/subtopic tree. Each chapter: {id, title, order, topics[]}. Each topic: {id, title, description, order, subtopics[]}. Each subtopic: {id, title, description, order}.
+5. conceptMap (array, max 15): Key concept nodes. Each: {id, label, description, type (core/sub/related), connections (array of other node ids)}
+6. keyConceptCards (array, max 20): Important terms. Each: {id, term, definition, example, relatedTerms[], importance (high/medium/low)}
+7. timeline (array): Chronological events IF applicable, else []. Each: {id, period, title, description, significance}
+8. comparisonTables (array): Comparison tables IF applicable, else []. Each: {title, headers[], rows[]}. Each row: {id, subject, values[] (values in same order as headers)}
+9. learningPath (array, 3-6 steps): Recommended learning steps. Each: {id, order, title, description, topicIds[], estimatedMinutes}
+
+Be thorough. Use the same language as the document (Korean if Korean).
+Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
+  const truncated = text.length > 50000 ? text.slice(0, 50000) + "\n...[truncated]" : text;
+  const response = await aiInvoke(userId, {
+    messages: [
+      { role: "system" as const, content: systemPrompt },
+      { role: "user" as const, content: `Please analyze this document titled "${docTitle}".\n\nDocument content:\n${truncated}\n\nReturn the hierarchical structure as JSON.` },
+    ],
+  });
+  const rawContent = response.choices[0]?.message?.content;
+  if (!rawContent) throw new Error("AI 분석 결과를 받지 못했습니다. (빈 응답)");
+  let parsed: DocumentStructure;
+  if (typeof rawContent === "object") {
+    parsed = rawContent as unknown as DocumentStructure;
+  } else {
+    let stripped = (rawContent as string).trim();
+    stripped = stripped.replace(/^```(?:json)?[\s\S]*?\n/, "").replace(/\n```[\s\S]*$/, "").trim();
+    if (stripped.startsWith('```')) stripped = stripped.replace(/^```[^\n]*/, '').trim();
+    if (stripped.endsWith('```')) stripped = stripped.replace(/```$/, '').trim();
+    const jsonStart = stripped.indexOf('{');
+    if (jsonStart > 0) stripped = stripped.slice(jsonStart);
+    const jsonEnd = stripped.lastIndexOf('}');
+    if (jsonEnd !== -1 && jsonEnd < stripped.length - 1) stripped = stripped.slice(0, jsonEnd + 1);
+    try {
+      parsed = JSON.parse(stripped) as DocumentStructure;
+    } catch {
+      // 잘린 JSON 복구 시도
+      const lastBrace = stripped.lastIndexOf('}');
+      if (lastBrace > 0) {
+        try { parsed = JSON.parse(stripped.slice(0, lastBrace + 1)) as DocumentStructure; }
+        catch { throw new Error(`AI 분석 결과를 파싱하지 못했습니다: ${(rawContent as string).slice(0, 200)}`); }
+      } else {
+        throw new Error(`AI 분석 결과를 파싱하지 못했습니다: ${(rawContent as string).slice(0, 200)}`);
+      }
+    }
+  }
+  if (!parsed.title) parsed.title = docTitle;
+  if (!parsed.summary) parsed.summary = "";
+  if (!Array.isArray(parsed.chapters)) parsed.chapters = [];
+  if (!Array.isArray(parsed.conceptMap)) parsed.conceptMap = [];
+  if (!Array.isArray(parsed.keyConceptCards)) parsed.keyConceptCards = [];
+  if (!Array.isArray(parsed.timeline)) parsed.timeline = [];
+  if (!Array.isArray(parsed.comparisonTables)) parsed.comparisonTables = [];
+  if (!Array.isArray(parsed.learningPath)) parsed.learningPath = [];
+  if (!parsed.documentType) parsed.documentType = "other";
+  // 언어 감지
+  let detectedLanguage = "ko";
+  try {
+    const sampleText = parsed.chapters?.[0]?.title || parsed.title || docTitle || "";
+    const langResp = await aiInvoke(userId, {
+      messages: [
+        { role: "system", content: "Detect the language of the given text and return ONLY the ISO 639-1 language code (e.g. en, ko, ja, zh, fr, de, es, pt, ar). Return nothing else." },
+        { role: "user", content: sampleText },
+      ],
+    });
+    const raw = langResp.choices[0]?.message?.content;
+    const code = (typeof raw === "string" ? raw.trim().toLowerCase() : "").slice(0, 5);
+    if (/^[a-z]{2}(-[a-z]{2})?$/.test(code)) detectedLanguage = code.slice(0, 2);
+  } catch (_) { /* 감지 실패 시 ko 폴백 */ }
+  return { ...parsed, detectedLanguage };
+}
+
+/**
  * 첫 번째 질문 생성 — 문서를 직접 참조하지 않고 토픽 제목/설명만으로 질문 생성
  * 학습자가 문서를 읽지 않고 순수 문답으로 학습할 수 있도록 함
  */
@@ -1328,19 +1412,22 @@ Return ONLY valid JSON matching the schema exactly.`;
         })
       )
       .mutation(async ({ ctx, input }) => {
+        // 텍스트를 S3에 저장하여 재분석 시에도 사용 가능하도록
+        const textKey = `text-documents/${ctx.user.id}/${Date.now()}.txt`;
+        const { url: textUrl } = await storagePut(textKey, Buffer.from(input.text, "utf8"), "text/plain; charset=utf-8");
         const docId = await createDocument({
           userId: ctx.user.id,
           groupId: input.groupId ?? null,
           title: input.title,
           fileType: "text",
-          storageKey: `text-documents/${ctx.user.id}/${Date.now()}`,
-          storageUrl: "",
+          storageKey: textKey,
+          storageUrl: textUrl,
           fileSize: Buffer.byteLength(input.text, "utf8"),
           analysisStatus: "pending",
           analysisStep: "uploading",
           learningLanguage: input.learningLanguage,
         });
-        return { documentId: docId, storageUrl: "" };
+        return { documentId: docId, storageUrl: textUrl };
       }),
 
     // 텍스트 문서 AI 분석
@@ -1420,6 +1507,22 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
         // 단계 1: extracting (파일 접근 중)
         await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "extracting");
         try {
+          // 텍스트 타입 문서: S3에서 텍스트 읽어서 분석
+          if (doc.fileType === "text") {
+            const signedUrl = await storageGetSignedUrl(doc.storageKey);
+            const res = await fetch(signedUrl);
+            if (!res.ok) throw new Error("텍스트 파일을 불러올 수 없습니다.");
+            const text = await res.text();
+            await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "structuring");
+            const structureResult = await analyzeTextContent(text, doc.title, ctx.user.id);
+            const { detectedLanguage, ...structure } = structureResult;
+            if (detectedLanguage) {
+              const db2 = await getDb();
+              if (db2) await db2.update(documents).set({ sourceLanguage: detectedLanguage }).where(eq(documents.id, input.documentId));
+            }
+            await updateDocumentAnalysis(input.documentId, "done", structure, undefined, "done");
+            return { success: true, structure, detectedLanguage };
+          }
           const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, "");
           const signedUrl = await storageGetSignedUrl(actualKey);
           const mimeForAnalysis = doc.fileType === "pdf" ? "application/pdf" : doc.fileType === "doc" ? "application/msword" : doc.fileType === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : doc.fileType === "ppt" ? "application/vnd.ms-powerpoint" : doc.fileType === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/pdf";
@@ -1529,6 +1632,22 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
           structure: null,
         }).where(eq(documents.id, input.documentId));
         try {
+          // 텍스트 타입 문서: S3에서 텍스트 읽어서 분석
+          if (doc.fileType === "text") {
+            const signedUrl = await storageGetSignedUrl(doc.storageKey);
+            const res = await fetch(signedUrl);
+            if (!res.ok) throw new Error("텍스트 파일을 불러올 수 없습니다.");
+            const text = await res.text();
+            await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "structuring");
+            const structureResult = await analyzeTextContent(text, doc.title, ctx.user.id);
+            const { detectedLanguage, ...structure } = structureResult;
+            if (detectedLanguage) {
+              const db3 = await getDb();
+              if (db3) await db3.update(documents).set({ sourceLanguage: detectedLanguage }).where(eq(documents.id, input.documentId));
+            }
+            await updateDocumentAnalysis(input.documentId, "done", structure, undefined, "done");
+            return { success: true, structure, detectedLanguage };
+          }
           const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, "");
           const signedUrl = await storageGetSignedUrl(actualKey);
           const mimeForAnalysis = doc.fileType === "pdf" ? "application/pdf" : doc.fileType === "doc" ? "application/msword" : doc.fileType === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : doc.fileType === "ppt" ? "application/vnd.ms-powerpoint" : doc.fileType === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/pdf";

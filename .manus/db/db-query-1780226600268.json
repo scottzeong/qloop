@@ -1,0 +1,170 @@
+{
+  "query": "SHOW COLUMNS FROM documents;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user PBmX1TLNWYzhjh7.96966ba0982e --database NvrzUNjEMAuyrZ6SHXrcZ8 --execute SHOW COLUMNS FROM documents;",
+  "rows": [
+    {
+      "Field": "id",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "PRI",
+      "Default": "NULL",
+      "Extra": "auto_increment"
+    },
+    {
+      "Field": "userId",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "title",
+      "Type": "varchar(512)",
+      "Null": "NO",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "storageKey",
+      "Type": "varchar(512)",
+      "Null": "NO",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "storageUrl",
+      "Type": "varchar(1024)",
+      "Null": "NO",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "fileSize",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "pageCount",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "analysisStatus",
+      "Type": "enum('pending','analyzing','done','error')",
+      "Null": "NO",
+      "Key": "",
+      "Default": "pending",
+      "Extra": ""
+    },
+    {
+      "Field": "structure",
+      "Type": "json",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "createdAt",
+      "Type": "timestamp",
+      "Null": "NO",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": ""
+    },
+    {
+      "Field": "updatedAt",
+      "Type": "timestamp",
+      "Null": "NO",
+      "Key": "",
+      "Default": "CURRENT_TIMESTAMP",
+      "Extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"
+    },
+    {
+      "Field": "groupId",
+      "Type": "int",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "fileType",
+      "Type": "enum('pdf','doc','docx','ppt','pptx','text')",
+      "Null": "NO",
+      "Key": "",
+      "Default": "pdf",
+      "Extra": ""
+    },
+    {
+      "Field": "openQloopEnabled",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "selectedStructure",
+      "Type": "enum('tree','conceptMap','learningPath')",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "structureLocked",
+      "Type": "int",
+      "Null": "NO",
+      "Key": "",
+      "Default": "0",
+      "Extra": ""
+    },
+    {
+      "Field": "analysisStep",
+      "Type": "enum('uploading','extracting','structuring','done','error')",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    },
+    {
+      "Field": "sourceLanguage",
+      "Type": "varchar(10)",
+      "Null": "NO",
+      "Key": "",
+      "Default": "ko",
+      "Extra": ""
+    },
+    {
+      "Field": "learningLanguage",
+      "Type": "varchar(10)",
+      "Null": "NO",
+      "Key": "",
+      "Default": "ko",
+      "Extra": ""
+    },
+    {
+      "Field": "analysisError",
+      "Type": "text",
+      "Null": "YES",
+      "Key": "",
+      "Default": "NULL",
+      "Extra": ""
+    }
+  ],
+  "messages": [],
+  "stdout": "Field\tType\tNull\tKey\tDefault\tExtra\nid\tint\tNO\tPRI\tNULL\tauto_increment\nuserId\tint\tNO\t\tNULL\t\ntitle\tvarchar(512)\tNO\t\tNULL\t\nstorageKey\tvarchar(512)\tNO\t\tNULL\t\nstorageUrl\tvarchar(1024)\tNO\t\tNULL\t\nfileSize\tint\tYES\t\tNULL\t\npageCount\tint\tYES\t\tNULL\t\nanalysisStatus\tenum('pending','analyzing','done','error')\tNO\t\tpending\t\nstructure\tjson\tYES\t\tNULL\t\ncreatedAt\ttimestamp\tNO\t\tCURRENT_TIMESTAMP\t\nupdatedAt\ttimestamp\tNO\t\tCURRENT_TIMESTAMP\tDEFAULT_GENERATED on update CURRENT_TIMESTAMP\ngroupId\tint\tYES\t\tNULL\t\nfileType\tenum('pdf','doc','docx','ppt','pptx','text')\tNO\t\tpdf\t\nopenQloopEnabled\tint\tNO\t\t0\t\nselectedStructure\tenum('tree','conceptMap','learningPath')\tYES\t\tNULL\t\nstructureLocked\tint\tNO\t\t0\t\nanalysisStep\tenum('uploading','extracting','structuring','done','error')\tYES\t\tNULL\t\nsourceLanguage\tvarchar(10)\tNO\t\tko\t\nlearningLanguage\tvarchar(10)\tNO\t\tko\t\nanalysisError\ttext\tYES\t\tNULL\t\n",
+  "stderr": "",
+  "execution_time_ms": 1507
+}

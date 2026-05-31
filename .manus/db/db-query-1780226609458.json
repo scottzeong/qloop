@@ -1,0 +1,26 @@
+{
+  "query": "SELECT id, title, fileType, analysisStatus, analysisError, updatedAt FROM documents WHERE analysisStatus = 'error' ORDER BY updatedAt DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user PBmX1TLNWYzhjh7.96966ba0982e --database NvrzUNjEMAuyrZ6SHXrcZ8 --execute SELECT id, title, fileType, analysisStatus, analysisError, updatedAt FROM documents WHERE analysisStatus = 'error' ORDER BY updatedAt DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "330001",
+      "title": "사회학의 이론들",
+      "fileType": "text",
+      "analysisStatus": "error",
+      "analysisError": "Storage signed URL failed (400): {\"error\":\"file path is required\"}",
+      "updatedAt": "2026-05-31 11:22:48"
+    },
+    {
+      "id": "360001",
+      "title": "사회이론들",
+      "fileType": "text",
+      "analysisStatus": "error",
+      "analysisError": "Storage signed URL failed (400): {\"error\":\"file path is required\"}",
+      "updatedAt": "2026-05-31 11:22:42"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttitle\tfileType\tanalysisStatus\tanalysisError\tupdatedAt\n330001\t사회학의 이론들\ttext\terror\tStorage signed URL failed (400): {\"error\":\"file path is required\"}\t2026-05-31 11:22:48\n360001\t사회이론들\ttext\terror\tStorage signed URL failed (400): {\"error\":\"file path is required\"}\t2026-05-31 11:22:42\n",
+  "stderr": "",
+  "execution_time_ms": 1581
+}
