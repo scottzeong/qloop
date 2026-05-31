@@ -1198,6 +1198,13 @@ export default function DocumentDetail() {
                 <p className="text-sm text-black/60">아래 안내를 확인하고 분석 재시도해 주세요.</p>
               </div>
             </div>
+            {/* 실제 에러 메시지 표시 */}
+            {(doc as any).analysisError && (
+              <div className="bg-red-50 border border-red-300 p-3 rounded">
+                <p className="text-xs font-bold text-red-700 mb-1">오류 상세:</p>
+                <p className="text-xs text-red-600 font-mono break-all">{(doc as any).analysisError}</p>
+              </div>
+            )}
             {/* 파일 형식별 압축 안내 */}
             <div className="bg-red-50 border border-red-200 p-4 rounded space-y-2 text-sm">
               <p className="font-bold text-red-700">파일 크기 또는 형식 문제일 수 있습니다:</p>

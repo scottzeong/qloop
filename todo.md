@@ -403,3 +403,11 @@
 - [x] PageHeader: 대시보드/네비메뉴 페이지에서 선택된 메뉴 흑백 반전(bg-black text-white) 표시
 - [x] PageHeader: 네비메뉴 페이지(LEARNING HISTORY 등)에서 메뉴 외 추가정보 숨기고 ← DASHBOARD 버튼만 표시
 - [x] PageHeader: 세부 페이지(DocumentDetail 등)에서 ← DASHBOARD 브레드크럼 유지
+
+## PDF 업로드 분석 오류 수정 (v4.38)
+- [x] aiRouter.ts: 사용자 Provider 경로에서 PDF file_url을 텍스트 평탄화 없이 직접 전달 (multimodal 지원)
+- [x] openaiProvider.ts: PDF URL을 image_url 방식으로 전달 (OpenAI vision 호환)
+- [x] geminiProvider.ts: PDF URL을 inline_data 또는 file_data 방식으로 전달 (Gemini 호환)
+- [x] claudeProvider.ts: PDF URL을 document source 방식으로 전달 (Claude 호환)
+- [x] DB: analysisError 컨럼 추가 (오류 원인 저장)
+- [x] DocumentDetail.tsx: 실제 에러 메시지를 UI에 표시

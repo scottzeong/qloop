@@ -1273,7 +1273,8 @@ Return ONLY valid JSON matching the schema exactly.`;
           await updateDocumentAnalysis(input.documentId, "done", structure, undefined, "done");
           return { success: true, structure, detectedLanguage };
         } catch (e) {
-          await updateDocumentAnalysis(input.documentId, "error", undefined, undefined, "error");
+          const errMsg = e instanceof Error ? e.message : String(e);
+          await updateDocumentAnalysis(input.documentId, "error", undefined, undefined, "error", errMsg);
           throw e;
         }
       }),
@@ -1380,7 +1381,8 @@ Return ONLY valid JSON matching the schema exactly.`;
           await updateDocumentAnalysis(input.documentId, "done", structure, undefined, "done");
           return { success: true, structure, detectedLanguage };
         } catch (e) {
-          await updateDocumentAnalysis(input.documentId, "error", undefined, undefined, "error");
+          const errMsg = e instanceof Error ? e.message : String(e);
+          await updateDocumentAnalysis(input.documentId, "error", undefined, undefined, "error", errMsg);
           throw e;
         }
       }),

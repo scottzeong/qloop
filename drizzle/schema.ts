@@ -76,6 +76,8 @@ export const documents = mysqlTable("documents", {
   sourceLanguage: varchar("sourceLanguage", { length: 10 }).default("ko").notNull(),
   // 학습 언어 (사용자 선택, AI Tutor가 이 언어로 문답)
   learningLanguage: varchar("learningLanguage", { length: 10 }).default("ko").notNull(),
+  // 분석 오류 메시지 (실패 원인 저장)
+  analysisError: text("analysisError"),
 });
 export type Document = typeof documents.$inferSelect;
 export type InsertDocument = typeof documents.$inferInsert;

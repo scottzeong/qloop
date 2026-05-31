@@ -56,6 +56,7 @@ const mockDocument = {
 };
 
 vi.mock("./db", () => ({
+  getDb: vi.fn().mockResolvedValue(null), // aiRouter에서 사용자 Provider 없음으로 처리
   createDocument: vi.fn().mockResolvedValue(1),
   getDocumentById: vi.fn().mockResolvedValue({
     id: 1,
@@ -467,6 +468,9 @@ describe("session.sendMessage", () => {
 
   it("marks topic complete and generates summary when AI says isTopicComplete", async () => {
     const { invokeLLM } = vi.mocked(await import("./_core/llm"));
+    // answeredQuestions >= 24 이어야 isTopicComplete가 강제 false 처리되지 않음
+    const { getLearningSessionById } = vi.mocked(await import("./db"));
+    getLearningSessionById.mockResolvedValueOnce({ ...mockSession, answeredQuestions: 24, totalQuestions: 30 });
     // First call: topic complete response
     invokeLLM.mockResolvedValueOnce({
       choices: [
@@ -597,6 +601,15 @@ describe("document.analyze - structure fallback", () => {
       pageCount: 10,
       analysisStatus: "pending",
       structure: null,
+      fileType: "pdf",
+      groupId: null,
+      openQloopEnabled: 0,
+      selectedStructure: null,
+      structureLocked: 0,
+      analysisStep: null,
+      sourceLanguage: "ko",
+      learningLanguage: "ko",
+      analysisError: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -643,6 +656,15 @@ describe("document.analyze - structure fallback", () => {
       pageCount: 5,
       analysisStatus: "pending",
       structure: null,
+      fileType: "pdf",
+      groupId: null,
+      openQloopEnabled: 0,
+      selectedStructure: null,
+      structureLocked: 0,
+      analysisStep: null,
+      sourceLanguage: "ko",
+      learningLanguage: "ko",
+      analysisError: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -674,6 +696,15 @@ describe("document.analyze - structure fallback", () => {
       pageCount: 5,
       analysisStatus: "pending",
       structure: null,
+      fileType: "pdf",
+      groupId: null,
+      openQloopEnabled: 0,
+      selectedStructure: null,
+      structureLocked: 0,
+      analysisStep: null,
+      sourceLanguage: "ko",
+      learningLanguage: "ko",
+      analysisError: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -700,6 +731,15 @@ describe("document.analyze - structure fallback", () => {
       pageCount: 5,
       analysisStatus: "pending",
       structure: null,
+      fileType: "pdf",
+      groupId: null,
+      openQloopEnabled: 0,
+      selectedStructure: null,
+      structureLocked: 0,
+      analysisStep: null,
+      sourceLanguage: "ko",
+      learningLanguage: "ko",
+      analysisError: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -737,5 +777,145 @@ describe("document.delete — cascade sessions", () => {
 
     expect(result.success).toBe(true);
     expect(deleteDocument).toHaveBeenCalledWith(42);
+  });
+});
+
+// ─── Document Analyze Error Persistence Tests ─────────────────────────────────
+
+describe("document.analyze error handling", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("saves analysisError message when AI analysis fails", async () => {
+    const { updateDocumentAnalysis, getDocumentById } = await import("./db");
+    const { storageGetSignedUrl } = await import("./storage");
+    const { invokeLLM } = await import("./_core/llm");
+
+    // 문서 존재 설정
+    vi.mocked(getDocumentById).mockResolvedValue({
+      ...{
+        id: 1,
+        userId: 1,
+        title: "Test Document",
+        storageKey: "documents/1/test.pdf",
+        storageUrl: "/manus-storage/test.pdf",
+        fileSize: 1024,
+        pageCount: 10,
+        analysisStatus: "pending" as const,
+        structure: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      fileType: "pdf" as const,
+      groupId: null,
+      openQloopEnabled: 0,
+      selectedStructure: null,
+      structureLocked: 0,
+      analysisStep: null,
+      sourceLanguage: "ko",
+      learningLanguage: "ko",
+      analysisError: null,
+    });
+
+    vi.mocked(storageGetSignedUrl).mockResolvedValue("https://cdn.example.com/test.pdf?signed=1");
+    vi.mocked(updateDocumentAnalysis).mockResolvedValue(undefined);
+
+    // AI 분석 실패 시뮬레이션
+    vi.mocked(invokeLLM).mockRejectedValueOnce(new Error("AI API 호출 실패: 401 Unauthorized"));
+
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+
+    // analyze 호출 시 에러가 throw되어야 함
+    await expect(caller.document.analyze({ documentId: 1 })).rejects.toThrow();
+
+    // updateDocumentAnalysis가 error 상태와 에러 메시지로 호출되었는지 확인
+    expect(vi.mocked(updateDocumentAnalysis)).toHaveBeenCalledWith(
+      1,
+      "error",
+      undefined,
+      undefined,
+      "error",
+      expect.stringContaining("AI API 호출 실패")
+    );
+  });
+
+  it("clears analysisError on successful analysis", async () => {
+    const { updateDocumentAnalysis, getDocumentById } = await import("./db");
+    const { storageGetSignedUrl } = await import("./storage");
+    const { invokeLLM } = await import("./_core/llm");
+
+    vi.mocked(getDocumentById).mockResolvedValue({
+      ...{
+        id: 1,
+        userId: 1,
+        title: "Test Document",
+        storageKey: "documents/1/test.pdf",
+        storageUrl: "/manus-storage/test.pdf",
+        fileSize: 1024,
+        pageCount: 10,
+        analysisStatus: "error" as const,
+        structure: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      fileType: "pdf" as const,
+      groupId: null,
+      openQloopEnabled: 0,
+      selectedStructure: null,
+      structureLocked: 0,
+      analysisStep: "error" as const,
+      sourceLanguage: "ko",
+      learningLanguage: "ko",
+      analysisError: "이전 오류",
+    });
+
+    vi.mocked(storageGetSignedUrl).mockResolvedValue("https://cdn.example.com/test.pdf?signed=1");
+    vi.mocked(updateDocumentAnalysis).mockResolvedValue(undefined);
+
+    // AI 분석 성공 응답
+    vi.mocked(invokeLLM).mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              title: "Test Document",
+              summary: "A test summary.",
+              documentType: "textbook",
+              chapters: [
+                {
+                  id: "ch1",
+                  title: "Chapter 1",
+                  order: 1,
+                  topics: [
+                    { id: "ch1_t1", title: "Topic 1", description: "First topic", order: 1, subtopics: [] },
+                  ],
+                },
+              ],
+              conceptMap: [{ id: "c1", label: "Topic 1", description: "Core concept", type: "core", connections: [] }],
+              keyConceptCards: [{ id: "k1", term: "Topic 1", definition: "A key concept", example: "Example", relatedTerms: [], importance: "high" }],
+              timeline: [],
+              comparisonTables: [],
+              learningPath: [{ id: "lp1", order: 1, title: "Step 1", description: "Learn Topic 1", topicIds: ["ch1_t1"], estimatedMinutes: 15 }],
+            }),
+          },
+        },
+      ],
+    });
+
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.document.analyze({ documentId: 1 });
+
+    expect(result.success).toBe(true);
+    // 성공 시 "done" 상태로 업데이트 확인
+    expect(vi.mocked(updateDocumentAnalysis)).toHaveBeenCalledWith(
+      1,
+      "done",
+      expect.any(Object),
+      undefined,
+      "done"
+    );
   });
 });

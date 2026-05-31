@@ -199,7 +199,8 @@ export async function updateDocumentAnalysis(
   status: "pending" | "analyzing" | "done" | "error",
   structure?: unknown,
   pageCount?: number,
-  analysisStep?: "uploading" | "extracting" | "structuring" | "done" | "error"
+  analysisStep?: "uploading" | "extracting" | "structuring" | "done" | "error",
+  analysisError?: string
 ) {
   const db = await getDb();
   if (!db) return;
@@ -210,6 +211,9 @@ export async function updateDocumentAnalysis(
       ...(structure !== undefined ? { structure } : {}),
       ...(pageCount !== undefined ? { pageCount } : {}),
       ...(analysisStep !== undefined ? { analysisStep } : {}),
+      ...(analysisError !== undefined ? { analysisError } : {}),
+      // 성공 시 이전 오류 메시지 초기화
+      ...(status === "done" ? { analysisError: null } : {}),
     })
     .where(eq(documents.id, id));
 }
