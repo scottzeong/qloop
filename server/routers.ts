@@ -200,32 +200,23 @@ async function analyzeDocumentStructure(
 ): Promise<DocumentStructure & { detectedLanguage?: string }> {
   const systemPrompt = `You are an expert educational content analyzer.
 Analyze the provided document comprehensively and extract its structure in MULTIPLE formats simultaneously.
-Return a single JSON object containing ALL of the following:
+Return a single JSON object containing ALL of the following fields:
 
-1. chapters: Hierarchical chapter/topic/subtopic tree
-2. conceptMap: Key concepts as nodes with connections (max 15 nodes)
-3. keyConceptCards: Important terms with definitions and examples (max 20 cards)
-4. timeline: Chronological/sequential events or development stages IF the document has historical or process content (empty array if not applicable)
-5. comparisonTables: Comparison tables for contrasting concepts/items IF the document compares things (empty array if not applicable)
-6. learningPath: Recommended sequential learning steps (3-6 steps)
-7. documentType: One of: textbook, research, manual, report, narrative, reference, other
-
-For conceptMap nodes:
-- type "core" = central/most important concepts
-- type "sub" = supporting concepts
-- type "related" = peripherally related concepts
-- connections = array of other node IDs this concept links to
-
-For keyConceptCards:
-- importance: "high" for must-know terms, "medium" for important, "low" for supplementary
-
-For learningPath:
-- estimatedMinutes: realistic study time per step
+1. title (string): Document title
+2. summary (string): Brief summary
+3. documentType (string): One of: textbook, research, manual, report, narrative, reference, other
+4. chapters (array): Hierarchical chapter/topic/subtopic tree. Each chapter: {id, title, order, topics[]}. Each topic: {id, title, description, order, subtopics[]}. Each subtopic: {id, title, description, order}.
+5. conceptMap (array, max 15): Key concept nodes. Each: {id, label, description, type (core/sub/related), connections (array of other node ids)}
+6. keyConceptCards (array, max 20): Important terms. Each: {id, term, definition, example, relatedTerms[], importance (high/medium/low)}
+7. timeline (array): Chronological events IF applicable, else []. Each: {id, period, title, description, significance}
+8. comparisonTables (array): Comparison tables IF applicable, else []. Each: {title, headers[], rows[]}. Each row: {id, subject, values[] (values in same order as headers)}
+9. learningPath (array, 3-6 steps): Recommended learning steps. Each: {id, order, title, description, topicIds[], estimatedMinutes}
 
 Be thorough. Use the same language as the document (Korean if Korean).
-Return ONLY valid JSON matching the schema exactly.`;
+Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
 
   // PDF는 file_url로 직접 전달, Word/PPT는 텍스트 추출 후 텍스트로 전달
+  // PDF인 경우 response_format 사용 안 함 (Forge API가 file_url + json_schema 동시 지원 안 함)
   const isPdf = mimeType === "application/pdf";
   let userContent: Message["content"];
 
@@ -251,17 +242,16 @@ Return ONLY valid JSON matching the schema exactly.`;
     userContent = `Please analyze this document titled "${docTitle}".\n\nDocument content:\n${truncated}\n\nReturn the hierarchical structure as JSON.`;
   }
 
-  const response = await aiInvoke(userId, {
-    messages: [
-      { role: "system", content: systemPrompt },
-      {
-        role: "user" as const,
-        content: userContent,
-      },
-    ] satisfies Message[],
-    response_format: {
-      type: "json_schema",
-      json_schema: {
+  // PDF 모드: response_format 없이 호출 (Forge API는 file_url + json_schema 동시 미지원)
+  // 텍스트 모드(Word/PPT): json_schema로 구조화 출력 요청
+  const baseMessages: Message[] = [
+    { role: "system", content: systemPrompt },
+    { role: "user" as const, content: userContent },
+  ];
+
+  const jsonSchema = {
+    type: "json_schema" as const,
+    json_schema: {
         name: "document_structure",
         strict: true,
         schema: {
@@ -407,7 +397,11 @@ Return ONLY valid JSON matching the schema exactly.`;
           additionalProperties: false,
         },
       },
-    },
+    };
+
+  const response = await aiInvoke(userId, {
+    messages: baseMessages,
+    ...(isPdf ? {} : { response_format: jsonSchema }),
   });
 
   const rawContent = response.choices[0]?.message?.content;

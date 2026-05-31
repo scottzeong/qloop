@@ -411,3 +411,8 @@
 - [x] claudeProvider.ts: PDF URL을 document source 방식으로 전달 (Claude 호환)
 - [x] DB: analysisError 컨럼 추가 (오류 원인 저장)
 - [x] DocumentDetail.tsx: 실제 에러 메시지를 UI에 표시
+
+## PDF 분석 실패 근본 수정 (v4.41)
+- [x] 실제 오류 로그 추적 및 원인 파악
+- [x] analyzeDocumentStructure 전체 흐름 디버그 로그 추가
+- [x] 오류 원인 수정: PDF 분석 시 response_format 제거 (Forge API는 file_url + json_schema 동시 미지원)
