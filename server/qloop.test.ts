@@ -711,7 +711,7 @@ describe("document.analyze - structure fallback", () => {
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
     await expect(caller.document.analyze({ documentId: 1 })).rejects.toThrow(
-      "AI 분석 결과를 파싱하지 못했습니다."
+      /AI 분석 결과를 파싱하지 못했습니다/
     );
   });
 

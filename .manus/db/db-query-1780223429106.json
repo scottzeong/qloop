@@ -1,0 +1,18 @@
+{
+  "query": "SELECT id, title, fileType, analysisStatus, analysisError, updatedAt FROM documents WHERE analysisStatus = 'error' ORDER BY updatedAt DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user PBmX1TLNWYzhjh7.96966ba0982e --database NvrzUNjEMAuyrZ6SHXrcZ8 --execute SELECT id, title, fileType, analysisStatus, analysisError, updatedAt FROM documents WHERE analysisStatus = 'error' ORDER BY updatedAt DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "270001",
+      "title": "사회학이론들",
+      "fileType": "pdf",
+      "analysisStatus": "error",
+      "analysisError": "AI 분석 결과를 파싱하지 못했습니다. 다시 시도해 주세요.",
+      "updatedAt": "2026-05-31 10:29:28"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttitle\tfileType\tanalysisStatus\tanalysisError\tupdatedAt\n270001\t사회학이론들\tpdf\terror\tAI 분석 결과를 파싱하지 못했습니다. 다시 시도해 주세요.\t2026-05-31 10:29:28\n",
+  "stderr": "",
+  "execution_time_ms": 1611
+}

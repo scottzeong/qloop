@@ -1,0 +1,8 @@
+{
+  "query": "SELECT id, title, file_type, analysis_status, analysis_error, updated_at FROM documents WHERE analysis_status = 'error' ORDER BY updated_at DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user PBmX1TLNWYzhjh7.96966ba0982e --database NvrzUNjEMAuyrZ6SHXrcZ8 --execute SELECT id, title, file_type, analysis_status, analysis_error, updated_at FROM documents WHERE analysis_status = 'error' ORDER BY updated_at DESC LIMIT 10;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'analysis_status' in 'where clause'"
+  ]
+}

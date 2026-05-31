@@ -3,6 +3,7 @@ import { COOKIE_NAME } from "@shared/const";
 import mammoth from "mammoth";
 import { parseOffice } from "officeparser";
 import WordExtractor from "word-extractor";
+import PDFParser from "pdf2json";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -215,29 +216,57 @@ Return a single JSON object containing ALL of the following fields:
 Be thorough. Use the same language as the document (Korean if Korean).
 Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
 
-  // PDF는 file_url로 직접 전달, Word/PPT는 텍스트 추출 후 텍스트로 전달
-  // PDF인 경우 response_format 사용 안 함 (Forge API가 file_url + json_schema 동시 지원 안 함)
+  // 모든 파일 형식(PDF 포함)을 텍스트 추출 후 텍스트로 분석
+  // (이전 PDF file_url 방식은 Forge API에서 파싱 실패 발생)
   const isPdf = mimeType === "application/pdf";
   let userContent: Message["content"];
+  let extractedText: string | null = null;
 
   if (isPdf) {
-    userContent = [
-      {
-        type: "file_url" as const,
-        file_url: { url: fileUrl, mime_type: "application/pdf" },
-      },
-      {
-        type: "text" as const,
-        text: `Please analyze this document titled "${docTitle}" and return the hierarchical structure as JSON.`,
-      },
-    ];
+    // PDF 텍스트 추출 (pdf-parse)
+    try {
+      const res = await fetch(fileUrl);
+      if (!res.ok) throw new Error(`PDF 다운로드 실패: ${res.status}`);
+      const arrayBuffer = await res.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      extractedText = await new Promise<string | null>((resolve) => {
+        const pdfParser = new PDFParser(null, true);
+        pdfParser.on("pdfParser_dataReady", (pdfData: unknown) => {
+          try {
+            const pages = (pdfData as { Pages?: Array<{ Texts?: Array<{ R?: Array<{ T?: string }> }> }> }).Pages || [];
+            const text = pages.map(page =>
+              (page.Texts || []).map(t =>
+                (t.R || []).map(r => decodeURIComponent(r.T || '')).join('')
+              ).join(' ')
+            ).join('\n');
+            resolve(text || null);
+          } catch { resolve(null); }
+        });
+        pdfParser.on("pdfParser_dataError", () => resolve(null));
+        pdfParser.parseBuffer(buffer);
+      });
+    } catch (e) {
+      console.error("[ANALYZE] PDF 텍스트 추출 실패:", e);
+    }
+
+    if (extractedText && extractedText.trim().length >= 50) {
+      // 텍스트 추출 성공: 텍스트로 분석
+      const truncated = extractedText.length > 50000 ? extractedText.slice(0, 50000) + "\n...[truncated]" : extractedText;
+      userContent = `Please analyze this document titled "${docTitle}".\n\nDocument content:\n${truncated}\n\nReturn the hierarchical structure as JSON.`;
+    } else {
+      // 텍스트 추출 실패 (scan PDF 등): file_url로 fallback
+      console.log("[ANALYZE] PDF 텍스트 추출 실패, file_url fallback 사용");
+      userContent = [
+        { type: "file_url" as const, file_url: { url: fileUrl, mime_type: "application/pdf" } },
+        { type: "text" as const, text: `Please analyze this document titled "${docTitle}" and return the hierarchical structure as JSON.` },
+      ];
+    }
   } else {
     // Word/PPT: 텍스트 추출 후 텍스트로 분석
-    const extractedText = await extractTextFromOfficeFile(fileUrl, mimeType);
+    extractedText = await extractTextFromOfficeFile(fileUrl, mimeType);
     if (!extractedText || extractedText.trim().length < 50) {
       throw new Error("파일에서 텍스트를 추출할 수 없습니다. 파일이 손상되었거나 내용이 없습니다.");
     }
-    // 너무 긴 텍스트는 앞부분 50,000자로 제한 (LLM 토큰 한도)
     const truncated = extractedText.length > 50000 ? extractedText.slice(0, 50000) + "\n...[truncated]" : extractedText;
     userContent = `Please analyze this document titled "${docTitle}".\n\nDocument content:\n${truncated}\n\nReturn the hierarchical structure as JSON.`;
   }
@@ -399,16 +428,25 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
       },
     };
 
-  const response = await aiInvoke(userId, {
-    messages: baseMessages,
-    ...(isPdf ? {} : { response_format: jsonSchema }),
-  });
+  console.log(`[ANALYZE] isPdf=${isPdf}, mimeType=${mimeType}, userId=${userId}`);
+  let response: Awaited<ReturnType<typeof aiInvoke>>;
+  try {
+    response = await aiInvoke(userId, {
+      messages: baseMessages,
+      ...(isPdf ? {} : { response_format: jsonSchema }),
+    });
+  } catch (invokeErr) {
+    console.error(`[ANALYZE] aiInvoke error:`, invokeErr);
+    throw invokeErr;
+  }
 
   const rawContent = response.choices[0]?.message?.content;
+  console.log(`[ANALYZE] rawContent type=${typeof rawContent}, length=${typeof rawContent === 'string' ? rawContent.length : 'N/A'}, preview=${typeof rawContent === 'string' ? rawContent.slice(0, 200) : JSON.stringify(rawContent)?.slice(0, 200)}`);
+
   // Forge API가 json_schema 모드에서 content를 이미 파싱된 객체로 반환할 수 있음
   let parsed: DocumentStructure;
   if (!rawContent) {
-    throw new Error("AI 분석 결과를 받지 못했습니다.");
+    throw new Error("AI 분석 결과를 받지 못했습니다. (빈 응답)");
   } else if (typeof rawContent === "object") {
     // 이미 파싱된 JSON 객체
     parsed = rawContent as unknown as DocumentStructure;
@@ -418,8 +456,9 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
       // 마크다운 코드 블록 제거 (```json ... ``` 형태)
       const stripped = (rawContent as string).replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
       parsed = JSON.parse(stripped) as DocumentStructure;
-    } catch {
-      throw new Error("AI 분석 결과를 파싱하지 못했습니다. 다시 시도해 주세요.");
+    } catch (parseErr) {
+      console.error(`[ANALYZE] JSON parse error. rawContent=${(rawContent as string).slice(0, 500)}`);
+      throw new Error(`AI 분석 결과를 파싱하지 못했습니다: ${(rawContent as string).slice(0, 200)}`);
     }
   }
 
