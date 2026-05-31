@@ -671,9 +671,9 @@ function ComparisonView({
                   return (
                     <tr key={row.id} className={`border-b border-black/10 ${ri % 2 === 0 ? "" : "bg-black/[0.02]"}`}>
                       <td className="px-4 py-3 font-bold text-xs">{row.subject}</td>
-                      {table.headers.map((h) => (
+                      {table.headers.map((h, hi) => (
                         <td key={h} className="px-4 py-3 text-xs text-black/70 border-l border-black/10 leading-relaxed">
-                          {row.attributes[h] ?? "—"}
+                          {(row.values?.[hi]) ?? (row as unknown as Record<string, Record<string, string>>).attributes?.[h] ?? "—"}
                         </td>
                       ))}
                       <td className="px-4 py-3 border-l border-black/10">

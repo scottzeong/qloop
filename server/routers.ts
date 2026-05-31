@@ -92,7 +92,8 @@ export interface TimelineItem {
 export interface ComparisonItem {
   id: string;
   subject: string;
-  attributes: Record<string, string>;
+  /** Column values in the same order as headers */
+  values: string[];
 }
 
 export interface ComparisonTable {
@@ -370,12 +371,13 @@ Return ONLY valid JSON matching the schema exactly.`;
                       properties: {
                         id: { type: "string" },
                         subject: { type: "string" },
-                        attributes: {
-                          type: "object",
-                          additionalProperties: { type: "string" },
+                        values: {
+                          type: "array",
+                          items: { type: "string" },
+                          description: "Column values in the same order as headers",
                         },
                       },
-                      required: ["id", "subject", "attributes"],
+                      required: ["id", "subject", "values"],
                       additionalProperties: false,
                     },
                   },
