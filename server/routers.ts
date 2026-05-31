@@ -411,14 +411,22 @@ Return ONLY valid JSON matching the schema exactly.`;
   });
 
   const rawContent = response.choices[0]?.message?.content;
-  const content = typeof rawContent === "string" ? rawContent : null;
-  if (!content) throw new Error("AI 분석 결과를 받지 못했습니다.");
-
+  // Forge API가 json_schema 모드에서 content를 이미 파싱된 객체로 반환할 수 있음
   let parsed: DocumentStructure;
-  try {
-    parsed = JSON.parse(content) as DocumentStructure;
-  } catch {
-    throw new Error("AI 분석 결과를 파싱하지 못했습니다. 다시 시도해 주세요.");
+  if (!rawContent) {
+    throw new Error("AI 분석 결과를 받지 못했습니다.");
+  } else if (typeof rawContent === "object") {
+    // 이미 파싱된 JSON 객체
+    parsed = rawContent as unknown as DocumentStructure;
+  } else {
+    // 문자열 → JSON 파싱
+    try {
+      // 마크다운 코드 블록 제거 (```json ... ``` 형태)
+      const stripped = (rawContent as string).replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+      parsed = JSON.parse(stripped) as DocumentStructure;
+    } catch {
+      throw new Error("AI 분석 결과를 파싱하지 못했습니다. 다시 시도해 주세요.");
+    }
   }
 
   if (!parsed.title) parsed.title = docTitle;
@@ -1161,12 +1169,14 @@ Return ONLY valid JSON matching the schema exactly.`;
           });
 
           const rawContent = response.choices[0]?.message?.content;
-          const content = typeof rawContent === "string" ? rawContent : null;
-          if (!content) throw new Error("AI 통합 분석 결과를 받지 못했습니다.");
+          if (!rawContent) throw new Error("AI 통합 분석 결과를 받지 못했습니다.");
 
           let unifiedStructure: DocumentStructure;
           try {
-            const parsed = JSON.parse(content) as any;
+            // Forge API가 객체로 반환하거나 마크다운 코드블록으로 반환할 수 있음
+            const parsed = typeof rawContent === "object"
+              ? rawContent as any
+              : JSON.parse((rawContent as string).replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim()) as any;
             unifiedStructure = {
               title: parsed.title || group.name,
               summary: parsed.summary || "",
