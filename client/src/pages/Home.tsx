@@ -98,7 +98,7 @@ export default function Home() {
       <footer className="border-t-2 border-black">
         <div className="max-w-7xl mx-auto px-8 py-6 flex items-center justify-between">
           <div className="flex items-center">
-            <span className="text-xl font-black tracking-tight">QLOOP</span>
+            <img src="/logo.png" alt="QLoop" className="h-6 w-auto" />
           </div>
           <span className="swiss-label">Neural Campus</span>
         </div>
