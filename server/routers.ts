@@ -1574,7 +1574,7 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
             await updateDocumentAnalysis(input.documentId, "done", structure, undefined, "done");
             return { success: true, structure, detectedLanguage };
           }
-          const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, "");
+          const actualKey = doc.storageUrl.replace(/^\/r2-storage\//, "").replace(/^\/manus-storage\//, "");
           const signedUrl = await storageGetSignedUrl(actualKey);
           const mimeForAnalysis = doc.fileType === "pdf" ? "application/pdf" : doc.fileType === "doc" ? "application/msword" : doc.fileType === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : doc.fileType === "ppt" ? "application/vnd.ms-powerpoint" : doc.fileType === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/pdf";
           // 단계 2: structuring (AI 구조 분석 중)
@@ -1699,7 +1699,7 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
             await updateDocumentAnalysis(input.documentId, "done", structure, undefined, "done");
             return { success: true, structure, detectedLanguage };
           }
-          const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, "");
+          const actualKey = doc.storageUrl.replace(/^\/r2-storage\//, "").replace(/^\/manus-storage\//, "");
           const signedUrl = await storageGetSignedUrl(actualKey);
           const mimeForAnalysis = doc.fileType === "pdf" ? "application/pdf" : doc.fileType === "doc" ? "application/msword" : doc.fileType === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : doc.fileType === "ppt" ? "application/vnd.ms-powerpoint" : doc.fileType === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/pdf";
           await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "structuring");
