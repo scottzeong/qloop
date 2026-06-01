@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { hashPassword, verifyPassword } from "./_core/password";
+import { sdk } from "./_core/sdk";
+import { nanoid } from "nanoid";
 import mammoth from "mammoth";
 import { parseOffice } from "officeparser";
 import WordExtractor from "word-extractor";
@@ -1047,11 +1050,91 @@ export const appRouter = router({
   aiConnection: aiConnectionRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
+
+    register: publicProcedure
+      .input(z.object({
+        email: z.string().email(),
+        password: z.string().min(8, "비밀번호는 최소 8자 이상이어야 합니다"),
+        name: z.string().min(1),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database unavailable");
+        const { users } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const existing = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
+        if (existing.length > 0) throw new Error("이미 사용 중인 이메일입니다");
+        const openId = nanoid();
+        const passwordHash = await hashPassword(input.password);
+        const userCount = await db.select().from(users);
+        const isFirstUser = userCount.length === 0;
+        const role = isFirstUser ? "superadmin" : "user";
+        await db.insert(users).values({ openId, email: input.email, name: input.name, passwordHash, role, loginMethod: "email", lastSignedIn: new Date() });
+        const sessionToken = await sdk.createSessionToken(openId, { name: input.name, expiresInMs: ONE_YEAR_MS });
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        return { success: true } as const;
+      }),
+
+    login: publicProcedure
+      .input(z.object({
+        email: z.string().email(),
+        password: z.string().min(1),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database unavailable");
+        const { users } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const [user] = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
+        if (!user || !user.passwordHash) throw new Error("이메일 또는 비밀번호가 올바르지 않습니다");
+        const valid = await verifyPassword(input.password, user.passwordHash);
+        if (!valid) throw new Error("이메일 또는 비밀번호가 올바르지 않습니다");
+        const sessionToken = await sdk.createSessionToken(user.openId, { name: user.name || "", expiresInMs: ONE_YEAR_MS });
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        return { success: true } as const;
+      }),
+
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
+
+    // ── 사용자 관리 (superadmin 전용) ──────────────────────────────────────────
+    listUsers: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role !== "superadmin") throw new Error("권한이 없습니다");
+      const db = await getDb();
+      if (!db) throw new Error("Database unavailable");
+      const { users } = await import("../drizzle/schema");
+      return db.select({
+        id: users.id,
+        openId: users.openId,
+        name: users.name,
+        email: users.email,
+        role: users.role,
+        loginMethod: users.loginMethod,
+        createdAt: users.createdAt,
+        lastSignedIn: users.lastSignedIn,
+      }).from(users).orderBy(users.createdAt);
+    }),
+
+    updateUserRole: protectedProcedure
+      .input(z.object({
+        openId: z.string(),
+        role: z.enum(["user", "admin", "instructor", "superadmin"]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "superadmin") throw new Error("권한이 없습니다");
+        if (input.openId === ctx.user.openId) throw new Error("자기 자신의 역할은 변경할 수 없습니다");
+        const db = await getDb();
+        if (!db) throw new Error("Database unavailable");
+        const { users } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        await db.update(users).set({ role: input.role }).where(eq(users.openId, input.openId));
+        return { success: true } as const;
+      }),
   }),
 
   // ─── Document Groups ─────────────────────────────────────────────────────────
@@ -2111,28 +2194,24 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
     getTopicProgress: protectedProcedure
       .input(z.object({ documentId: z.number() }))
       .query(async ({ ctx, input }) => {
-        const sessions = await getSessionsByDocumentId(input.documentId, ctx.user.id);
-        const progressMap: Record<string, "completed" | "active"> = {};
+        const sessions = await getSessionsByUserId(ctx.user.id);
+        const progressMap: Record<string, string> = {};
         for (const s of sessions) {
-          // startTopicId 기준 완성도 기록
-          if (s.startTopicId) {
-            const tid = s.startTopicId;
-            if (s.status === "completed") {
-              progressMap[tid] = "completed";
-            } else if (s.status === "active" && progressMap[tid] !== "completed") {
-              progressMap[tid] = "active";
+          if (s.documentId !== input.documentId) continue;
+          if (s.currentTopicId) {
+            if (!progressMap[s.currentTopicId] || progressMap[s.currentTopicId] !== "completed") {
+              progressMap[s.currentTopicId] = "active";
             }
           }
-          // completedTopics 배열에 있는 모든 토픽도 완료로 표시
-          // (학습 중 여러 토픽을 다룸는 세션에서도 일관성 유지)
           if (Array.isArray(s.completedTopics)) {
             for (const ctid of s.completedTopics as string[]) {
               progressMap[ctid] = "completed";
             }
           }
         }
-         return progressMap;
+        return progressMap;
       }),
+
     // QLoop 모델별 세션 통계 (Core/Curated/Open 세션 수 + 평균 점수)
     getModelStats: protectedProcedure.query(async ({ ctx }) => {
       const sessions = await getSessionsByUserId(ctx.user.id);

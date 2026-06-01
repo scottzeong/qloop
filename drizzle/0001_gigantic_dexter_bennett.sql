@@ -20,7 +20,7 @@ CREATE TABLE `learningSessions` (
 	`startTopicId` varchar(128),
 	`startTopicTitle` varchar(512),
 	`status` enum('active','completed','paused') NOT NULL DEFAULT 'active',
-	`completedTopics` json DEFAULT ('[]'),
+	`completedTopics` json,
 	`currentTopicId` varchar(128),
 	`totalQuestions` int DEFAULT 0,
 	`answeredQuestions` int DEFAULT 0,

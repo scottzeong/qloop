@@ -48,7 +48,8 @@ export default function PageHeader({
 
   // 세부 페이지 여부: 대시보드가 아닌 네비게이션 메뉴 페이지 또는 title이 있는 페이지
   const isDashboard = location === "/dashboard";
-  const isNavPage = navItems.some((item) => isActive(item.path)) || (user?.role === "admin" && isActive(adminNavItem.path));
+  const isAdminOrAbove = user?.role === "admin" || user?.role === "superadmin";
+  const isNavPage = navItems.some((item) => isActive(item.path)) || (isAdminOrAbove && isActive(adminNavItem.path));
   const isSubPage = !isDashboard && !isNavPage; // 세부 페이지 (title 있는 페이지)
 
   return (
@@ -64,7 +65,7 @@ export default function PageHeader({
             onClick={() => navigate("/dashboard")}
           >
             <img
-              src="/manus-storage/QLoop_n_14e252ea.png"
+              src="/logo.png"
               alt="QLoop"
               className="h-16 w-auto"
             />
@@ -119,7 +120,7 @@ export default function PageHeader({
                 {item.label}
               </button>
             ))}
-            {user?.role === "admin" && (
+            {isAdminOrAbove && (
               <button
                 onClick={() => navigate(adminNavItem.path)}
                 className={`swiss-label flex items-center gap-1.5 px-3 py-2 transition-colors relative ${

@@ -27,7 +27,7 @@ const mockDocument = {
   userId: 1,
   title: "Test Document",
   storageKey: "documents/1/test.pdf",
-  storageUrl: "/manus-storage/test.pdf",
+  storageUrl: "/r2-storage/test.pdf",
   fileSize: 1024,
   pageCount: 10,
   analysisStatus: "done",
@@ -63,7 +63,7 @@ vi.mock("./db", () => ({
     userId: 1,
     title: "Test Document",
     storageKey: "documents/1/test.pdf",
-    storageUrl: "/manus-storage/test.pdf",
+    storageUrl: "/r2-storage/test.pdf",
     fileSize: 1024,
     pageCount: 10,
     analysisStatus: "done",
@@ -140,7 +140,7 @@ vi.mock("./db", () => ({
 vi.mock("./storage", () => ({
   storagePut: vi.fn().mockResolvedValue({
     key: "documents/1/test.pdf",
-    url: "/manus-storage/test.pdf",
+    url: "/r2-storage/test.pdf",
   }),
   storageGetSignedUrl: vi.fn().mockResolvedValue(
     "https://cdn.example.com/test.pdf?signed=1"
@@ -303,7 +303,7 @@ describe("document", () => {
       mimeType: "application/pdf",
     });
     expect(result.documentId).toBe(1);
-    expect(result.storageUrl).toBe("/manus-storage/test.pdf");
+    expect(result.storageUrl).toBe("/r2-storage/test.pdf");
   });
 });
 
@@ -596,7 +596,7 @@ describe("document.analyze - structure fallback", () => {
       userId: 1,
       title: "Test Document",
       storageKey: "documents/1/test.pdf",
-      storageUrl: "/manus-storage/test.pdf",
+      storageUrl: "/r2-storage/test.pdf",
       fileSize: 1024,
       pageCount: 10,
       analysisStatus: "pending",
@@ -651,7 +651,7 @@ describe("document.analyze - structure fallback", () => {
       userId: 1,
       title: "Partial Doc",
       storageKey: "documents/1/partial.pdf",
-      storageUrl: "/manus-storage/partial.pdf",
+      storageUrl: "/r2-storage/partial.pdf",
       fileSize: 512,
       pageCount: 5,
       analysisStatus: "pending",
@@ -691,7 +691,7 @@ describe("document.analyze - structure fallback", () => {
       userId: 1,
       title: "Bad Doc",
       storageKey: "documents/1/bad.pdf",
-      storageUrl: "/manus-storage/bad.pdf",
+      storageUrl: "/r2-storage/bad.pdf",
       fileSize: 512,
       pageCount: 5,
       analysisStatus: "pending",
@@ -726,7 +726,7 @@ describe("document.analyze - structure fallback", () => {
       userId: 1,
       title: "Empty Doc",
       storageKey: "documents/1/empty.pdf",
-      storageUrl: "/manus-storage/empty.pdf",
+      storageUrl: "/r2-storage/empty.pdf",
       fileSize: 512,
       pageCount: 5,
       analysisStatus: "pending",
@@ -759,7 +759,7 @@ describe("document.delete — cascade sessions", () => {
       userId: 1,
       title: "To Delete",
       storageKey: "documents/42/file.pdf",
-      storageUrl: "/manus-storage/documents/42/file.pdf",
+      storageUrl: "/r2-storage/documents/42/file.pdf",
       fileSize: 1024,
       pageCount: 10,
       analysisStatus: "done" as const,
@@ -799,7 +799,7 @@ describe("document.analyze error handling", () => {
         userId: 1,
         title: "Test Document",
         storageKey: "documents/1/test.pdf",
-        storageUrl: "/manus-storage/test.pdf",
+        storageUrl: "/r2-storage/test.pdf",
         fileSize: 1024,
         pageCount: 10,
         analysisStatus: "pending" as const,
@@ -852,7 +852,7 @@ describe("document.analyze error handling", () => {
         userId: 1,
         title: "Test Document",
         storageKey: "documents/1/test.pdf",
-        storageUrl: "/manus-storage/test.pdf",
+        storageUrl: "/r2-storage/test.pdf",
         fileSize: 1024,
         pageCount: 10,
         analysisStatus: "error" as const,

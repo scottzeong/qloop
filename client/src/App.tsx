@@ -14,11 +14,13 @@ import SocraticProfile from "./pages/SocraticProfile";
 import AdminSocratic from "./pages/AdminSocratic";
 import KnowledgeLibrary from "./pages/KnowledgeLibrary";
 import AIConnection from "./pages/AIConnection";
+import Login from "./pages/Login";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/login" component={Login} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/documents/:id" component={DocumentDetail} />
       <Route path="/sessions/:id" component={LearningSession} />

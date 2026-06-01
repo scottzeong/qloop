@@ -4,9 +4,9 @@ import { useLocation } from "wouter";
 import { useState } from "react";
 import { toast } from "sonner";
 import PageHeader from "@/components/PageHeader";
-import { Settings, Layers, Grid3X3, BookOpen, Save, ChevronDown, ChevronUp } from "lucide-react";
+import { Settings, Layers, Grid3X3, BookOpen, Save, ChevronDown, ChevronUp, Users } from "lucide-react";
 
-type Tab = "question_types" | "dimensions" | "weights" | "policies";
+type Tab = "question_types" | "dimensions" | "weights" | "policies" | "users";
 
 // ── Question Type Manager ──────────────────────────────────────────────────
 function QuestionTypeManager() {
@@ -548,13 +548,80 @@ function PolicyEditor() {
   );
 }
 
+// ── User Manager (superadmin only) ────────────────────────────────────────
+const ROLE_LABELS: Record<string, string> = {
+  user: "일반 사용자",
+  instructor: "교수자",
+  admin: "관리자",
+  superadmin: "슈퍼관리자",
+};
+
+function UserManager() {
+  const { user: me } = useAuth();
+  const { data: users, refetch } = trpc.auth.listUsers.useQuery();
+  const updateRole = trpc.auth.updateUserRole.useMutation({
+    onSuccess: () => { toast.success("역할이 변경되었습니다"); refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  return (
+    <div>
+      <p className="swiss-label text-gray-400 mb-6">전체 사용자 목록 및 역할 관리 (슈퍼관리자 전용)</p>
+      <table className="w-full text-xs border-collapse">
+        <thead>
+          <tr className="border-b-2 border-black">
+            <th className="text-left py-2 pr-4 font-bold">이름</th>
+            <th className="text-left py-2 pr-4 font-bold">이메일</th>
+            <th className="text-left py-2 pr-4 font-bold">현재 역할</th>
+            <th className="text-left py-2 font-bold">역할 변경</th>
+          </tr>
+        </thead>
+        <tbody>
+          {users?.map((u) => (
+            <tr key={u.openId} className="border-b border-gray-100">
+              <td className="py-3 pr-4">{u.name || "—"}</td>
+              <td className="py-3 pr-4 text-gray-500">{u.email || "—"}</td>
+              <td className="py-3 pr-4">
+                <span className={`px-2 py-0.5 border font-bold ${
+                  u.role === "superadmin" ? "border-black bg-black text-white" :
+                  u.role === "admin" ? "border-black text-black" :
+                  "border-gray-300 text-gray-500"
+                }`}>
+                  {ROLE_LABELS[u.role ?? "user"] ?? u.role}
+                </span>
+              </td>
+              <td className="py-3">
+                {u.openId === me?.openId ? (
+                  <span className="text-gray-300">본인</span>
+                ) : (
+                  <select
+                    className="border border-black text-xs px-2 py-1 bg-white"
+                    value={u.role ?? "user"}
+                    onChange={(e) => updateRole.mutate({ openId: u.openId, role: e.target.value as "user" | "admin" | "instructor" | "superadmin" })}
+                  >
+                    <option value="user">일반 사용자</option>
+                    <option value="instructor">교수자</option>
+                    <option value="admin">관리자</option>
+                    <option value="superadmin">슈퍼관리자</option>
+                  </select>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────
 export default function AdminSocratic() {
   const [, navigate] = useLocation();
   const { user, isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("question_types");
 
-  if (!isAuthenticated || user?.role !== "admin") {
+  const isAdminOrAbove = user?.role === "admin" || user?.role === "superadmin";
+  if (!isAuthenticated || !isAdminOrAbove) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <p className="swiss-label text-gray-400">관리자 권한이 필요합니다.</p>
@@ -562,12 +629,13 @@ export default function AdminSocratic() {
     );
   }
 
-  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+  const tabs: { id: Tab; label: string; icon: React.ReactNode; superadminOnly?: boolean }[] = [
     { id: "question_types", label: "질문 유형", icon: <Settings size={13} /> },
     { id: "dimensions", label: "평가 요소", icon: <Layers size={13} /> },
     { id: "weights", label: "가중치 매트릭스", icon: <Grid3X3 size={13} /> },
     { id: "policies", label: "평가 정책", icon: <BookOpen size={13} /> },
-  ];
+    { id: "users", label: "사용자 관리", icon: <Users size={13} />, superadminOnly: true },
+  ].filter((t) => !t.superadminOnly || user?.role === "superadmin");
 
   return (
     <div className="min-h-screen bg-white">
@@ -597,6 +665,7 @@ export default function AdminSocratic() {
         {activeTab === "dimensions" && <DimensionManager />}
         {activeTab === "weights" && <WeightMatrixEditor />}
         {activeTab === "policies" && <PolicyEditor />}
+        {activeTab === "users" && <UserManager />}
       </div>
     </div>
   );
