@@ -204,8 +204,9 @@ async function extractTextFromPdf(fileUrl: string): Promise<string | null> {
     const arrayBuffer = await res.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     console.log("[extractTextFromPdf] 버퍼 크기:", buffer.length);
-    const pdfParse = (await import("pdf-parse")).default;
-    const data = await pdfParse(buffer);
+    const pdfParseModule = await import("pdf-parse");
+    const pdfParse = pdfParseModule.default ?? pdfParseModule;
+    const data = await (pdfParse as (buf: Buffer) => Promise<{ text: string }>)(buffer);
     console.log("[extractTextFromPdf] 추출 텍스트 길이:", data.text?.length ?? 0);
     return data.text && data.text.trim().length > 0 ? data.text : null;
   } catch (e) {
