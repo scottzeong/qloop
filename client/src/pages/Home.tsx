@@ -19,7 +19,7 @@ export default function Home() {
       <header className="border-b-2 border-black">
         <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
           <div className="flex items-center">
-            <span className="text-2xl font-black tracking-tight">QLOOP</span>
+            <img src="/logo.png" alt="QLoop" className="h-8 w-auto" />
           </div>
           <nav className="flex items-center gap-8">
             {!loading && !isAuthenticated && (
