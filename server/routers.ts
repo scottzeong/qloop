@@ -7,9 +7,6 @@ import mammoth from "mammoth";
 import { parseOffice } from "officeparser";
 import WordExtractor from "word-extractor";
 import PDFParser from "pdf2json";
-import { createRequire } from "module";
-const _require = createRequire(import.meta.url);
-const pdfParse = _require("pdf-parse") as (buf: Buffer) => Promise<{ text: string; numpages: number }>;
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -207,9 +204,27 @@ async function extractTextFromPdf(fileUrl: string): Promise<string | null> {
     const arrayBuffer = await res.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     console.log("[extractTextFromPdf] 버퍼 크기:", buffer.length);
-    const data = await pdfParse(buffer);
-    console.log("[extractTextFromPdf] 추출 텍스트 길이:", data.text?.length ?? 0);
-    return data.text && data.text.trim().length > 0 ? data.text : null;
+    const text = await new Promise<string | null>((resolve) => {
+      const parser = new PDFParser(null, true);
+      parser.on("pdfParser_dataReady", (pdfData: unknown) => {
+        try {
+          const pages = (pdfData as { Pages?: Array<{ Texts?: Array<{ R?: Array<{ T?: string }> }> }> }).Pages || [];
+          const extracted = pages.map(page =>
+            (page.Texts || []).map(t =>
+              (t.R || []).map(r => decodeURIComponent(r.T || "")).join("")
+            ).join(" ")
+          ).join("\n");
+          resolve(extracted.trim() || null);
+        } catch { resolve(null); }
+      });
+      parser.on("pdfParser_dataError", (err: unknown) => {
+        console.error("[extractTextFromPdf] pdf2json 에러:", err);
+        resolve(null);
+      });
+      parser.parseBuffer(buffer);
+    });
+    console.log("[extractTextFromPdf] 추출 텍스트 길이:", text?.length ?? 0);
+    return text;
   } catch (e) {
     console.error("[extractTextFromPdf] 실패:", e);
     return null;
