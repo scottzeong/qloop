@@ -198,12 +198,15 @@ async function extractTextFromOfficeFile(fileUrl: string, mimeType: string): Pro
 
 async function extractTextFromPdf(fileUrl: string): Promise<string | null> {
   try {
+    console.log("[extractTextFromPdf] 시작:", fileUrl.slice(0, 80));
     const res = await fetch(fileUrl);
     if (!res.ok) throw new Error(`PDF 다운로드 실패: ${res.status}`);
     const arrayBuffer = await res.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    console.log("[extractTextFromPdf] 버퍼 크기:", buffer.length);
     const pdfParse = (await import("pdf-parse")).default;
     const data = await pdfParse(buffer);
+    console.log("[extractTextFromPdf] 추출 텍스트 길이:", data.text?.length ?? 0);
     return data.text && data.text.trim().length > 0 ? data.text : null;
   } catch (e) {
     console.error("[extractTextFromPdf] 실패:", e);
