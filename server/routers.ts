@@ -1575,7 +1575,9 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
             return { success: true, structure, detectedLanguage };
           }
           const actualKey = doc.storageUrl.replace(/^\/r2-storage\//, "").replace(/^\/manus-storage\//, "");
+          console.log("[ANALYZE] storageUrl:", doc.storageUrl, "=> actualKey:", actualKey);
           const signedUrl = await storageGetSignedUrl(actualKey);
+          console.log("[ANALYZE] signedUrl:", signedUrl.slice(0, 100));
           const mimeForAnalysis = doc.fileType === "pdf" ? "application/pdf" : doc.fileType === "doc" ? "application/msword" : doc.fileType === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : doc.fileType === "ppt" ? "application/vnd.ms-powerpoint" : doc.fileType === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/pdf";
           // 단계 2: structuring (AI 구조 분석 중)
           await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "structuring");
