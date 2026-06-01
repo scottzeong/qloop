@@ -53,7 +53,7 @@ export default function Login() {
       {/* Header */}
       <header className="border-b-2 border-black px-8 py-4">
         <a href="/" className="flex items-center gap-2">
-          <span className="text-xl font-black tracking-tight">QLOOP</span>
+          <img src="/logo.png" alt="QLoop" className="h-10 w-auto" />
         </a>
       </header>
 
