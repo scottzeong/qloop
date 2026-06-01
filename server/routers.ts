@@ -202,22 +202,9 @@ async function extractTextFromPdf(fileUrl: string): Promise<string | null> {
     if (!res.ok) throw new Error(`PDF 다운로드 실패: ${res.status}`);
     const arrayBuffer = await res.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    return await new Promise<string | null>((resolve) => {
-      const pdfParser = new PDFParser(null, true);
-      pdfParser.on("pdfParser_dataReady", (pdfData: unknown) => {
-        try {
-          const pages = (pdfData as { Pages?: Array<{ Texts?: Array<{ R?: Array<{ T?: string }> }> }> }).Pages || [];
-          const text = pages.map(page =>
-            (page.Texts || []).map(t =>
-              (t.R || []).map(r => decodeURIComponent(r.T || '')).join('')
-            ).join(' ')
-          ).join('\n');
-          resolve(text || null);
-        } catch { resolve(null); }
-      });
-      pdfParser.on("pdfParser_dataError", () => resolve(null));
-      pdfParser.parseBuffer(buffer);
-    });
+    const pdfParse = (await import("pdf-parse")).default;
+    const data = await pdfParse(buffer);
+    return data.text && data.text.trim().length > 0 ? data.text : null;
   } catch (e) {
     console.error("[extractTextFromPdf] 실패:", e);
     return null;
