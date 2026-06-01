@@ -67,7 +67,7 @@ export default function PageHeader({
             <img
               src="/logo.png"
               alt="QLoop"
-              className="h-16 w-auto"
+              className="h-8 w-auto"
             />
           </div>
 
