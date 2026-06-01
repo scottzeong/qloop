@@ -196,6 +196,34 @@ async function extractTextFromOfficeFile(fileUrl: string, mimeType: string): Pro
   }
 }
 
+async function extractTextFromPdf(fileUrl: string): Promise<string | null> {
+  try {
+    const res = await fetch(fileUrl);
+    if (!res.ok) throw new Error(`PDF 다운로드 실패: ${res.status}`);
+    const arrayBuffer = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    return await new Promise<string | null>((resolve) => {
+      const pdfParser = new PDFParser(null, true);
+      pdfParser.on("pdfParser_dataReady", (pdfData: unknown) => {
+        try {
+          const pages = (pdfData as { Pages?: Array<{ Texts?: Array<{ R?: Array<{ T?: string }> }> }> }).Pages || [];
+          const text = pages.map(page =>
+            (page.Texts || []).map(t =>
+              (t.R || []).map(r => decodeURIComponent(r.T || '')).join('')
+            ).join(' ')
+          ).join('\n');
+          resolve(text || null);
+        } catch { resolve(null); }
+      });
+      pdfParser.on("pdfParser_dataError", () => resolve(null));
+      pdfParser.parseBuffer(buffer);
+    });
+  } catch (e) {
+    console.error("[extractTextFromPdf] 실패:", e);
+    return null;
+  }
+}
+
 async function analyzeDocumentStructure(
   fileUrl: string,
   docTitle: string,
@@ -226,43 +254,12 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
   let extractedText: string | null = null;
 
   if (isPdf) {
-    // PDF 텍스트 추출 (pdf-parse)
-    try {
-      const res = await fetch(fileUrl);
-      if (!res.ok) throw new Error(`PDF 다운로드 실패: ${res.status}`);
-      const arrayBuffer = await res.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      extractedText = await new Promise<string | null>((resolve) => {
-        const pdfParser = new PDFParser(null, true);
-        pdfParser.on("pdfParser_dataReady", (pdfData: unknown) => {
-          try {
-            const pages = (pdfData as { Pages?: Array<{ Texts?: Array<{ R?: Array<{ T?: string }> }> }> }).Pages || [];
-            const text = pages.map(page =>
-              (page.Texts || []).map(t =>
-                (t.R || []).map(r => decodeURIComponent(r.T || '')).join('')
-              ).join(' ')
-            ).join('\n');
-            resolve(text || null);
-          } catch { resolve(null); }
-        });
-        pdfParser.on("pdfParser_dataError", () => resolve(null));
-        pdfParser.parseBuffer(buffer);
-      });
-    } catch (e) {
-      console.error("[ANALYZE] PDF 텍스트 추출 실패:", e);
-    }
-
+    extractedText = await extractTextFromPdf(fileUrl);
     if (extractedText && extractedText.trim().length >= 50) {
-      // 텍스트 추출 성공: 텍스트로 분석
       const truncated = extractedText.length > 50000 ? extractedText.slice(0, 50000) + "\n...[truncated]" : extractedText;
       userContent = `Please analyze this document titled "${docTitle}".\n\nDocument content:\n${truncated}\n\nReturn the hierarchical structure as JSON.`;
     } else {
-      // 텍스트 추출 실패 (scan PDF 등): file_url로 fallback
-      console.log("[ANALYZE] PDF 텍스트 추출 실패, file_url fallback 사용");
-      userContent = [
-        { type: "file_url" as const, file_url: { url: fileUrl, mime_type: "application/pdf" } },
-        { type: "text" as const, text: `Please analyze this document titled "${docTitle}" and return the hierarchical structure as JSON.` },
-      ];
+      throw new Error("PDF에서 텍스트를 추출할 수 없습니다. 스캔된 이미지 PDF는 지원되지 않습니다. 텍스트가 포함된 PDF를 업로드해주세요.");
     }
   } else {
     // Word/PPT: 텍스트 추출 후 텍스트로 분석
@@ -1229,11 +1226,10 @@ export const appRouter = router({
         await updateDocumentGroup(input.groupId, { analysisStatus: "analyzing" });
 
         try {
-          // 모든 문서의 원문 내용을 수집: PDF는 file_url, Word/PPT는 텍스트 추출
-          type DocEntry = { title: string; kind: "pdf"; signedUrl: string } | { title: string; kind: "text"; text: string };
-          const docEntries: DocEntry[] = [];
+          // 모든 문서의 텍스트 추출 (PDF 포함 모두 텍스트로 처리)
+          const docTextEntries: { title: string; text: string }[] = [];
           for (const doc of docs) {
-            const actualKey = doc.storageUrl.replace(/^\/manus-storage\//, "");
+            const actualKey = doc.storageUrl.replace(/^\/r2-storage\//, "").replace(/^\/manus-storage\//, "");
             const signedUrl = await storageGetSignedUrl(actualKey);
             const mimeType = doc.fileType === "pdf" ? "application/pdf"
               : doc.fileType === "doc" ? "application/msword"
@@ -1241,21 +1237,25 @@ export const appRouter = router({
               : doc.fileType === "ppt" ? "application/vnd.ms-powerpoint"
               : doc.fileType === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation"
               : "application/pdf";
+
+            let text: string | null = null;
             if (mimeType === "application/pdf") {
-              docEntries.push({ title: doc.title, kind: "pdf", signedUrl });
+              text = await extractTextFromPdf(signedUrl);
             } else {
-              const text = await extractTextFromOfficeFile(signedUrl, mimeType);
-              if (text && text.trim().length > 50) {
-                const truncated = text.length > 30000 ? text.slice(0, 30000) + "\n...[truncated]" : text;
-                docEntries.push({ title: doc.title, kind: "text", text: `[문서: ${doc.title}]\n${truncated}` });
-              }
+              text = await extractTextFromOfficeFile(signedUrl, mimeType);
+            }
+            if (text && text.trim().length > 50) {
+              const truncated = text.length > 30000 ? text.slice(0, 30000) + "\n...[truncated]" : text;
+              docTextEntries.push({ title: doc.title, text: `[문서: ${doc.title}]\n${truncated}` });
             }
           }
 
-          if (docEntries.length === 0) throw new Error("분석할 수 있는 문서 내용이 없습니다.");
+          if (docTextEntries.length === 0) throw new Error("분석할 수 있는 문서 내용이 없습니다. 텍스트가 포함된 PDF 또는 문서를 업로드해주세요.");
 
-          // PDF만 있는 경우 file_url 방식, 혼합인 경우 PDF+텍스트 함께 전달
-          const allPdf = docEntries.every(e => e.kind === "pdf");
+          const combinedText = docTextEntries.map(e => e.text).join("\n\n" + "=".repeat(50) + "\n\n");
+          const maxLen = 60000;
+          const truncatedCombined = combinedText.length > maxLen ? combinedText.slice(0, maxLen) + "\n...[truncated]" : combinedText;
+
           const groupSystemPrompt = `You are an expert educational content synthesizer.
 You are given ${docs.length} document(s) that belong to a learning group titled "${group.name}".
 Your task is to analyze ALL the documents TOGETHER and create a UNIFIED, COHERENT educational structure.
@@ -1266,29 +1266,7 @@ Do NOT simply list each document separately. Instead, SYNTHESIZE the content acr
 The result should feel like a single integrated curriculum, not a collection of separate documents.
 Return ONLY valid JSON matching the schema exactly.`;
 
-          let analysisContent: Message["content"];
-          if (allPdf) {
-            // 모든 문서가 PDF: file_url 배열로 전달
-            analysisContent = [
-              { type: "text" as const, text: `Analyze these ${docs.length} PDF documents together as a unified learning group titled "${group.name}". Create a single integrated educational structure that synthesizes content from all documents.` },
-              ...docEntries.map(e => ({ type: "file_url" as const, file_url: { url: (e as { kind: "pdf"; signedUrl: string }).signedUrl, mime_type: "application/pdf" as const } })),
-            ];
-          } else {
-            // 혼합 그룹: PDF는 file_url로, 텍스트(Word/PPT)는 텍스트로 함께 전달
-            const pdfEntries = docEntries.filter(e => e.kind === "pdf") as { title: string; kind: "pdf"; signedUrl: string }[];
-            const textEntries = docEntries.filter(e => e.kind === "text") as { title: string; kind: "text"; text: string }[];
-            const combinedText = textEntries.map(e => e.text).join("\n\n" + "=".repeat(50) + "\n\n");
-            const maxLen = 60000;
-            const truncatedCombined = combinedText.length > maxLen ? combinedText.slice(0, maxLen) + "\n...[truncated]" : combinedText;
-            const contentParts: Array<{ type: "text"; text: string } | { type: "file_url"; file_url: { url: string; mime_type: "application/pdf" } }> = [
-              { type: "text", text: `Analyze these ${docs.length} documents together as a unified learning group titled "${group.name}". Create a single integrated educational structure.` },
-              ...pdfEntries.map(e => ({ type: "file_url" as const, file_url: { url: e.signedUrl, mime_type: "application/pdf" as const } })),
-            ];
-            if (truncatedCombined.trim()) {
-              contentParts.push({ type: "text", text: `\n\nAdditional document content (Word/PPT):\n${truncatedCombined}` });
-            }
-            analysisContent = contentParts;
-          }
+          const analysisContent = `Analyze these ${docTextEntries.length} document(s) together as a unified learning group titled "${group.name}". Create a single integrated educational structure that synthesizes content from all documents.\n\n${truncatedCombined}`;
 
           const response = await aiInvoke(ctx.user.id, {
             messages: [
