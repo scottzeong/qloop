@@ -7,6 +7,7 @@ import mammoth from "mammoth";
 import { parseOffice } from "officeparser";
 import WordExtractor from "word-extractor";
 import PDFParser from "pdf2json";
+import pdfParse from "pdf-parse";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -204,9 +205,7 @@ async function extractTextFromPdf(fileUrl: string): Promise<string | null> {
     const arrayBuffer = await res.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     console.log("[extractTextFromPdf] 버퍼 크기:", buffer.length);
-    const pdfParseModule = await import("pdf-parse");
-    const pdfParse = pdfParseModule.default ?? pdfParseModule;
-    const data = await (pdfParse as (buf: Buffer) => Promise<{ text: string }>)(buffer);
+    const data = await pdfParse(buffer);
     console.log("[extractTextFromPdf] 추출 텍스트 길이:", data.text?.length ?? 0);
     return data.text && data.text.trim().length > 0 ? data.text : null;
   } catch (e) {
