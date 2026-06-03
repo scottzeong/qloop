@@ -1,5 +1,5 @@
 // Cloudflare R2 storage (S3-compatible)
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { ENV } from "./_core/env";
 
@@ -59,6 +59,13 @@ export async function storagePut(
 export async function storageGet(relKey: string): Promise<{ key: string; url: string }> {
   const key = normalizeKey(relKey);
   return { key, url: `/r2-storage/${key}` };
+}
+
+export async function storageDelete(relKey: string): Promise<void> {
+  const client = getR2Client();
+  const bucket = getBucket();
+  const key = normalizeKey(relKey);
+  await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }
 
 export async function storageGetSignedUrl(relKey: string): Promise<string> {

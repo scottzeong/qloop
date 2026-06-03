@@ -12,7 +12,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { invokeLLM, type Message } from "./_core/llm";
 import { aiInvoke } from "./ai/aiRouter";
-import { storagePut, storageGetSignedUrl } from "./storage";
+import { storagePut, storageGetSignedUrl, storageDelete } from "./storage";
 import { notifyOwner } from "./_core/notification";
 import { socraticRouter } from "./routers/socratic";
 import { libraryRouter } from "./routers/library";
@@ -1447,7 +1447,31 @@ Return ONLY valid JSON matching the schema exactly.`;
           throw new Error("지원하지 않는 파일 형식입니다. PDF, DOC, DOCX, PPT, PPTX만 업로드 가능합니다.");
         }
 
+        // 파일 크기 제한: 50MB
+        const MAX_FILE_SIZE = 50 * 1024 * 1024;
+        if (input.fileSize > MAX_FILE_SIZE) {
+          throw new Error("파일 크기가 너무 큽니다. 최대 50MB까지 업로드 가능합니다.");
+        }
+
         const buffer = Buffer.from(input.fileData, "base64");
+
+        // magic bytes로 실제 파일 형식 검증
+        const MAGIC_BYTES: Record<string, number[][]> = {
+          "application/pdf": [[0x25, 0x50, 0x44, 0x46]], // %PDF
+          "application/msword": [[0xD0, 0xCF, 0x11, 0xE0]], // OLE2
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [[0x50, 0x4B, 0x03, 0x04]], // ZIP (OOXML)
+          "application/vnd.openxmlformats-officedocument.presentationml.presentation": [[0x50, 0x4B, 0x03, 0x04]], // ZIP (OOXML)
+          "application/vnd.ms-powerpoint": [[0xD0, 0xCF, 0x11, 0xE0]], // OLE2
+        };
+        const expectedMagic = MAGIC_BYTES[input.mimeType];
+        if (expectedMagic) {
+          const matches = expectedMagic.some(magic =>
+            magic.every((byte, i) => buffer[i] === byte)
+          );
+          if (!matches) {
+            throw new Error("파일 내용이 선언된 형식과 일치하지 않습니다.");
+          }
+        }
         const safeFileName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
         const key = `documents/${ctx.user.id}/${Date.now()}-${safeFileName}`;
         const { url } = await storagePut(key, buffer, input.mimeType);
@@ -1505,7 +1529,8 @@ Return ONLY valid JSON matching the schema exactly.`;
         const doc = await getDocumentById(input.documentId);
         if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
         await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "structuring");
-        try {
+        // 분석을 백그라운드에서 실행하고 즉시 반환
+        (async () => { try {
           // 텍스트를 직접 analyzeDocumentStructure에 전달
           const truncated = input.text.length > 50000 ? input.text.slice(0, 50000) + "\n...[truncated]" : input.text;
           const systemPrompt = `You are an expert educational content analyzer.
@@ -1558,12 +1583,12 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
           if (!Array.isArray(parsed.learningPath)) parsed.learningPath = [];
           if (!parsed.documentType) parsed.documentType = "other";
           await updateDocumentAnalysis(input.documentId, "done", parsed, undefined, "done");
-          return { success: true, structure: parsed };
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : String(e);
           await updateDocumentAnalysis(input.documentId, "error", undefined, undefined, "error", errMsg);
-          throw e;
         }
+        })();
+        return { success: true };
       }),
 
     // AI 구조 분석 시작
@@ -1574,7 +1599,8 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
         if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
         // 단계 1: extracting (파일 접근 중)
         await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "extracting");
-        try {
+        // 분석을 백그라운드에서 실행하고 즉시 반환
+        (async () => { try {
           // 텍스트 타입 문서: S3에서 텍스트 읽어서 분석
           if (doc.fileType === "text") {
             const signedUrl = await storageGetSignedUrl(doc.storageKey);
@@ -1608,12 +1634,12 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
             }
           }
           await updateDocumentAnalysis(input.documentId, "done", structure, undefined, "done");
-          return { success: true, structure, detectedLanguage };
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : String(e);
           await updateDocumentAnalysis(input.documentId, "error", undefined, undefined, "error", errMsg);
-          throw e;
         }
+        })();
+        return { success: true };
       }),
     // 문서 목록 조회 (단독 문서만)
     list: protectedProcedure.query(async ({ ctx }) => {
@@ -1648,6 +1674,11 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
             structure: null,
             analysisStatus: "pending",
           });
+        }
+        // R2에서 실제 파일 삭제
+        if (doc.storageUrl) {
+          const r2Key = doc.storageUrl.replace(/^\/r2-storage\//, "").replace(/^\/manus-storage\//, "");
+          try { await storageDelete(r2Key); } catch { /* R2 삭제 실패해도 DB는 삭제 진행 */ }
         }
         await deleteDocument(input.documentId);
         return { success: true };
