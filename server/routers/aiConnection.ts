@@ -38,6 +38,20 @@ const PROVIDER_MODELS: Record<ProviderName, string[]> = {
 };
 
 export const aiConnectionRouter = router({
+  /** 시스템 기본 AI 상태 조회 */
+  systemAiStatus: protectedProcedure.query(async () => {
+    const { ENV } = await import("../_core/env");
+    const hasKey = !!ENV.openaiApiKey;
+    return {
+      active: hasKey,
+      provider: "openai" as const,
+      model: "gpt-4o",
+      apiKeyMasked: hasKey
+        ? `sk-...${ENV.openaiApiKey.slice(-4)}`
+        : null,
+    };
+  }),
+
   /** 사용자의 AI Connection 목록 조회 (API Key는 마스킹) */
   list: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();

@@ -19,6 +19,7 @@ import {
   Zap,
   Shield,
   ChevronDown,
+  Server,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,6 +89,9 @@ export default function AIConnection() {
     enabled: !!user,
   });
   const { data: providerModels = {} } = trpc.aiConnection.getProviderModels.useQuery(undefined, {
+    enabled: !!user,
+  });
+  const { data: systemAi } = trpc.aiConnection.systemAiStatus.useQuery(undefined, {
     enabled: !!user,
   });
 
@@ -178,6 +182,32 @@ export default function AIConnection() {
             <Shield size={12} />
             <span>API Key는 암호화되어 안전하게 저장됩니다.</span>
           </div>
+
+          {/* 시스템 AI 상태 배너 */}
+          {systemAi && (
+            <div className={`mt-5 border-2 p-4 flex items-center gap-3 ${systemAi.active ? "border-emerald-300 bg-emerald-50" : "border-gray-200 bg-gray-50"}`}>
+              <Server size={16} className={systemAi.active ? "text-emerald-600" : "text-gray-400"} />
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black">QLOOP 시스템 AI</span>
+                  {systemAi.active ? (
+                    <span className="flex items-center gap-1 text-xs font-bold text-emerald-600">
+                      <CheckCircle size={10} /> 활성
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-xs font-bold text-red-500">
+                      <XCircle size={10} /> 미설정
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {systemAi.active
+                    ? `OpenAI · ${systemAi.model} · 운영자 키 (${systemAi.apiKeyMasked}) — 개인 Connection 미설정 시 자동 사용`
+                    : "운영자 API Key가 설정되지 않았습니다. 개인 Connection을 등록해야 AI 기능을 사용할 수 있습니다."}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-12 gap-10">
