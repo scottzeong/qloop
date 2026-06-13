@@ -281,10 +281,10 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="flex items-center gap-3">
-          <div className="w-4 h-4 swiss-red-bg animate-pulse" />
-          <span className="swiss-label">로딩 중</span>
+      <div className="min-h-screen bg-[#F8F7F5] flex items-center justify-center">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 rounded-full bg-[#5B5BD6] animate-pulse" />
+          <span className="text-sm text-[#737373] font-medium">로딩 중</span>
         </div>
       </div>
     );
@@ -292,11 +292,11 @@ export default function Dashboard() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-6">
-        <div className="swiss-label">로그인이 필요합니다</div>
+      <div className="min-h-screen bg-[#F8F7F5] flex flex-col items-center justify-center gap-4">
+        <p className="text-sm text-[#737373]">로그인이 필요합니다</p>
         <a
           href={getLoginUrl()}
-          className="bg-black text-white px-8 py-3 text-sm font-bold tracking-widest uppercase hover:bg-[var(--swiss-red)] transition-colors"
+          className="bg-[#0F0F0F] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#262626] transition-colors"
         >
           로그인
         </a>
@@ -307,7 +307,7 @@ export default function Dashboard() {
   const recentSessions = sessions?.slice(0, 3) ?? [];
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="min-h-screen bg-[#F8F7F5] flex flex-col">
       {/* 삭제 확인 팝업 - 학습자료 */}
       <AlertDialog open={!!deleteDocConfirm} onOpenChange={(open) => !open && setDeleteDocConfirm(null)}>
         <AlertDialogContent>
@@ -384,33 +384,33 @@ export default function Dashboard() {
           {/* Left: Upload + Groups + Docs */}
           <div className="col-span-8">
             {/* Upload area */}
-            <div className="mb-10">
-              <div className="swiss-label mb-4">학습자료 등록</div>
+            <div className="mb-8">
+              <p className="pm-label mb-3">학습자료 등록</p>
               {/* 모드 탭 */}
-              <div className="flex border-b border-gray-200 mb-4">
+              <div className="flex gap-1 mb-4 bg-[#F0EFED] rounded-lg p-1 w-fit">
                 <button
                   onClick={() => setUploadMode("file")}
-                  className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-colors ${
-                    uploadMode === "file" ? "border-black text-black" : "border-transparent text-gray-400 hover:text-black"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                    uploadMode === "file" ? "bg-white text-[#0F0F0F] shadow-sm" : "text-[#737373] hover:text-[#0F0F0F]"
                   }`}
                 >
-                  <Upload size={13} /> 파일 업로드
+                  <Upload size={12} /> 파일 업로드
                 </button>
                 <button
                   onClick={() => setUploadMode("text")}
-                  className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-colors ${
-                    uploadMode === "text" ? "border-black text-black" : "border-transparent text-gray-400 hover:text-black"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                    uploadMode === "text" ? "bg-white text-[#0F0F0F] shadow-sm" : "text-[#737373] hover:text-[#0F0F0F]"
                   }`}
                 >
-                  <AlignLeft size={13} /> 텍스트 입력
+                  <AlignLeft size={12} /> 텍스트 입력
                 </button>
               </div>
 
               {uploadMode === "file" ? (
                 <>
                   <div
-                    className={`border-2 border-dashed transition-colors cursor-pointer p-12 text-center ${
-                      dragging ? "border-black bg-gray-50" : "border-gray-300 hover:border-black"
+                    className={`border-2 border-dashed rounded-xl transition-all cursor-pointer p-12 text-center ${
+                      dragging ? "border-[#5B5BD6] bg-[#E8E8FD]" : "border-[#E5E5E3] bg-white hover:border-[#5B5BD6] hover:bg-[#F8F8FF]"
                     }`}
                     onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
                     onDragLeave={() => setDragging(false)}
@@ -418,20 +418,22 @@ export default function Dashboard() {
                     onClick={() => fileInputRef.current?.click()}
                   >
                     {uploading ? (
-                      <div className="space-y-3">
-                        <div className="w-full bg-gray-100 h-1">
+                      <div className="space-y-3 max-w-xs mx-auto">
+                        <div className="w-full bg-[#F0EFED] h-1.5 rounded-full">
                           <div
-                            className="h-1 swiss-red-bg transition-all duration-300"
+                            className="h-1.5 bg-[#5B5BD6] rounded-full transition-all duration-300"
                             style={{ width: `${uploadProgress}%` }}
                           />
                         </div>
-                        <p className="text-xs text-gray-500">업로드 및 분석 중... {uploadProgress}%</p>
+                        <p className="text-xs text-[#737373]">업로드 및 분석 중... {uploadProgress}%</p>
                       </div>
                     ) : (
                       <>
-                        <Upload size={24} className="mx-auto mb-3 text-gray-300" />
-                        <p className="text-sm font-bold mb-1">파일을 드래그하거나 클릭하여 업로드</p>
-                        <p className="text-xs text-gray-400">PDF / DOC / DOCX / PPT / PPTX · 최대 20MB</p>
+                        <div className="w-12 h-12 bg-[#F0EFED] rounded-xl flex items-center justify-center mx-auto mb-3">
+                          <Upload size={22} className="text-[#A3A3A3]" />
+                        </div>
+                        <p className="text-sm font-semibold text-[#0F0F0F] mb-1">파일을 드래그하거나 클릭하여 업로드</p>
+                        <p className="text-xs text-[#A3A3A3]">PDF / DOC / DOCX / PPT / PPTX · 최대 50MB</p>
                       </>
                     )}
                   </div>
@@ -448,34 +450,34 @@ export default function Dashboard() {
                   />
                 </>
               ) : (
-                <div className="border-2 border-gray-200 p-5 space-y-3">
+                <div className="bg-white border border-[#E5E5E3] rounded-xl p-5 space-y-4">
                   <div>
-                    <label className="block text-xs font-bold mb-1 text-gray-600">제목 <span className="text-red-500">*</span></label>
+                    <label className="block text-xs font-semibold text-[#525252] mb-1.5">제목 <span className="text-red-400">*</span></label>
                     <input
                       type="text"
                       placeholder="학습자료 제목을 입력하세요"
                       value={textTitle}
                       onChange={(e) => setTextTitle(e.target.value)}
-                      className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-black"
+                      className="w-full border border-[#E5E5E3] rounded-lg px-3 py-2.5 text-sm text-[#0F0F0F] outline-none focus:border-[#5B5BD6] focus:ring-2 focus:ring-[#5B5BD6]/10 transition-all"
                       disabled={textUploading}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold mb-1 text-gray-600">본문 <span className="text-red-500">*</span></label>
+                    <label className="block text-xs font-semibold text-[#525252] mb-1.5">본문 <span className="text-red-400">*</span></label>
                     <textarea
-                      placeholder="학습할 내용을 여기에 붙여넣으세요. (PDF 텍스트 복사 후 붙여넣기 가능)"
+                      placeholder="학습할 내용을 여기에 붙여넣으세요."
                       value={textContent}
                       onChange={(e) => setTextContent(e.target.value)}
                       rows={8}
-                      className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-black resize-y"
+                      className="w-full border border-[#E5E5E3] rounded-lg px-3 py-2.5 text-sm text-[#0F0F0F] outline-none focus:border-[#5B5BD6] focus:ring-2 focus:ring-[#5B5BD6]/10 transition-all resize-y"
                       disabled={textUploading}
                     />
-                    <p className="text-xs text-gray-400 mt-1">{textContent.length.toLocaleString()}자</p>
+                    <p className="text-xs text-[#A3A3A3] mt-1">{textContent.length.toLocaleString()}자</p>
                   </div>
                   <button
                     onClick={handleTextSubmit}
                     disabled={textUploading || !textTitle.trim() || textContent.trim().length < 10}
-                    className="bg-black text-white px-5 py-2 text-xs font-bold hover:bg-[var(--swiss-red)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="bg-[#0F0F0F] text-white px-5 py-2.5 rounded-lg text-xs font-semibold hover:bg-[#262626] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {textUploading ? (
                       <><span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />분석 중...</>
@@ -488,25 +490,25 @@ export default function Dashboard() {
             </div>
 
             {/* Groups section */}
-            <div className="mb-10">
-              <div className="flex items-center justify-between mb-4">
-                <div className="swiss-label">학습그룹</div>
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-3">
+                <p className="pm-label">학습그룹</p>
                 <button
                   onClick={() => setShowCreateGroup(!showCreateGroup)}
-                  className="flex items-center gap-1 text-xs font-bold hover:text-[var(--swiss-red)] transition-colors"
+                  className="flex items-center gap-1 text-xs font-semibold text-[#737373] hover:text-[#5B5BD6] transition-colors"
                 >
-                  <FolderPlus size={14} /> 그룹 만들기
+                  <FolderPlus size={13} /> 그룹 만들기
                 </button>
               </div>
 
               {showCreateGroup && (
-                <div className="border-2 border-black p-5 mb-4 space-y-3">
+                <div className="bg-white border border-[#E5E5E3] rounded-xl p-4 mb-4 space-y-3">
                   <input
                     type="text"
                     placeholder="그룹 이름"
                     value={newGroupName}
                     onChange={(e) => setNewGroupName(e.target.value)}
-                    className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-black"
+                    className="w-full border border-[#E5E5E3] rounded-lg px-3 py-2.5 text-sm text-[#0F0F0F] outline-none focus:border-[#5B5BD6] focus:ring-2 focus:ring-[#5B5BD6]/10 transition-all"
                     onKeyDown={(e) => e.key === "Enter" && handleCreateGroup()}
                   />
                   <input
@@ -514,18 +516,18 @@ export default function Dashboard() {
                     placeholder="설명 (선택사항)"
                     value={newGroupDesc}
                     onChange={(e) => setNewGroupDesc(e.target.value)}
-                    className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-black"
+                    className="w-full border border-[#E5E5E3] rounded-lg px-3 py-2.5 text-sm text-[#0F0F0F] outline-none focus:border-[#5B5BD6] focus:ring-2 focus:ring-[#5B5BD6]/10 transition-all"
                   />
                   <div className="flex gap-2">
                     <button
                       onClick={handleCreateGroup}
-                      className="bg-black text-white px-4 py-2 text-xs font-bold hover:bg-[var(--swiss-red)] transition-colors"
+                      className="bg-[#0F0F0F] text-white px-4 py-2 rounded-lg text-xs font-semibold hover:bg-[#262626] transition-colors"
                     >
                       생성
                     </button>
                     <button
                       onClick={() => setShowCreateGroup(false)}
-                      className="border border-gray-300 px-4 py-2 text-xs font-bold hover:border-black transition-colors"
+                      className="border border-[#E5E5E3] px-4 py-2 rounded-lg text-xs font-semibold text-[#737373] hover:border-[#A3A3A3] transition-colors"
                     >
                       취소
                     </button>
@@ -534,11 +536,11 @@ export default function Dashboard() {
               )}
 
               {!groups || groups.length === 0 ? (
-                <div className="border border-gray-200 p-8 text-center">
-                  <p className="text-sm text-gray-400">그룹이 없습니다. 여러 파일을 묶어 함께 학습하세요.</p>
+                <div className="bg-white border border-dashed border-[#E5E5E3] rounded-xl p-8 text-center">
+                  <p className="text-sm text-[#A3A3A3]">그룹이 없습니다. 여러 파일을 묶어 함께 학습하세요.</p>
                 </div>
               ) : (
-                <div className="space-y-0">
+                <div className="space-y-2">
                   {groups.map((group, i) => (
                     <GroupRow
                       key={group.id}
@@ -577,51 +579,50 @@ export default function Dashboard() {
 
             {/* Standalone docs section */}
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <div className="swiss-label">학습자료</div>
-                <span className="text-xs text-gray-400">{documents?.filter((d) => !d.groupId).length ?? 0}개</span>
+              <div className="flex items-center justify-between mb-3">
+                <p className="pm-label">학습자료</p>
+                <span className="text-xs text-[#A3A3A3]">{documents?.filter((d) => !d.groupId).length ?? 0}개</span>
               </div>
               {!documents || documents.filter((d) => !d.groupId).length === 0 ? (
-                <div className="border border-gray-200 p-8 text-center">
-                  <FileText size={24} className="mx-auto mb-2 text-gray-200" />
-                  <p className="text-sm text-gray-400">업로드된 학습자료가 없습니다.</p>
+                <div className="bg-white border border-dashed border-[#E5E5E3] rounded-xl p-8 text-center">
+                  <FileText size={24} className="mx-auto mb-2 text-[#D4D4D2]" />
+                  <p className="text-sm text-[#A3A3A3]">업로드된 학습자료가 없습니다.</p>
                 </div>
               ) : (
-                <div className="space-y-0">
+                <div className="space-y-2">
                   {documents
                     .filter((d) => !d.groupId)
-                    .map((doc, i, arr) => (
+                    .map((doc) => (
                       <div
                         key={doc.id}
-                        className={`flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition-colors border border-black ${i > 0 ? "border-t-0" : ""}`}
+                        className="flex items-center justify-between p-4 cursor-pointer bg-white border border-[#E5E5E3] rounded-xl hover:border-[#D4D4D2] hover:shadow-sm transition-all"
                         onClick={() => navigate(`/documents/${doc.id}`)}
                       >
                         <div className="flex items-center gap-3">
                           <div
-                            className={`w-2 h-2 flex-shrink-0 ${
-                              doc.analysisStatus === "done" ? "swiss-red-bg" : doc.analysisStatus === "analyzing" ? "bg-yellow-400" : "bg-gray-300"
+                            className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                              doc.analysisStatus === "done" ? "bg-[#5B5BD6]" : doc.analysisStatus === "analyzing" ? "bg-amber-400" : "bg-[#D4D4D2]"
                             }`}
                           />
                           <div>
                             <div className="flex items-center gap-2 mb-0.5">
-                              <p className="text-sm font-bold">{doc.title}</p>
+                              <p className="text-sm font-semibold text-[#0F0F0F]">{doc.title}</p>
                               <FileTypeBadge fileType={doc.fileType} />
                             </div>
-                            <p className="text-xs text-gray-400">
-                              {doc.analysisStatus === "done" ? "분석 완료" : doc.analysisStatus === "analyzing" ? "분석 중..." : "대기 중"} ·{" "}
-                              {new Date(doc.createdAt).toLocaleDateString("ko-KR")}
+                            <p className="text-xs text-[#A3A3A3]">
+                              {doc.analysisStatus === "done" ? "분석 완료" : doc.analysisStatus === "analyzing" ? "분석 중..." : "대기 중"} · {new Date(doc.createdAt).toLocaleDateString("ko-KR")}
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
                           <button
                             onClick={(e) => { e.stopPropagation(); setDeleteDocConfirm({ id: doc.id, title: doc.title }); }}
-                            className="p-1.5 transition-colors text-gray-300 hover:text-red-500"
+                            className="p-1.5 transition-colors text-[#D4D4D2] hover:text-red-500"
                             title="삭제"
                           >
                             <Trash2 size={14} />
                           </button>
-                          <ChevronRight size={16} className="text-gray-300" />
+                          <ChevronRight size={15} className="text-[#D4D4D2]" />
                         </div>
                       </div>
                     ))}
@@ -631,65 +632,58 @@ export default function Dashboard() {
           </div>
 
           {/* Right: Stats + Recent Sessions */}
-          <div className="col-span-4 pl-12">
-            <div className="mb-10">
-              <div className="swiss-label mb-6">학습 현황</div>
-              <div className="grid grid-cols-2 gap-0">
-                <div className="border border-black p-5 border-r-0">
-                  <div className="text-3xl font-black mb-1">{(documents?.length ?? 0) + (groups?.reduce((acc, g) => acc, 0) ?? 0)}</div>
-                  <div className="swiss-label">문서</div>
-                </div>
-                <div className="border border-black p-5">
-                  <div className="text-3xl font-black mb-1">{groups?.length ?? 0}</div>
-                  <div className="swiss-label">그룹</div>
-                </div>
-                <div className="border border-black p-5 border-t-0 border-r-0">
-                  <div className="text-3xl font-black mb-1" style={{ color: "var(--swiss-red)" }}>
-                    {sessions?.filter((s) => s.status === "completed").length ?? 0}
+          <div className="col-span-4">
+            <div className="mb-8">
+              <p className="pm-label mb-4">학습 현황</p>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { value: documents?.length ?? 0, label: "문서" },
+                  { value: groups?.length ?? 0, label: "그룹" },
+                  { value: sessions?.filter((s) => s.status === "completed").length ?? 0, label: "완료 세션", accent: true },
+                  { value: sessions?.filter((s) => s.status === "active").length ?? 0, label: "진행 중" },
+                ].map((stat) => (
+                  <div key={stat.label} className="bg-white border border-[#E5E5E3] rounded-xl p-4">
+                    <div className={`text-2xl font-bold mb-1 ${stat.accent ? "text-[#5B5BD6]" : "text-[#0F0F0F]"}`}>
+                      {stat.value}
+                    </div>
+                    <div className="pm-label">{stat.label}</div>
                   </div>
-                  <div className="swiss-label">완료 세션</div>
-                </div>
-                <div className="border border-black p-5 border-t-0">
-                  <div className="text-3xl font-black mb-1">
-                    {sessions?.filter((s) => s.status === "active").length ?? 0}
-                  </div>
-                  <div className="swiss-label">진행 중</div>
-                </div>
+                ))}
               </div>
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <div className="swiss-label">최근 학습 세션</div>
+              <div className="flex items-center justify-between mb-3">
+                <p className="pm-label">최근 학습 세션</p>
                 <button
                   onClick={() => navigate("/history")}
-                  className="text-xs text-gray-400 hover:text-black transition-colors"
+                  className="text-xs text-[#A3A3A3] hover:text-[#0F0F0F] transition-colors font-medium"
                 >
                   전체 보기
                 </button>
               </div>
               {recentSessions.length === 0 ? (
-                <div className="border border-gray-200 p-8 text-center">
-                  <BookOpen size={24} className="mx-auto mb-2 text-gray-200" />
-                  <p className="text-xs text-gray-400">학습 기록이 없습니다.</p>
+                <div className="bg-white border border-dashed border-[#E5E5E3] rounded-xl p-8 text-center">
+                  <BookOpen size={22} className="mx-auto mb-2 text-[#D4D4D2]" />
+                  <p className="text-xs text-[#A3A3A3]">학습 기록이 없습니다.</p>
                 </div>
               ) : (
-                <div className="space-y-0">
-                  {recentSessions.map((s, i) => (
+                <div className="space-y-2">
+                  {recentSessions.map((s) => (
                     <div
                       key={s.id}
-                      className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors border border-black ${i > 0 ? "border-t-0" : ""}`}
+                      className="p-4 cursor-pointer bg-white border border-[#E5E5E3] rounded-xl hover:border-[#D4D4D2] hover:shadow-sm transition-all"
                       onClick={() => navigate(`/sessions/${s.id}`)}
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <div
-                          className={`w-1.5 h-1.5 flex-shrink-0 ${s.status === "completed" ? "swiss-red-bg" : s.status === "active" ? "bg-yellow-400" : "bg-gray-300"}`}
+                          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.status === "completed" ? "bg-[#5B5BD6]" : s.status === "active" ? "bg-amber-400" : "bg-[#D4D4D2]"}`}
                         />
-                        <p className="text-xs font-bold truncate">{s.startTopicTitle || "학습 세션"}</p>
+                        <p className="text-xs font-semibold text-[#0F0F0F] truncate">{s.startTopicTitle || "학습 세션"}</p>
                       </div>
-                      <div className="flex items-center gap-2 pl-3.5">
-                        <Clock size={10} className="text-gray-300" />
-                        <p className="text-xs text-gray-400">{new Date(s.createdAt).toLocaleDateString("ko-KR")}</p>
+                      <div className="flex items-center gap-1.5 pl-3.5">
+                        <Clock size={10} className="text-[#D4D4D2]" />
+                        <p className="text-xs text-[#A3A3A3]">{new Date(s.createdAt).toLocaleDateString("ko-KR")}</p>
                       </div>
                     </div>
                   ))}
@@ -750,33 +744,33 @@ function GroupRow({
   );
 
   return (
-    <div className={`border border-black ${!isLast ? "border-b-0" : ""}`}>
+    <div className="bg-white border border-[#E5E5E3] rounded-xl overflow-hidden hover:border-[#D4D4D2] transition-all">
       {/* Group header row */}
       <div
-        className="flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition-colors"
+        className="flex items-center justify-between px-4 py-3.5 cursor-pointer hover:bg-[#F8F7F5] transition-colors"
         onClick={onToggle}
       >
         <div className="flex items-center gap-3">
           {isExpanded ? (
-            <FolderOpen size={16} className="text-[var(--swiss-red)]" />
+            <FolderOpen size={15} className="text-[#5B5BD6]" />
           ) : (
-            <Folder size={16} className="text-gray-400" />
+            <Folder size={15} className="text-[#A3A3A3]" />
           )}
           <div>
-            <p className="text-sm font-bold">{group.name}</p>
+            <p className="text-sm font-semibold text-[#0F0F0F]">{group.name}</p>
             {group.description && (
-              <p className="text-xs text-gray-400 mt-0.5">{group.description}</p>
+              <p className="text-xs text-[#A3A3A3] mt-0.5">{group.description}</p>
             )}
           </div>
         </div>
         <div className="flex items-center gap-2">
           <span
-            className={`text-xs font-bold px-2 py-0.5 ${
+            className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
               group.analysisStatus === "done"
-                ? "bg-green-100 text-green-700"
+                ? "bg-[#DCFCE7] text-[#15803D]"
                 : group.analysisStatus === "analyzing"
-                ? "bg-yellow-100 text-yellow-700"
-                : "bg-gray-100 text-gray-500"
+                ? "bg-[#FEF3C7] text-[#92400E]"
+                : "bg-[#F0EFED] text-[#737373]"
             }`}
           >
             {group.analysisStatus === "done" ? "분석 완료" : group.analysisStatus === "analyzing" ? "분석 중" : "미분석"}
@@ -784,7 +778,7 @@ function GroupRow({
           {group.analysisStatus === "done" && (
             <button
               onClick={(e) => { e.stopPropagation(); navigate(`/groups/${group.id}`); }}
-              className="text-xs font-bold px-2 py-0.5 border border-black hover:bg-black hover:text-white transition-colors"
+              className="text-xs font-semibold px-3 py-1 bg-[#0F0F0F] text-white rounded-md hover:bg-[#262626] transition-colors"
             >
               열기
             </button>
@@ -792,14 +786,14 @@ function GroupRow({
           <button
             onClick={onAnalyze}
             disabled={isAnalyzing}
-            className="text-xs font-bold px-2 py-0.5 border border-black hover:bg-black hover:text-white transition-colors disabled:opacity-40"
+            className="text-xs font-semibold px-3 py-1 border border-[#E5E5E3] rounded-md text-[#525252] hover:border-[#A3A3A3] hover:text-[#0F0F0F] transition-colors disabled:opacity-40"
             title="그룹 전체 분석"
           >
             분석
           </button>
           <button
             onClick={onDelete}
-            className="p-1.5 transition-colors text-gray-300 hover:text-red-500"
+            className="p-1.5 transition-colors text-[#D4D4D2] hover:text-red-500"
             title="그룹 삭제"
           >
             <Trash2 size={13} />
@@ -809,26 +803,26 @@ function GroupRow({
 
       {/* Expanded: document list + add file */}
       {isExpanded && (
-        <div className="border-t border-gray-200 bg-gray-50">
+        <div className="border-t border-[#E5E5E3] bg-[#F8F7F5]">
           {groupDetail?.documents && groupDetail.documents.length > 0 ? (
             <div>
               {groupDetail.documents.map((doc: GroupDoc) => (
                 <div
                   key={doc.id}
-                  className="flex items-center justify-between px-8 py-3 border-b border-gray-200 last:border-b-0 transition-colors"
+                  className="flex items-center justify-between px-6 py-3 border-b border-[#E5E5E3] last:border-b-0"
                 >
                   <div className="flex items-center gap-3">
                     <div
-                      className={`w-1.5 h-1.5 flex-shrink-0 ${
-                        doc.analysisStatus === "done" ? "swiss-red-bg" : doc.analysisStatus === "analyzing" ? "bg-yellow-400" : "bg-gray-300"
+                      className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                        doc.analysisStatus === "done" ? "bg-[#5B5BD6]" : doc.analysisStatus === "analyzing" ? "bg-amber-400" : "bg-[#D4D4D2]"
                       }`}
                     />
-                    <span className="text-sm font-medium">{doc.title}</span>
+                    <span className="text-sm font-medium text-[#0F0F0F]">{doc.title}</span>
                     <FileTypeBadge fileType={doc.fileType ?? undefined} />
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); onDeleteDoc(doc.id, doc.title); }}
-                    className="p-1 transition-colors text-gray-300 hover:text-red-500"
+                    className="p-1 transition-colors text-[#D4D4D2] hover:text-red-500"
                     title="삭제"
                   >
                     <Trash2 size={12} />
@@ -837,12 +831,12 @@ function GroupRow({
               ))}
             </div>
           ) : (
-            <div className="px-8 py-4 text-xs text-gray-400">파일이 없습니다.</div>
+            <div className="px-6 py-4 text-xs text-[#A3A3A3]">파일이 없습니다.</div>
           )}
-          <div className="px-8 py-3 border-t border-gray-200">
+          <div className="px-6 py-3 border-t border-[#E5E5E3]">
             <button
               onClick={onAddFile}
-              className="flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-black transition-colors"
+              className="flex items-center gap-1.5 text-xs font-semibold text-[#737373] hover:text-[#5B5BD6] transition-colors"
             >
               <Plus size={12} /> 파일 추가 (PDF / DOC / DOCX / PPT / PPTX)
             </button>
