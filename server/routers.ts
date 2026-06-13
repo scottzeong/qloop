@@ -708,7 +708,8 @@ async function generateFirstQuestion(
   openQloopMode = false,
   learningLanguage = "ko",
   libraryContext = "",
-  userId: number | null = null
+  userId: number | null = null,
+  topicContext = ""
 ): Promise<string> {
   let webContext = "";
   if (openQloopMode) {
@@ -719,6 +720,9 @@ async function generateFirstQuestion(
     : "";
   const libraryContextInstruction = libraryContext
     ? `\n\nADDITIONAL KNOWLEDGE LIBRARY CONTEXT (use to enrich questions and feedback, but do NOT ask the learner to read these materials):\n${libraryContext.slice(0, 8000)}`
+    : "";
+  const topicContextInstruction = topicContext
+    ? `\n\nTOPIC CONTENT (from document analysis — use this to ask about specific concepts in this material):\n${topicContext}`
     : "";
   const langName = LANGUAGE_NAMES[learningLanguage] || "Korean";
   const languageInstruction = `\nIMPORTANT: The document may be written in a foreign language, but you MUST ask your question in ${langName}. The learner will also answer in ${langName}. Do NOT use the source document's language if it differs from ${langName}.`;
@@ -736,7 +740,7 @@ CRITICAL RULES:
 - The question should be open-ended and thought-provoking.
 - Assess the learner's baseline understanding of the topic concept itself.
 - Be directly related to the topic.
-- Use the same language as the topic title (Korean if Korean).${openQloopInstruction}${languageInstruction}${libraryContextInstruction}
+- Use the same language as the topic title (Korean if Korean).${openQloopInstruction}${languageInstruction}${libraryContextInstruction}${topicContextInstruction}
 Return only the question text, nothing else.`,
       },
       {
@@ -816,6 +820,135 @@ async function runSocraticEvaluation(opts: {
   }
 }
 
+// ─── 토픽 컨텍스트 추출 헬퍼 ─────────────────────────────────────────────────
+/**
+ * doc.structure JSON에서 특정 topicId/topicTitle에 해당하는 내용을 추출.
+ * 토픽 설명 + 소주제 목록 + 관련 핵심 개념 카드를 조합해 반환.
+ */
+function extractTopicContext(
+  structure: unknown,
+  topicId: string | null | undefined,
+  topicTitle: string | null | undefined
+): string {
+  if (!structure || typeof structure !== "object") return "";
+  const s = structure as Record<string, unknown>;
+
+  // 1. chapters 트리에서 topicId 또는 topicTitle 매칭
+  let matchedTopic: Record<string, unknown> | null = null;
+  let matchedChapterTitle = "";
+
+  const chapters = Array.isArray(s.chapters) ? s.chapters : [];
+  for (const chapter of chapters) {
+    if (!chapter || typeof chapter !== "object") continue;
+    const ch = chapter as Record<string, unknown>;
+    // 챕터 자체가 매칭되는 경우
+    if (
+      (topicId && ch.id === topicId) ||
+      (topicTitle && ch.title === topicTitle)
+    ) {
+      matchedTopic = ch;
+      matchedChapterTitle = "";
+      break;
+    }
+    // topics 배열 탐색
+    const topics = Array.isArray(ch.topics) ? ch.topics : [];
+    for (const topic of topics) {
+      if (!topic || typeof topic !== "object") continue;
+      const t = topic as Record<string, unknown>;
+      if (
+        (topicId && t.id === topicId) ||
+        (topicTitle && t.title === topicTitle)
+      ) {
+        matchedTopic = t;
+        matchedChapterTitle = typeof ch.title === "string" ? ch.title : "";
+        break;
+      }
+      // subtopics 탐색
+      const subtopics = Array.isArray(t.subtopics) ? t.subtopics : [];
+      for (const sub of subtopics) {
+        if (!sub || typeof sub !== "object") continue;
+        const st = sub as Record<string, unknown>;
+        if (
+          (topicId && st.id === topicId) ||
+          (topicTitle && st.title === topicTitle)
+        ) {
+          matchedTopic = st;
+          matchedChapterTitle = typeof ch.title === "string" ? `${ch.title} > ${t.title}` : typeof t.title === "string" ? t.title : "";
+          break;
+        }
+      }
+      if (matchedTopic) break;
+    }
+    if (matchedTopic) break;
+  }
+
+  const parts: string[] = [];
+
+  if (matchedChapterTitle) {
+    parts.push(`[상위 챕터] ${matchedChapterTitle}`);
+  }
+
+  if (matchedTopic) {
+    const title = typeof matchedTopic.title === "string" ? matchedTopic.title : "";
+    const desc = typeof matchedTopic.description === "string" ? matchedTopic.description : "";
+    if (title) parts.push(`[토픽] ${title}`);
+    if (desc) parts.push(`[설명] ${desc}`);
+
+    // 소주제 목록
+    const subtopics = Array.isArray(matchedTopic.subtopics) ? matchedTopic.subtopics : [];
+    const topics2 = Array.isArray(matchedTopic.topics) ? matchedTopic.topics : [];
+    const children = [...subtopics, ...topics2];
+    if (children.length > 0) {
+      const subList = children
+        .filter((c): c is Record<string, unknown> => !!c && typeof c === "object")
+        .map((c) => {
+          const cTitle = typeof c.title === "string" ? c.title : "";
+          const cDesc = typeof c.description === "string" ? c.description : "";
+          return cDesc ? `  - ${cTitle}: ${cDesc}` : `  - ${cTitle}`;
+        })
+        .join("\n");
+      if (subList) parts.push(`[소주제 목록]\n${subList}`);
+    }
+  }
+
+  // 2. 핵심 개념 카드에서 관련 항목 추출 (최대 8개)
+  const cards = Array.isArray(s.keyConceptCards) ? s.keyConceptCards : [];
+  const relevantCards = cards
+    .filter((card): card is Record<string, unknown> => !!card && typeof card === "object")
+    .filter((card) => {
+      if (!topicTitle) return true;
+      const term = typeof card.term === "string" ? card.term : "";
+      const def = typeof card.definition === "string" ? card.definition : "";
+      // 토픽 제목 키워드가 포함된 카드만 선택 (폴백: 전체 상위 8개)
+      return term.toLowerCase().includes(topicTitle.toLowerCase().slice(0, 10)) ||
+             def.toLowerCase().includes(topicTitle.toLowerCase().slice(0, 10));
+    })
+    .slice(0, 8);
+
+  // 관련 카드가 없으면 전체 카드 상위 5개 사용
+  const finalCards = relevantCards.length > 0 ? relevantCards : cards.slice(0, 5).filter(
+    (card): card is Record<string, unknown> => !!card && typeof card === "object"
+  );
+
+  if (finalCards.length > 0) {
+    const cardText = finalCards.map((card) => {
+      const term = typeof card.term === "string" ? card.term : "";
+      const def = typeof card.definition === "string" ? card.definition : "";
+      const ex = typeof card.example === "string" && card.example ? ` (예: ${card.example})` : "";
+      return `  • ${term}: ${def}${ex}`;
+    }).join("\n");
+    parts.push(`[핵심 개념 카드]\n${cardText}`);
+  }
+
+  // 3. 문서 전체 요약 (컨텍스트가 충분하지 않을 경우 보완)
+  if (parts.length === 0 || (!matchedTopic && parts.length < 2)) {
+    const summary = typeof s.summary === "string" ? s.summary : "";
+    if (summary) parts.push(`[문서 요약] ${summary}`);
+  }
+
+  return parts.join("\n\n").slice(0, 3000); // LLM 컨텍스트 과부하 방지
+}
+
 // 질문 유형 3단계 난이도 매핑
 // 초반 (1~8번): 기초 이해 확인
 const QUESTION_TYPES_EASY = ["definition", "clarification"];
@@ -856,7 +989,8 @@ async function generateNextMessage(
   answeredQuestions = 0,
   learningLanguage = "ko",
   libraryContext = "",
-  userId: number | null = null
+  userId: number | null = null,
+  topicContext = "" // 문서 구조에서 추출한 토픽 설명 + 핵심 개념 카드
 ): Promise<{ content: string; messageType: string; isTopicComplete: boolean; questionType?: string }> {
   // Open QLoop: 대화 초반(1~3번째 답변)에만 웹 검색 수행 (비용 절감)
   let webContextForNext = "";
@@ -905,11 +1039,14 @@ async function generateNextMessage(
   const langInstruction2 = learningLanguage !== "ko"
     ? `\nIMPORTANT: The source document may be in a foreign language. You MUST write ALL feedback and questions in ${langName2}. The learner will respond in ${langName2}.`
     : `\nIMPORTANT: Always write ALL feedback and questions in Korean (한국어). The learner will respond in Korean.`;
+  const topicContextInstruction = topicContext
+    ? `\n\nTOPIC CONTENT (from document analysis — use this to ensure questions cover all key concepts and subtopics in this material):\n${topicContext}`
+    : "";
   const baseRules = `CRITICAL RULES:
 - Do NOT ask the learner to read, look at, or refer to any document, book, or material.
 - Do NOT say things like "according to the document", "as described in the text", "what does the document say about...".
 - All questions and feedback must be based on the learner's own thinking and understanding.
-- Use the same language as the conversation (Korean if Korean).${langInstruction2}`;
+- Use the same language as the conversation (Korean if Korean).${langInstruction2}${topicContextInstruction}`;
 
   if (isUserQuestion) {
     const response = await aiInvoke(userId, {
@@ -1836,6 +1973,11 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
         });
         // 첫 번째 질문 생성 — 문서 직접 참조 없이 토픽 정보만 사용
         const learningLang = (doc as any).learningLanguage || "ko";
+        const firstTopicContext = extractTopicContext(
+          (doc as any).structure ?? null,
+          input.topicId,
+          input.topicTitle
+        );
         const firstQuestion = await generateFirstQuestion(
           input.topicTitle,
           input.topicDescription,
@@ -1843,7 +1985,8 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
           openQloopMode, // open=true
           learningLang,
           libraryContext,
-          ctx.user.id
+          ctx.user.id,
+          firstTopicContext
         );
 
         await createSessionMessage({
@@ -1930,6 +2073,13 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
           }
         }
 
+        // 문서 구조에서 토픽 컨텍스트 추출 (핵심 개념 + 소주제 설명)
+        const topicContext = extractTopicContext(
+          (doc as any).structure ?? null,
+          session.startTopicId ?? null,
+          session.startTopicTitle ?? null
+        );
+
         const aiResponse = await generateNextMessage(
           doc.title,
           session.startTopicTitle || "",
@@ -1940,7 +2090,8 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
           currentAnsweredForTier,
           docLearningLang,
           libraryContext,
-          ctx.user.id
+          ctx.user.id,
+          topicContext
         );
 
         // AI 메시지 저장
@@ -2205,10 +2356,7 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
         }
         return progressMap;
       }),
-    // 문서별 토픽 완성도 조회 (topicId → status 맵)
-    // 완료: 해당 topicId로 completed 세션 존재
-    // 진행중: 해당 topicId로 active 세션 존재 (completed 없음)
-    // 미진행: 세션 없음
+    // 문서별 토픽 완성도 조회
     getTopicProgress: protectedProcedure
       .input(z.object({ documentId: z.number() }))
       .query(async ({ ctx, input }) => {
@@ -2230,7 +2378,7 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
         return progressMap;
       }),
 
-    // QLoop 모델별 세션 통계 (Core/Curated/Open 세션 수 + 평균 점수)
+    // QLoop 모델별 세션 통계
     getModelStats: protectedProcedure.query(async ({ ctx }) => {
       const sessions = await getSessionsByUserId(ctx.user.id);
       const modelMap: Record<string, { count: number; totalScore: number; scoredCount: number }> = {
