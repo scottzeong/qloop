@@ -1056,17 +1056,23 @@ export default function DocumentDetail() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      <PageHeader
-        title={doc.title}
-        actions={
+      <PageHeader title={doc.title} />
+
+      {/* Document control sub-bar */}
+      <div className="sticky top-14 z-40 bg-white border-b border-[#E5E5E3]">
+        <div className="max-w-7xl mx-auto px-6 h-10 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <LanguageBadge doc={doc} docId={docId} />
             {(doc as any).structureLocked === 1 && (
-              <div className="flex items-center gap-1.5 text-xs font-bold text-black/50 border border-black/20 px-2 py-1">
-                <Lock size={10} />
-                <span>{(doc as any).selectedStructure === 'tree' ? '목차 트리' : (doc as any).selectedStructure === 'conceptMap' ? '개념 맵' : '학습 경로'} 고정됨</span>
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#F0EFED]">
+                <Lock size={10} className="text-[#737373]" />
+                <span className="text-xs font-medium text-[#737373]">
+                  {(doc as any).selectedStructure === 'tree' ? '목차 트리' : (doc as any).selectedStructure === 'conceptMap' ? '개념 맵' : '학습 경로'} 고정
+                </span>
               </div>
             )}
+          </div>
+          <div className="flex items-center gap-1.5">
             {doc.analysisStatus === "done" && !isAnalyzing && (
               <button
                 onClick={() => {
@@ -1078,50 +1084,51 @@ export default function DocumentDetail() {
                   }
                 }}
                 disabled={reanalyzeMutation.isPending}
-                className="flex items-center gap-1 text-xs font-bold uppercase tracking-widest border border-black/30 px-3 py-1.5 hover:border-black transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border border-[#E5E5E3] bg-white hover:bg-[#F8F7F5] text-[#525252] transition-colors disabled:opacity-50"
               >
-                <RotateCcw size={10} /> 재분석
+                <RotateCcw size={11} /> 재분석
               </button>
             )}
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="flex items-center gap-1 text-xs font-bold text-black/30 hover:text-red-600 transition-colors px-2 py-1.5"
+              className="p-1.5 rounded-lg text-[#A3A3A3] hover:text-red-500 hover:bg-red-50 transition-colors"
               title="문서 삭제"
             >
               <Trash2 size={13} />
             </button>
-            <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>학습자료 삭제</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    <strong>"{doc.title}"</strong>을(를) 삭제하시겠습니까?<br />
-                    <span className="text-red-600 font-medium">관련 학습이력도 모두 함께 삭제됩니다.</span>
-                    <br />이 작업은 되돌릴 수 없습니다.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>취소</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={async () => {
-                      try {
-                        await deleteDocMutation.mutateAsync({ documentId: docId });
-                        toast.success("학습자료와 관련 학습이력이 삭제되었습니다.");
-                        navigate("/dashboard");
-                      } catch {
-                        toast.error("삭제에 실패했습니다.");
-                      }
-                    }}
-                    className="bg-red-600 hover:bg-red-700 text-white"
-                  >
-                    삭제
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
           </div>
-        }
-      />
+        </div>
+      </div>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>학습자료 삭제</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>"{doc.title}"</strong>을(를) 삭제하시겠습니까?<br />
+              <span className="text-red-600 font-medium">관련 학습이력도 모두 함께 삭제됩니다.</span>
+              <br />이 작업은 되돌릴 수 없습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                try {
+                  await deleteDocMutation.mutateAsync({ documentId: docId });
+                  toast.success("학습자료와 관련 학습이력이 삭제되었습니다.");
+                  navigate("/dashboard");
+                } catch {
+                  toast.error("삭제에 실패했습니다.");
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <main className="flex-1 max-w-7xl mx-auto px-8 py-10 w-full">
         {/* 분석 전 */}
