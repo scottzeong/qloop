@@ -236,33 +236,38 @@ export default function LearningSession() {
         title={session.startTopicTitle ?? ""}
         backTo={(session as any).groupId ? `/groups/${(session as any).groupId}` : `/documents/${session.documentId}`}
         backLabel={(session as any).groupId ? "그룹으로 돌아가기" : "문서로 돌아가기"}
-        actions={
-          <div className="flex items-center gap-5">
-            {/* Progress */}
-            <div className="flex items-center gap-2.5">
-              <span className="pm-label">진도</span>
-              <div className="w-20 bg-[#E5E5E3] h-1 rounded-full overflow-hidden">
-                <div
-                  className="h-1 rounded-full transition-all duration-500"
-                  style={{ width: `${progress}%`, backgroundColor: "var(--pm-indigo)" }}
-                />
-              </div>
-              <span className="text-xs font-bold" style={{ color: "var(--pm-indigo)" }}>{progress}%</span>
-            </div>
+      />
 
-            {/* QLoop 모델 */}
+      {/* Session control bar */}
+      <div className="sticky top-14 z-40 bg-white border-b border-[#E5E5E3]">
+        <div className="max-w-7xl mx-auto px-6 h-10 flex items-center justify-between gap-4">
+          {/* Progress */}
+          <div className="flex items-center gap-2.5">
+            <span className="pm-label">진도</span>
+            <div className="w-24 bg-[#E5E5E3] h-1 rounded-full overflow-hidden">
+              <div
+                className="h-1 rounded-full transition-all duration-500"
+                style={{ width: `${progress}%`, backgroundColor: "var(--pm-indigo)" }}
+              />
+            </div>
+            <span className="text-xs font-bold tabular-nums" style={{ color: "var(--pm-indigo)" }}>{progress}%</span>
+          </div>
+
+          {/* Right controls */}
+          <div className="flex items-center gap-2">
+            {/* QLoop 모델 선택 */}
             {!isCompleted && (
               <div className="relative">
                 <button
                   onClick={() => setShowModelPicker(!showModelPicker)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#E5E5E3] bg-white hover:border-[#D4D4D2] transition-colors shadow-sm"
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border border-[#E5E5E3] bg-white hover:border-[#D4D4D2] transition-colors"
                 >
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: modelConfig[currentModel].color }} />
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: modelConfig[currentModel].color }} />
                   <span>{modelConfig[currentModel].label}</span>
-                  <ChevronDown size={12} className="opacity-50" />
+                  <ChevronDown size={11} className="opacity-50" />
                 </button>
                 {showModelPicker && (
-                  <div className="absolute right-0 top-full mt-1.5 w-60 bg-white rounded-xl border border-[#E5E5E3] shadow-lg z-50 overflow-hidden">
+                  <div className="absolute right-0 top-full mt-1.5 w-56 bg-white rounded-xl border border-[#E5E5E3] shadow-lg z-50 overflow-hidden">
                     {(["core", "curated", "open"] as const).map((model) => {
                       const descs: Record<string, string> = {
                         core: "학습자료만 참조",
@@ -281,10 +286,10 @@ export default function LearningSession() {
                               refetchSession();
                             } catch { toast.error("모델 변경 실패"); }
                           }}
-                          className={`w-full px-4 py-3 text-left hover:bg-[#F8F7F5] transition-colors border-b border-[#F0EFED] last:border-b-0 ${currentModel === model ? "bg-[#F0EFED]" : ""}`}
+                          className={`w-full px-4 py-2.5 text-left hover:bg-[#F8F7F5] transition-colors border-b border-[#F0EFED] last:border-b-0 ${currentModel === model ? "bg-[#F0EFED]" : ""}`}
                         >
                           <div className="flex items-center gap-2.5">
-                            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: modelConfig[model].color }} />
+                            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: modelConfig[model].color }} />
                             <div>
                               <div className="text-xs font-semibold">{modelConfig[model].label}</div>
                               <div className="text-[10px] text-[#A3A3A3] mt-0.5">{descs[model]}</div>
@@ -303,18 +308,18 @@ export default function LearningSession() {
               <button
                 onClick={handleComplete}
                 disabled={completing}
-                className="px-4 py-1.5 text-xs font-semibold rounded-lg border border-[#E5E5E3] bg-white hover:bg-[#F8F7F5] transition-colors disabled:opacity-50"
+                className="px-3 py-1 text-xs font-semibold rounded-lg border border-[#E5E5E3] bg-white hover:bg-[#F8F7F5] transition-colors disabled:opacity-50"
               >
                 {completing ? "처리 중..." : "세션 종료"}
               </button>
             )}
           </div>
-        }
-      />
+        </div>
+      </div>
 
       <div className="flex-1 flex max-w-7xl mx-auto w-full">
         {/* Sidebar */}
-        <div className="w-60 flex-shrink-0 bg-white border-r border-[#E5E5E3] p-5 sticky top-[65px] h-[calc(100vh-65px)] overflow-y-auto">
+        <div className="w-60 flex-shrink-0 bg-white border-r border-[#E5E5E3] p-5 sticky top-[96px] h-[calc(100vh-96px)] overflow-y-auto">
           <p className="pm-label mb-4">학습 진행 상황</p>
 
           <div className="space-y-2.5 mb-5">
