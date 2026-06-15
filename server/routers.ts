@@ -21,13 +21,14 @@ import { getDb } from "./db";
 import {
   questions,
   questionEvaluations,
+  moduleEvaluations,
   questionTypes,
   evaluationDimensions,
   questionTypeDimensionWeights,
   socraticEvaluationPolicies,
   documents,
 } from "../drizzle/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import {
   createDocument,
   getDocumentById,
@@ -2378,7 +2379,7 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
         return progressMap;
       }),
 
-    // QLoop 모델별 세션 통계
+    // QLoop 모델별 세션 통계 (moduleEvaluations.moduleScore 기반 실제 점수 계산)
     getModelStats: protectedProcedure.query(async ({ ctx }) => {
       const sessions = await getSessionsByUserId(ctx.user.id);
       const modelMap: Record<string, { count: number; totalScore: number; scoredCount: number }> = {
@@ -2386,12 +2387,38 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
         curated: { count: 0, totalScore: 0, scoredCount: 0 },
         open: { count: 0, totalScore: 0, scoredCount: 0 },
       };
+
+      // 완료된 세션의 moduleEvaluations에서 실제 점수를 가져옴
+      const db = await getDb();
+      const sessionIdToScore: Record<number, number> = {};
+      if (db) {
+        const completedSessionIds = sessions
+          .filter((s) => s.status === "completed")
+          .map((s) => s.id);
+        if (completedSessionIds.length > 0) {
+          const evals = await db
+            .select({ sessionId: moduleEvaluations.sessionId, moduleScore: moduleEvaluations.moduleScore })
+            .from(moduleEvaluations)
+            .where(
+              and(
+                eq(moduleEvaluations.learnerId, ctx.user.id),
+                inArray(moduleEvaluations.sessionId, completedSessionIds)
+              )
+            );
+          for (const e of evals) {
+            if (e.sessionId && e.moduleScore != null) {
+              sessionIdToScore[e.sessionId] = e.moduleScore;
+            }
+          }
+        }
+      }
+
       for (const s of sessions) {
         const mode = (s as any).openQloopMode as number ?? 0;
         const key = mode === 1 ? "open" : mode === 2 ? "curated" : "core";
         modelMap[key].count++;
-        const score = (s as any).evaluationScore as number | null;
-        if (score !== null && score !== undefined) {
+        const score = sessionIdToScore[s.id] ?? null;
+        if (score !== null) {
           modelMap[key].totalScore += score;
           modelMap[key].scoredCount++;
         }
