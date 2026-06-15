@@ -185,10 +185,8 @@ export default function PageHeader({
   const isDashboard = location === "/dashboard";
   const isAdminOrAbove =
     user?.role === "admin" || user?.role === "superadmin";
-  const isNavPage =
-    navItems.some((item) => isActive(item.path)) ||
-    (isAdminOrAbove && isActive(adminNavItem.path));
-  const isSubPage = !isDashboard && !isNavPage;
+  // 대시보드만 nav 탭 표시; 나머지 모든 페이지는 breadcrumb 모드
+  const isSubPage = !isDashboard;
 
   return (
     <>
@@ -223,18 +221,6 @@ export default function PageHeader({
               </>
             )}
 
-            {isNavPage && (
-              <>
-                <span className="text-[#D4D4D2] text-sm">/</span>
-                <button
-                  onClick={() => navigate("/dashboard")}
-                  className="flex items-center gap-1 text-xs text-[#A3A3A3] hover:text-[#0F0F0F] transition-colors font-medium"
-                >
-                  <ArrowLeft size={11} />
-                  대시보드
-                </button>
-              </>
-            )}
           </div>
 
           <div className="flex items-center gap-1 flex-shrink-0">
