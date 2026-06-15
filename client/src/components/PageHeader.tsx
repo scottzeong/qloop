@@ -238,39 +238,43 @@ export default function PageHeader({
           </div>
 
           <div className="flex items-center gap-1 flex-shrink-0">
-            <nav className="flex items-center">
-              {navItems.map((item) => (
-                <button
-                  key={item.path}
-                  onClick={() => navigate(item.path)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                    isActive(item.path)
-                      ? "bg-[#F0EFED] text-[#0F0F0F]"
-                      : "text-[#737373] hover:text-[#0F0F0F] hover:bg-[#F8F7F5]"
-                  }`}
-                >
-                  {item.icon}
-                  {item.label}
-                </button>
-              ))}
-              {isAdminOrAbove && (
-                <button
-                  onClick={() => navigate(adminNavItem.path)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                    isActive(adminNavItem.path)
-                      ? "bg-[#F0EFED] text-[#0F0F0F]"
-                      : "text-[#737373] hover:text-[#0F0F0F] hover:bg-[#F8F7F5]"
-                  }`}
-                >
-                  {adminNavItem.icon}
-                  {adminNavItem.label}
-                </button>
-              )}
-            </nav>
+            {/* 메인/대시보드 페이지: 전체 nav 탭 표시 */}
+            {!isSubPage && (
+              <nav className="flex items-center">
+                {navItems.map((item) => (
+                  <button
+                    key={item.path}
+                    onClick={() => navigate(item.path)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                      isActive(item.path)
+                        ? "bg-[#F0EFED] text-[#0F0F0F]"
+                        : "text-[#737373] hover:text-[#0F0F0F] hover:bg-[#F8F7F5]"
+                    }`}
+                  >
+                    {item.icon}
+                    {item.label}
+                  </button>
+                ))}
+                {isAdminOrAbove && (
+                  <button
+                    onClick={() => navigate(adminNavItem.path)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                      isActive(adminNavItem.path)
+                        ? "bg-[#F0EFED] text-[#0F0F0F]"
+                        : "text-[#737373] hover:text-[#0F0F0F] hover:bg-[#F8F7F5]"
+                    }`}
+                  >
+                    {adminNavItem.icon}
+                    {adminNavItem.label}
+                  </button>
+                )}
+              </nav>
+            )}
 
+            {/* 세부 페이지: page-specific actions만 표시 */}
             {actions && (
               <>
-                <div className="w-px h-4 bg-[#E5E5E3] mx-1" />
+                {!isSubPage && <div className="w-px h-4 bg-[#E5E5E3] mx-1" />}
                 {actions}
               </>
             )}
@@ -300,11 +304,6 @@ export default function PageHeader({
           </div>
         </div>
       </header>
-
-      {showPwModal && <ChangePasswordModal onClose={() => setShowPwModal(false)} />}
-    </>
-  );
-}
 
       {showPwModal && <ChangePasswordModal onClose={() => setShowPwModal(false)} />}
     </>
