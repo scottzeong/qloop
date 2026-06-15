@@ -255,6 +255,11 @@ export default function LearningSession() {
 
           {/* Right controls */}
           <div className="flex items-center gap-2">
+            {isCompleted && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-semibold" style={{ backgroundColor: "var(--pm-indigo-light)", color: "var(--pm-indigo)" }}>
+                세션 완료
+              </span>
+            )}
             {/* QLoop 모델 선택 */}
             {!isCompleted && (
               <div className="relative">
