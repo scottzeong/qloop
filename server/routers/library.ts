@@ -7,7 +7,7 @@ import {
   documents,
 } from "../../drizzle/schema";
 import { eq, and, desc, like, or, inArray } from "drizzle-orm";
-import { storagePut, storageGetSignedUrl } from "../storage";
+import { storagePut, storageGetSignedUrl, storageDelete } from "../storage";
 import { invokeLLM, type Message } from "../_core/llm";
 import { aiInvoke } from "../ai/aiRouter";
 import mammoth from "mammoth";
@@ -439,7 +439,16 @@ export const libraryRouter = router({
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB 연결 실패" });
+      const [item] = await db
+        .select({ storageKey: knowledgeLibrary.storageKey })
+        .from(knowledgeLibrary)
+        .where(eq(knowledgeLibrary.id, input.libraryItemId))
+        .limit(1);
       await db.delete(knowledgeLibrary).where(eq(knowledgeLibrary.id, input.libraryItemId));
+      // R2 파일 삭제 (존재하는 경우)
+      if (item?.storageKey) {
+        try { await storageDelete(item.storageKey); } catch (e) { console.warn("[R2] Library 파일 삭제 실패:", e); }
+      }
       return { success: true };
     }),
 
@@ -450,7 +459,7 @@ export const libraryRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB 연결 실패" });
       const [item] = await db
-        .select({ addedBy: knowledgeLibrary.addedBy })
+        .select({ addedBy: knowledgeLibrary.addedBy, storageKey: knowledgeLibrary.storageKey })
         .from(knowledgeLibrary)
         .where(eq(knowledgeLibrary.id, input.libraryItemId))
         .limit(1);
@@ -458,6 +467,10 @@ export const libraryRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "삭제 권한이 없습니다." });
       }
       await db.delete(knowledgeLibrary).where(eq(knowledgeLibrary.id, input.libraryItemId));
+      // R2 파일 삭제 (존재하는 경우)
+      if (item.storageKey) {
+        try { await storageDelete(item.storageKey); } catch (e) { console.warn("[R2] Library 파일 삭제 실패:", e); }
+      }
       return { success: true };
     }),
 
@@ -494,7 +507,7 @@ export const libraryRouter = router({
       await db
         .update(documents)
         .set({ openQloopEnabled: input.enabled ? 1 : 0 })
-        .where(eq(documents.id, input.documentId));
+        .where(eq(dodocuments.id, input.documentId));
 
       return { success: true, openQloopEnabled: input.enabled };
     }),

@@ -1185,6 +1185,40 @@ Format the summary with:
 
 // ─── Router ───────────────────────────────────────────────────────────────────
 
+// ── Login Rate Limiter (브루트포스 방어) ────────────────────────────────────
+const loginAttempts = new Map<string, { count: number; firstAttempt: number }>();
+const LOGIN_MAX_ATTEMPTS = 10;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15분 윈도우
+const LOGIN_LOCKOUT_MS = 15 * 60 * 1000; // 15분 잠금
+
+function checkLoginRateLimit(ip: string): void {
+  const now = Date.now();
+  const record = loginAttempts.get(ip);
+  if (!record) return;
+  if (now - record.firstAttempt > LOGIN_WINDOW_MS) {
+    loginAttempts.delete(ip);
+    return;
+  }
+  if (record.count >= LOGIN_MAX_ATTEMPTS) {
+    const remaining = Math.ceil((record.firstAttempt + LOGIN_LOCKOUT_MS - now) / 1000 / 60);
+    throw new Error(`로그인 시도 횟수를 초과했습니다. ${remaining}분 후 다시 시도해주세요.`);
+  }
+}
+
+function recordLoginFailure(ip: string): void {
+  const now = Date.now();
+  const record = loginAttempts.get(ip);
+  if (!record || now - record.firstAttempt > LOGIN_WINDOW_MS) {
+    loginAttempts.set(ip, { count: 1, firstAttempt: now });
+  } else {
+    record.count++;
+  }
+}
+
+function clearLoginAttempts(ip: string): void {
+  loginAttempts.delete(ip);
+}
+
 export const appRouter = router({
   system: systemRouter,
   socratic: socraticRouter,
@@ -1224,14 +1258,23 @@ export const appRouter = router({
         password: z.string().min(1),
       }))
       .mutation(async ({ input, ctx }) => {
+        const ip = (ctx.req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? ctx.req.socket?.remoteAddress ?? "unknown";
+        checkLoginRateLimit(ip);
         const db = await getDb();
         if (!db) throw new Error("Database unavailable");
         const { users } = await import("../drizzle/schema");
         const { eq } = await import("drizzle-orm");
         const [user] = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
-        if (!user || !user.passwordHash) throw new Error("이메일 또는 비밀번호가 올바르지 않습니다");
+        if (!user || !user.passwordHash) {
+          recordLoginFailure(ip);
+          throw new Error("이메일 또는 비밀번호가 올바르지 않습니다");
+        }
         const valid = await verifyPassword(input.password, user.passwordHash);
-        if (!valid) throw new Error("이메일 또는 비밀번호가 올바르지 않습니다");
+        if (!valid) {
+          recordLoginFailure(ip);
+          throw new Error("이메일 또는 비밀번호가 올바르지 않습니다");
+        }
+        clearLoginAttempts(ip);
         const sessionToken = await sdk.createSessionToken(user.openId, { name: user.name || "", expiresInMs: ONE_YEAR_MS });
         const cookieOptions = getSessionCookieOptions(ctx.req);
         ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
@@ -1275,6 +1318,26 @@ export const appRouter = router({
         const { users } = await import("../drizzle/schema");
         const { eq } = await import("drizzle-orm");
         await db.update(users).set({ role: input.role }).where(eq(users.openId, input.openId));
+        return { success: true } as const;
+      }),
+
+    // 비밀번호 변경
+    changePassword: protectedProcedure
+      .input(z.object({
+        currentPassword: z.string().min(1, "현재 비밀번호를 입력해주세요"),
+        newPassword: z.string().min(8, "새 비밀번호는 최소 8자 이상이어야 합니다"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database unavailable");
+        const { users } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const [user] = await db.select().from(users).where(eq(users.openId, ctx.user.openId)).limit(1);
+        if (!user || !user.passwordHash) throw new Error("비밀번호 인증 방식의 계정이 아닙니다");
+        const valid = await verifyPassword(input.currentPassword, user.passwordHash);
+        if (!valid) throw new Error("현재 비밀번호가 올바르지 않습니다");
+        const newHash = await hashPassword(input.newPassword);
+        await db.update(users).set({ passwordHash: newHash }).where(eq(users.openId, ctx.user.openId));
         return { success: true } as const;
       }),
   }),
@@ -2377,6 +2440,24 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
           }
         }
         return progressMap;
+      }),
+
+    // 세션 삭제
+    delete: protectedProcedure
+      .input(z.object({ sessionId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database unavailable");
+        const session = await getLearningSessionById(input.sessionId);
+        if (!session || session.userId !== ctx.user.id) throw new Error("세션을 찾을 수 없습니다.");
+        const { sessionMessages, questionEvaluations, moduleEvaluations: meTable, learningSessions } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        // 관련 데이터 삭제 (순서: 메시지 → 평가 → 모듈 평가 → 세션)
+        await db.delete(sessionMessages).where(eq(sessionMessages.sessionId, input.sessionId));
+        await db.delete(questionEvaluations).where(eq(questionEvaluations.sessionId, input.sessionId));
+        await db.delete(meTable).where(eq(meTable.sessionId, input.sessionId));
+        await db.delete(learningSessions).where(eq(learningSessions.id, input.sessionId));
+        return { success: true } as const;
       }),
 
     // QLoop 모델별 세션 통계 (moduleEvaluations.moduleScore 기반 실제 점수 계산)
