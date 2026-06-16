@@ -1,11 +1,17 @@
 {
   "version": 2,
-  "buildCommand": "vite build && npx esbuild server-vercel.ts --bundle --platform=node --packages=external --format=esm --outfile=api/server.js",
+  "buildCommand": "vite build",
   "outputDirectory": "dist/public",
   "installCommand": "pnpm install --frozen-lockfile",
+  "functions": {
+    "api/server.ts": {
+      "maxDuration": 30
+    }
+  },
   "rewrites": [
     { "source": "/api/health", "destination": "/api/server" },
     { "source": "/api/trpc/:path*", "destination": "/api/server" },
     { "source": "/r2-storage/:path*", "destination": "/api/server" },
     { "source": "/(.*)", "destination": "/index.html" }
-  ]}
+  ]
+}
