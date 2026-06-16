@@ -16,7 +16,7 @@ import {
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { trpc } from "@/_core/trpc";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 
 interface PageHeaderProps {
   title?: string;
