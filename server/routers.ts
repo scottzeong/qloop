@@ -3,10 +3,6 @@ import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { hashPassword, verifyPassword } from "./_core/password";
 import { sdk } from "./_core/sdk";
 import { nanoid } from "nanoid";
-import mammoth from "mammoth";
-import { parseOffice } from "officeparser";
-import WordExtractor from "word-extractor";
-import PDFParser from "pdf2json";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -178,15 +174,18 @@ async function extractTextFromOfficeFile(fileUrl: string, mimeType: string): Pro
 
     if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
       // DOCX → mammoth으로 텍스트 추출 (가장 안정적)
+      const mammoth = (await import("mammoth")).default;
       const result = await mammoth.extractRawText({ buffer });
       return result.value || null;
     } else if (mimeType === "application/msword") {
       // DOC (Word 97-2003, CFB 포맷) → word-extractor 사용
+      const WordExtractor = (await import("word-extractor")).default;
       const extractor = new WordExtractor();
       const doc = await extractor.extract(buffer);
       return doc.getBody() || null;
     } else {
       // PPT / PPTX → officeparser 사용
+      const { parseOffice } = await import("officeparser");
       const ast = await parseOffice(buffer);
       const text = ast.toText();
       return text || null;
@@ -206,6 +205,7 @@ async function extractTextFromPdf(fileUrl: string): Promise<string | null> {
     const buffer = Buffer.from(arrayBuffer);
     console.log("[extractTextFromPdf] 버퍼 크기:", buffer.length);
     const text = await new Promise<string | null>((resolve) => {
+      const PDFParser = (await import("pdf2json")).default;
       const parser = new PDFParser(null, true);
       parser.on("pdfParser_dataReady", (pdfData: unknown) => {
         try {

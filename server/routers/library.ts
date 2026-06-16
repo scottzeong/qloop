@@ -10,9 +10,6 @@ import { eq, and, desc, like, or, inArray } from "drizzle-orm";
 import { storagePut, storageGetSignedUrl, storageDelete } from "../storage";
 import { invokeLLM, type Message } from "../_core/llm";
 import { aiInvoke } from "../ai/aiRouter";
-import mammoth from "mammoth";
-import { parseOffice } from "officeparser";
-import WordExtractor from "word-extractor";
 
 // ─── 허용 MIME 타입 ────────────────────────────────────────────────────────────
 
@@ -42,14 +39,17 @@ async function extractTextFromFile(fileUrl: string, mimeType: string): Promise<s
     if (!res.ok) return null;
     const buffer = Buffer.from(await res.arrayBuffer());
     if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+      const mammoth = (await import("mammoth")).default;
       const result = await mammoth.extractRawText({ buffer });
       return result.value || null;
     } else if (mimeType === "application/msword") {
+      const WordExtractor = (await import("word-extractor")).default;
       const extractor = new WordExtractor();
       const doc = await extractor.extract(buffer);
       return doc.getBody() || null;
     } else if (mimeType !== "application/pdf") {
       // PPT / PPTX → officeparser
+      const { parseOffice } = await import("officeparser");
       const ast = await parseOffice(buffer);
       return ast.toText() || null;
     }
