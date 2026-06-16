@@ -78,6 +78,33 @@ export default function GroupDetail() {
     onError: (e) => toast.error(e.message),
   });
 
+  // group.structure에서 topicId/topicTitle에 맞는 description을 찾아 반환
+  const findTopicDescription = (topicId: string, topicTitle: string): string => {
+    const gs = groupDetail?.structure as any;
+    if (!gs) return "";
+    // chapters 탐색
+    for (const ch of gs.chapters ?? []) {
+      for (const t of ch.topics ?? []) {
+        if (t.id === topicId || t.title === topicTitle) return t.description ?? "";
+        for (const sub of t.subtopics ?? []) {
+          if (sub.id === topicId || sub.title === topicTitle) return sub.description ?? "";
+        }
+      }
+    }
+    // conceptMap 탐색
+    for (const c of gs.conceptMap ?? []) {
+      if (c.id === topicId || c.label === topicTitle || c.concept === topicTitle) return c.description ?? "";
+    }
+    // learningPath 탐색
+    for (const step of gs.learningPath ?? []) {
+      if (step.id === topicId || step.title === topicTitle) return step.description ?? "";
+      for (const t of step.topics ?? []) {
+        if (t.id === topicId || t.title === topicTitle) return step.description ?? ""; // 단계 설명으로 대체
+      }
+    }
+    return "";
+  };
+
   const handleStartLearning = (topicId: string, topicTitle: string, documentId: number) => {
     setPendingTopic({ id: topicId, title: topicTitle, documentId });
     setEvalEnabled(null);
@@ -97,7 +124,7 @@ export default function GroupDetail() {
         documentId: pendingTopic.documentId,
         topicId: pendingTopic.id,
         topicTitle: pendingTopic.title,
-        topicDescription: "",
+        topicDescription: findTopicDescription(pendingTopic.id, pendingTopic.title),
         groupId,
         evaluationEnabled: evalEnabled,
         evaluationPolicyId: evalEnabled ? (selectedPolicyId ?? undefined) : undefined,

@@ -883,6 +883,68 @@ function extractTopicContext(
     if (matchedTopic) break;
   }
 
+  // 2-a. conceptMap에서 탐색 (chapters 실패 시)
+  if (!matchedTopic) {
+    const conceptMap = Array.isArray(s.conceptMap) ? s.conceptMap : [];
+    for (const node of conceptMap) {
+      if (!node || typeof node !== "object") continue;
+      const n = node as Record<string, unknown>;
+      const nodeLabel =
+        typeof n.label === "string" ? n.label : typeof n.concept === "string" ? n.concept : "";
+      if (
+        (topicId && n.id === topicId) ||
+        (topicTitle && nodeLabel === topicTitle) ||
+        (topicTitle && nodeLabel.toLowerCase().includes(topicTitle.toLowerCase().slice(0, 10)))
+      ) {
+        matchedTopic = {
+          title: nodeLabel,
+          description: typeof n.description === "string" ? n.description : "",
+          subtopics: Array.isArray(n.connections)
+            ? n.connections.map((c: unknown) => ({ title: String(c), description: "" }))
+            : [],
+        };
+        matchedChapterTitle = "개념 맵";
+        break;
+      }
+    }
+  }
+
+  // 2-b. learningPath에서 탐색 (chapters+conceptMap 실패 시)
+  if (!matchedTopic) {
+    const learningPath = Array.isArray(s.learningPath) ? s.learningPath : [];
+    for (const step of learningPath) {
+      if (!step || typeof step !== "object") continue;
+      const lp = step as Record<string, unknown>;
+      const stepTitle = typeof lp.title === "string" ? lp.title : "";
+      if ((topicId && lp.id === topicId) || (topicTitle && stepTitle === topicTitle)) {
+        matchedTopic = {
+          title: stepTitle,
+          description: typeof lp.description === "string" ? lp.description : "",
+          subtopics: [],
+        };
+        matchedChapterTitle = "학습 경로";
+        break;
+      }
+      // step 내부 topics 탐색
+      const lpTopics = Array.isArray(lp.topics) ? lp.topics : [];
+      for (const t of lpTopics) {
+        if (!t || typeof t !== "object") continue;
+        const lt = t as Record<string, unknown>;
+        const ltTitle = typeof lt.title === "string" ? lt.title : "";
+        if ((topicId && lt.id === topicId) || (topicTitle && ltTitle === topicTitle)) {
+          matchedTopic = {
+            title: ltTitle,
+            description: typeof lt.description === "string" ? lt.description : (typeof lp.description === "string" ? lp.description : ""),
+            subtopics: [],
+          };
+          matchedChapterTitle = stepTitle ? `학습 경로: ${stepTitle}` : "학습 경로";
+          break;
+        }
+      }
+      if (matchedTopic) break;
+    }
+  }
+
   const parts: string[] = [];
 
   if (matchedChapterTitle) {
@@ -1028,7 +1090,6 @@ async function generateNextMessage(
   const difficultyTier = getDifficultyTier(answeredQuestions);
 
   // ── ② 오답/어려움 개념 추적 ────────────────────────────────────────────────
-  // 대화 이력에서 학습자가 어려워했던 직전 AI 질문 개념(첫 60자)을 추출
   const weakConcepts: string[] = [];
   const historyArr = [...conversationHistory];
   for (let i = 0; i < historyArr.length; i++) {
@@ -1045,7 +1106,6 @@ async function generateNextMessage(
       }
     }
   }
-  // 세션 후반(16문항 이상)이면 약점 개념 재방문 instruction 추가
   const weakConceptsInstruction =
     weakConcepts.length > 0 && answeredQuestions >= 16
       ? `\n\nWEAK CONCEPT REVISIT: The learner previously struggled with these concepts:\n${weakConcepts.map((c, i) => `${i + 1}. "${c}"`).join("\n")}\nIf not already revisited, choose ONE to address again using a DIFFERENT question type. Approach from a completely new angle.`
@@ -1054,7 +1114,6 @@ async function generateNextMessage(
       : "";
 
   // ── ③ 답변 깊이 평가 ────────────────────────────────────────────────────────
-  // 단답(20~45자)이지만 모른다는 아닌 경우 → 더 깊이 생각하도록 feedback 방향 지시
   const isShallowAnswer = !isUserQuestion && (
     userMessage.trim().length >= 20 &&
     userMessage.trim().length < 45 &&
@@ -1065,9 +1124,10 @@ async function generateNextMessage(
     : "";
 
   // 학습자 답변 품질 평가: 오답/어려움 감지 시 한 단계 낮춰
+  // 답변이 매우 짧거나(어려움 신호) 또는 일반적으로 잘 모르갪다는 표현이 있으면 쉬운 유형으로 하향
   const isStruggling = !isUserQuestion && (
     userMessage.trim().length < 20 ||
-    /모르|잘 모르|어렵다|이해가 안|몰라|뭐지|잘 모르겠|어렵습니다|이해가 안 됨|잘 모르겠습니다/.test(userMessage)
+    /모르|\uc798 모르|어렵다|이해가 안|몰라|뭐지|잘 모르겠|어렵습니다|이해가 안 됨|잘 모르겠습니다/.test(userMessage)
   );
   const effectiveTier = isStruggling && difficultyTier.tier !== "easy"
     ? getDifficultyTier(Math.max(0, answeredQuestions - 8)) // 한 단계 하향
@@ -1506,8 +1566,8 @@ You are given ${docs.length} document(s) that belong to a learning group titled 
 Your task is to analyze ALL the documents TOGETHER and create a UNIFIED, COHERENT educational structure.
 Do NOT simply list each document separately. Instead, SYNTHESIZE the content across all documents to create:
 1. A unified chapter/topic tree that integrates concepts from all documents
-2. A unified concept map (max 15 nodes) using EXACTLY this schema per node: {id, label (short name), description (1-2 sentences), type ("core"|"sub"|"related"), connections (array of other node ids that this node connects to)}. Ensure connection ids reference real node ids in the same array.
-3. A unified learning path (3-6 steps) that guides learners through all the material in the optimal order
+2. A unified concept map showing how concepts across all documents relate to each other
+3. A unified learning path that guides learners through all the material in the optimal order
 The result should feel like a single integrated curriculum, not a collection of separate documents.
 Return ONLY valid JSON matching the schema exactly.`;
 
@@ -1612,7 +1672,6 @@ Return ONLY valid JSON matching the schema exactly.`;
                     },
                   },
                   required: ["title", "summary", "documentType", "chapters", "conceptMap", "learningPath"],
-                  // conceptMap nodes must use ConceptNode schema: {id, label, description, type, connections[]}
                   additionalProperties: false,
                 },
               },
@@ -1635,7 +1694,7 @@ Return ONLY valid JSON matching the schema exactly.`;
               chapters: Array.isArray(parsed.chapters) ? parsed.chapters : [],
               conceptMap: Array.isArray(parsed.conceptMap) ? parsed.conceptMap : [],
               learningPath: Array.isArray(parsed.learningPath) ? parsed.learningPath : [],
-              keyConceptCards: [],
+              keyConceptCards: Array.isArray(parsed.keyConceptCards) ? parsed.keyConceptCards : [],
               timeline: [],
               comparisonTables: [],
             };
@@ -2059,13 +2118,12 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
           }
         }
 
-        // ── ⑤ 세션 재개: 같은 토픽의 active 세션이 있으면 새로 만들지 않고 재개 ──
+        // ── ⑤ 세션 재개: 같은 토픽의 active 세션이 있으면 재사용 ────────────────
         const existingSessions = await getSessionsByDocumentId(input.documentId, ctx.user.id);
         const resumableSession = existingSessions.find(
           (s) => s.status === "active" && s.startTopicId === input.topicId
         );
         if (resumableSession) {
-          // 기존 메시지 중 마지막 AI 질문을 가져와 firstQuestion으로 반환
           const existingMessages = await getSessionMessages(resumableSession.id);
           const lastAIQuestion = [...existingMessages].reverse().find(
             (m) => m.role === "ai" && m.messageType === "question"
@@ -2095,7 +2153,6 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
         });
         // 첫 번째 질문 생성 — 문서 직접 참조 없이 토픽 정보만 사용
         const learningLang = (doc as any).learningLanguage || "ko";
-        // ④ 그룹 세션이면 group.structure 우선 사용
         const startGroup = input.groupId ? await getDocumentGroupById(input.groupId) : null;
         const structureForFirst = (startGroup as any)?.structure ?? (doc as any).structure ?? null;
         const firstTopicContext = extractTopicContext(
@@ -2103,11 +2160,10 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
           input.topicId,
           input.topicTitle
         );
-        const firstDocTitle = startGroup ? startGroup.name : doc.title;
         const firstQuestion = await generateFirstQuestion(
           input.topicTitle,
           input.topicDescription,
-          firstDocTitle,
+          startGroup ? startGroup.name : doc.title,
           openQloopMode, // open=true
           learningLang,
           libraryContext,
@@ -2144,11 +2200,10 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
         if (!session || session.userId !== ctx.user.id) throw new Error("세션을 찾을 수 없습니다.");
         if (session.status !== "active") throw new Error("이미 종료된 세션입니다.");
 
-        const doc = await getDocumentById(session.documentId);
-        if (!doc) throw new Error("문서를 찾을 수 없습니다.");
-
-        // ④ 그룹 세션인 경우 group.structure를 우선 사용
+        const doc = session.documentId ? await getDocumentById(session.documentId) : null;
         const sessionGroup = session.groupId ? await getDocumentGroupById(session.groupId) : null;
+        if (!doc && !sessionGroup) throw new Error("문서를 찾을 수 없습니다.");
+        const titleForSession = sessionGroup ? sessionGroup.name : (doc?.title ?? "");
 
         // 학습자 메시지 저장
         await createSessionMessage({
@@ -2178,7 +2233,7 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
         const sessionIsCurated = sessionOpenQloopVal >= 1; // Curated(2) or Open(1): Library 참조
         // 다음 질문 생성 시 현재 답변을 반영한 누적 답변 수 기준으로 난이도 계산
         const currentAnsweredForTier = (session.answeredQuestions || 0) + (input.isUserQuestion ? 0 : 1);
-        const docLearningLang = (doc as any).learningLanguage || "ko";
+        const docLearningLang = (doc as any)?.learningLanguage ?? (sessionGroup as any)?.learningLanguage ?? "ko";
         // Curated / Open: 세션 openQloopMode 기반으로 Library 자동 로드
         let libraryContext = "";
         if (sessionIsCurated) {
@@ -2202,16 +2257,13 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
           }
         }
 
-        // ④ 토픽 컨텍스트 추출: 그룹 세션은 group.structure 우선, 없으면 doc.structure 폴백
-        const structureForContext = (sessionGroup as any)?.structure ?? (doc as any).structure ?? null;
+        // 문서 구조에서 토픽 컨텍스트 추출 (그룹 세션은 group.structure 우선)
+        const structureForContext = (sessionGroup as any)?.structure ?? (doc as any)?.structure ?? null;
         const topicContext = extractTopicContext(
           structureForContext,
           session.startTopicId ?? null,
           session.startTopicTitle ?? null
         );
-
-        // 그룹 세션에서 참조 문서 제목: 그룹 이름 사용 (통합 커리큘럼임을 AI에 전달)
-        const titleForSession = sessionGroup ? sessionGroup.name : doc.title;
 
         const aiResponse = await generateNextMessage(
           titleForSession,
@@ -2565,4 +2617,19 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
 
       for (const s of sessions) {
         const mode = (s as any).openQloopMode as number ?? 0;
-        const key = mode === 1 ? "open" : mode === 2 ?
+        const key = mode === 1 ? "open" : mode === 2 ? "curated" : "core";
+        modelMap[key].count++;
+        const score = sessionIdToScore[s.id] ?? null;
+        if (score !== null) {
+          modelMap[key].totalScore += score;
+          modelMap[key].scoredCount++;
+        }
+      }
+      return {
+        core: { count: modelMap.core.count, avgScore: modelMap.core.scoredCount > 0 ? Math.round(modelMap.core.totalScore / modelMap.core.scoredCount) : null },
+        curated: { count: modelMap.curated.count, avgScore: modelMap.curated.scoredCount > 0 ? Math.round(modelMap.curated.totalScore / modelMap.curated.scoredCount) : null },
+        open: { count: modelMap.open.count, avgScore: modelMap.open.scoredCount > 0 ? Math.round(modelMap.open.totalScore / modelMap.open.scoredCount) : null },
+      };
+    }),
+  }),
+});
