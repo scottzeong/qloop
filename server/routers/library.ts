@@ -523,6 +523,6 @@ export const libraryRouter = router({
         .where(and(eq(documents.id, input.documentId), eq(documents.userId, ctx.user.id)))
         .limit(1);
 
-      return { openQloopEnabled: doc?.openQloopEnabled === 1 };
+      return { openQloopEnabled: doc?.openQloopEnabled ?? false };
     }),
 });
