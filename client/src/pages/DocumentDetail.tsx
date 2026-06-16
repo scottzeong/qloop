@@ -1062,7 +1062,6 @@ export default function DocumentDetail() {
       <div className="sticky top-14 z-40 bg-white border-b border-[#E5E5E3]">
         <div className="max-w-7xl mx-auto px-6 h-10 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <LanguageBadge doc={doc} docId={docId} />
             {(doc as any).structureLocked === 1 && (
               <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#F0EFED]">
                 <Lock size={10} className="text-[#737373]" />
@@ -1073,6 +1072,7 @@ export default function DocumentDetail() {
             )}
           </div>
           <div className="flex items-center gap-1.5">
+            <LanguageBadge doc={doc} docId={docId} />
             {doc.analysisStatus === "done" && !isAnalyzing && (
               <button
                 onClick={() => {
