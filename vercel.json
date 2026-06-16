@@ -4,6 +4,7 @@
   "outputDirectory": "dist/public",
   "installCommand": "pnpm install --frozen-lockfile",
   "rewrites": [
+    { "source": "/api/health", "destination": "/api/server" },
     { "source": "/api/trpc/:path*", "destination": "/api/server" },
     { "source": "/r2-storage/:path*", "destination": "/api/server" },
     { "source": "/(.*)", "destination": "/index.html" }
