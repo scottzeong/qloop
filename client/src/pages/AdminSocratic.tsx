@@ -529,7 +529,7 @@ export default function AdminSocratic() {
   const isAdminOrAbove = user?.role === "admin" || user?.role === "superadmin";
   if (!isAuthenticated || !isAdminOrAbove) {
     return (
-      <div className="min-h-screen bg-[#F8F7F5] flex items-center justify-center">
+      <div className="min-h-screen bg-[#EDECEA] flex items-center justify-center">
         <p className="pm-label text-[#A3A3A3]">관리자 권한이 필요합니다.</p>
       </div>
     );
@@ -544,7 +544,7 @@ export default function AdminSocratic() {
   ].filter((t) => !t.superadminOnly || user?.role === "superadmin");
 
   return (
-    <div className="min-h-screen bg-[#F8F7F5]">
+    <div className="min-h-screen bg-[#EDECEA]">
       <PageHeader title="NEURAL SYSTEM SET" />
 
       <div className="max-w-6xl mx-auto px-8 py-8">

@@ -1026,7 +1026,7 @@ export default function DocumentDetail() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="min-h-screen bg-[#EDECEA] flex items-center justify-center">
         <div className="text-center space-y-3">
           <div className="w-8 h-8 border-2 border-black border-t-transparent animate-spin mx-auto" />
           <p className="text-xs font-bold uppercase tracking-widest text-black/40">로딩 중</p>
@@ -1037,7 +1037,7 @@ export default function DocumentDetail() {
 
   if (!doc) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="min-h-screen bg-[#EDECEA] flex items-center justify-center">
         <div className="text-center space-y-4">
           <p className="font-bold">문서를 찾을 수 없습니다.</p>
           <button onClick={() => navigate("/dashboard")} className="text-xs font-bold uppercase tracking-widest border border-black px-4 py-2 hover:bg-black hover:text-white transition-colors">
@@ -1059,7 +1059,7 @@ export default function DocumentDetail() {
   if (structure?.learningPath && structure.learningPath.length > 0) availableTabs.push("path");
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="min-h-screen bg-[#EDECEA] flex flex-col">
       <PageHeader title={doc.title} />
 
       {/* Document control sub-bar */}
@@ -1592,12 +1592,4 @@ export default function DocumentDetail() {
           <div className="flex items-center gap-4 border-2 border-black px-8 py-6 bg-white">
             <div className="w-4 h-4 bg-red-600 animate-pulse" />
             <div>
-              <p className="font-bold text-sm uppercase tracking-widest">학습 세션 준비 중</p>
-              <p className="text-xs text-black/50 mt-1">AI가 첫 번째 질문을 생성하고 있습니다…</p>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+              <p className="font-bold text-sm uppercase tracking-widest">�

@@ -137,7 +137,7 @@ export default function AIConnection() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="min-h-screen bg-[#EDECEA] flex items-center justify-center">
         <Loader2 className="animate-spin" size={24} />
       </div>
     );
@@ -145,7 +145,7 @@ export default function AIConnection() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="min-h-screen bg-[#EDECEA] flex items-center justify-center">
         <div className="text-center">
           <p className="text-sm font-bold mb-4">로그인이 필요합니다</p>
           <a href={getLoginUrl()} className="text-xs underline">
@@ -167,7 +167,7 @@ export default function AIConnection() {
   const providerInfo = PROVIDER_INFO[selectedProvider];
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-[#EDECEA]">
       <PageHeader title="AI CONNECTION" />
 
       <main className="max-w-5xl mx-auto px-8 py-12">
@@ -185,7 +185,7 @@ export default function AIConnection() {
 
           {/* 시스템 AI 상태 배너 */}
           {systemAi && (
-            <div className={`mt-5 border-2 p-4 flex items-center gap-3 ${systemAi.active ? "border-emerald-300 bg-emerald-50" : "border-gray-200 bg-gray-50"}`}>
+            <div className={`mt-5 border rounded-xl p-4 flex items-center gap-3 ${systemAi.active ? "border-emerald-200 bg-emerald-50" : "border-[#E5E5E3] bg-white"}`}>
               <Server size={16} className={systemAi.active ? "text-emerald-600" : "text-gray-400"} />
               <div className="flex-1">
                 <div className="flex items-center gap-2">
@@ -213,10 +213,10 @@ export default function AIConnection() {
         <div className="grid grid-cols-12 gap-10">
           {/* Left: 등록 폼 */}
           <div className="col-span-5">
-            <div className="border-2 border-black p-6">
-              <div className="text-xs font-bold tracking-widest mb-6 flex items-center gap-2">
+            <div className="border border-[#E5E5E3] rounded-xl p-6 bg-white shadow-sm">
+              <div className="text-xs font-semibold text-[#737373] tracking-widest mb-6 flex items-center gap-2">
                 <Plus size={12} />
-                NEW CONNECTION
+                새 AI 연결 등록
               </div>
 
               {/* Provider 선택 */}
@@ -230,10 +230,10 @@ export default function AIConnection() {
                         setSelectedProvider(p);
                         setSelectedModel("");
                       }}
-                      className={`border-2 p-2 text-xs font-bold transition-all ${
+                      className={`border p-2 text-xs font-semibold rounded-lg transition-all ${
                         selectedProvider === p
-                          ? "border-black bg-black text-white"
-                          : "border-gray-200 hover:border-gray-400"
+                          ? "border-[#5B5BD6] bg-[#5B5BD6] text-white"
+                          : "border-[#E5E5E3] hover:border-[#D4D4D2] text-[#525252]"
                       }`}
                     >
                       {PROVIDER_INFO[p].name.split(" ")[0]}
@@ -247,7 +247,7 @@ export default function AIConnection() {
               <div className="mb-5">
                 <Label className="text-xs font-bold tracking-wider mb-2 block">MODEL</Label>
                 <Select value={selectedModel} onValueChange={setSelectedModel}>
-                  <SelectTrigger className="border-2 border-black rounded-none text-xs h-9">
+                  <SelectTrigger className="border border-[#E5E5E3] rounded-lg text-xs h-9">
                     <SelectValue placeholder="모델 선택" />
                   </SelectTrigger>
                   <SelectContent>
@@ -269,7 +269,7 @@ export default function AIConnection() {
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                     placeholder={providerInfo.keyHint}
-                    className="border-2 border-black rounded-none text-xs h-9 pr-9 font-mono"
+                    className="border border-[#E5E5E3] rounded-lg text-xs h-9 pr-9 font-mono"
                   />
                   <button
                     type="button"
@@ -300,7 +300,7 @@ export default function AIConnection() {
               <Button
                 onClick={handleSave}
                 disabled={saveMutation.isPending}
-                className="w-full bg-black text-white rounded-none text-xs font-bold h-9 hover:bg-gray-800"
+                className="w-full bg-[#0F0F0F] text-white rounded-lg text-xs font-semibold h-9 hover:bg-[#262626]"
               >
                 {saveMutation.isPending ? (
                   <Loader2 size={14} className="animate-spin mr-2" />
@@ -320,7 +320,7 @@ export default function AIConnection() {
             </div>
 
             {connections.length === 0 ? (
-              <div className="border-2 border-dashed border-gray-200 p-10 text-center">
+              <div className="border border-dashed border-[#E5E5E3] rounded-xl p-10 text-center bg-white">
                 <Cpu size={24} className="mx-auto mb-3 text-gray-300" />
                 <p className="text-xs text-gray-400 font-bold">등록된 AI Connection이 없습니다</p>
                 <p className="text-xs text-gray-400 mt-1">
@@ -334,14 +334,14 @@ export default function AIConnection() {
                   return (
                     <div
                       key={conn.id}
-                      className={`border-2 p-4 ${conn.isDefault ? "border-black" : "border-gray-200"}`}
+                      className={`border p-4 rounded-xl bg-white ${conn.isDefault ? "border-[#5B5BD6]" : "border-[#E5E5E3]"}`}
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <span className={`text-xs font-black ${info.color}`}>{info.name}</span>
                             {conn.isDefault && (
-                              <span className="text-xs font-bold bg-black text-white px-2 py-0.5">
+                              <span className="text-xs font-semibold bg-[#5B5BD6] text-white px-2 py-0.5 rounded-md">
                                 DEFAULT
                               </span>
                             )}
@@ -366,7 +366,7 @@ export default function AIConnection() {
                           <button
                             onClick={() => testMutation.mutate({ connectionId: conn.id })}
                             disabled={testMutation.isPending}
-                            className="text-xs font-bold border border-gray-200 px-2 py-1 hover:border-black transition-colors"
+                            className="text-xs font-medium border border-[#E5E5E3] rounded-md px-2 py-1 hover:border-[#D4D4D2] hover:bg-[#F8F7F5] transition-colors text-[#525252]"
                             title="연결 테스트"
                           >
                             {testMutation.isPending ? (
@@ -380,7 +380,7 @@ export default function AIConnection() {
                             <button
                               onClick={() => setDefaultMutation.mutate({ connectionId: conn.id })}
                               disabled={setDefaultMutation.isPending}
-                              className="text-xs font-bold border border-gray-200 px-2 py-1 hover:border-black transition-colors"
+                              className="text-xs font-medium border border-[#E5E5E3] rounded-md px-2 py-1 hover:border-[#D4D4D2] hover:bg-[#F8F7F5] transition-colors text-[#525252]"
                               title="기본 Provider로 설정"
                             >
                               <Star size={10} />
@@ -389,7 +389,7 @@ export default function AIConnection() {
                           {/* 삭제 */}
                           <button
                             onClick={() => setDeleteTarget(conn.id)}
-                            className="text-xs font-bold border border-red-200 px-2 py-1 hover:border-red-500 text-red-500 transition-colors"
+                            className="text-xs font-medium border border-red-100 rounded-md px-2 py-1 hover:border-red-400 hover:bg-red-50 text-red-500 transition-colors"
                             title="삭제"
                           >
                             <Trash2 size={10} />
@@ -403,7 +403,7 @@ export default function AIConnection() {
             )}
 
             {/* 안내 */}
-            <div className="mt-6 border border-gray-100 p-4 bg-gray-50">
+            <div className="mt-6 border border-[#E5E5E3] rounded-xl p-4 bg-white">
               <p className="text-xs font-bold mb-2">AI Provider 우선순위</p>
               <ol className="text-xs text-gray-600 space-y-1 list-decimal list-inside">
                 <li>기본(DEFAULT)으로 설정된 개인 AI Provider</li>

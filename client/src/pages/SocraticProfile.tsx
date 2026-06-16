@@ -59,7 +59,7 @@ export default function SocraticProfile() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#F8F7F5] flex items-center justify-center">
+      <div className="min-h-screen bg-[#EDECEA] flex items-center justify-center">
         <p className="pm-label">로그인이 필요합니다.</p>
       </div>
     );
@@ -67,7 +67,7 @@ export default function SocraticProfile() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#F8F7F5] flex items-center justify-center">
+      <div className="min-h-screen bg-[#EDECEA] flex items-center justify-center">
         <div className="flex items-center gap-3">
           <div className="w-3 h-3 rounded-full animate-pulse" style={{ backgroundColor: "var(--pm-indigo)" }} />
           <span className="pm-label">프로필 로딩 중...</span>
@@ -104,7 +104,7 @@ export default function SocraticProfile() {
   const levelCfg = LEVEL_CONFIG[dominantLevel] ?? { badge: "pm-badge-gray", bg: "bg-gray-50", text: "text-gray-700" };
 
   return (
-    <div className="min-h-screen bg-[#F8F7F5]">
+    <div className="min-h-screen bg-[#EDECEA]">
       <PageHeader title="QLOOP PROFILE" />
 
       <div className="max-w-5xl mx-auto px-8 py-10">

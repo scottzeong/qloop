@@ -281,7 +281,7 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F8F7F5] flex items-center justify-center">
+      <div className="min-h-screen bg-[#EDECEA] flex items-center justify-center">
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 rounded-full bg-[#5B5BD6] animate-pulse" />
           <span className="text-sm text-[#737373] font-medium">로딩 중</span>
@@ -292,7 +292,7 @@ export default function Dashboard() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#F8F7F5] flex flex-col items-center justify-center gap-4">
+      <div className="min-h-screen bg-[#EDECEA] flex flex-col items-center justify-center gap-4">
         <p className="text-sm text-[#737373]">로그인이 필요합니다</p>
         <a
           href={getLoginUrl()}
@@ -307,7 +307,7 @@ export default function Dashboard() {
   const recentSessions = sessions?.slice(0, 3) ?? [];
 
   return (
-    <div className="min-h-screen bg-[#F8F7F5] flex flex-col">
+    <div className="min-h-screen bg-[#EDECEA] flex flex-col">
       {/* 삭제 확인 팝업 - 학습자료 */}
       <AlertDialog open={!!deleteDocConfirm} onOpenChange={(open) => !open && setDeleteDocConfirm(null)}>
         <AlertDialogContent>

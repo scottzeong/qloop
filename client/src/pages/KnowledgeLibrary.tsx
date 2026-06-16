@@ -167,7 +167,7 @@ export default function KnowledgeLibrary() {
   });
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-[#EDECEA]">
       <PageHeader
         title="KNOWLEDGE LIBRARY"
 
@@ -185,14 +185,14 @@ export default function KnowledgeLibrary() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* 왼쪽: 업로드 영역 */}
-          <div>
+          <div className="bg-white rounded-xl border border-[#E5E5E3] p-6 shadow-sm">
             <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground mb-4">
               새 자료 등록
             </h2>
             {!pendingFile ? (
               <div
                 className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
-                  isDragging ? "border-red-400 bg-red-50" : "border-border hover:border-red-300 hover:bg-muted/30"
+                  isDragging ? "border-[#5B5BD6] bg-[#E8E8FD]" : "border-border hover:border-[#5B5BD6] hover:bg-[#F8F7F5]"
                 }`}
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
@@ -290,7 +290,7 @@ export default function KnowledgeLibrary() {
           </div>
 
           {/* 오른쪽: 등록된 자료 목록 */}
-          <div>
+          <div className="bg-white rounded-xl border border-[#E5E5E3] p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">
                 내 지식 목록 ({filteredItems.length}/{myItems.length})
@@ -353,7 +353,7 @@ export default function KnowledgeLibrary() {
                 {filteredItems.map((item) => {
                   const itemTags = parseTags(item.tags as string | null);
                   return (
-                    <div key={item.id} className="border border-border rounded-lg p-4 hover:shadow-sm transition-shadow">
+                    <div key={item.id} className="border border-[#E5E5E3] rounded-lg p-4 hover:shadow-sm transition-shadow bg-[#FAFAF9]">
                       <div className="flex items-start gap-3">
                         <BookOpen className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
                         <div className="flex-1 min-w-0">

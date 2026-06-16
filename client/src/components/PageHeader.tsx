@@ -191,7 +191,7 @@ export default function PageHeader({
   return (
     <>
       <header
-        className={`bg-white/90 backdrop-blur-sm border-b border-[#E5E5E3] z-50 ${
+        className={`bg-[#E8E6E3] border-b border-[#D4D4D2] z-50 ${
           sticky ? "sticky top-0" : ""
         }`}
       >
@@ -295,3 +295,4 @@ export default function PageHeader({
     </>
   );
 }
+                

@@ -66,7 +66,7 @@ export default function SessionHistory() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#F8F7F5] flex items-center justify-center">
+      <div className="min-h-screen bg-[#EDECEA] flex items-center justify-center">
         <div className="flex items-center gap-3">
           <div className="w-3 h-3 rounded-full animate-pulse" style={{ backgroundColor: "var(--pm-indigo)" }} />
           <span className="pm-label">로딩 중</span>
@@ -76,7 +76,7 @@ export default function SessionHistory() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F7F5] flex flex-col">
+    <div className="min-h-screen bg-[#EDECEA] flex flex-col">
       <PageHeader title="LEARNING HISTORY" />
 
       <main className="flex-1 max-w-7xl mx-auto px-8 py-10 w-full">
