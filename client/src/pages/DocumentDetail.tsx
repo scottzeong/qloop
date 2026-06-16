@@ -783,6 +783,11 @@ const LANG_LABELS: Record<string, string> = {
   ar: "العربية", ru: "Русский",
 };
 
+const LANG_SHORT: Record<string, string> = {
+  ko: "KO", en: "EN", eng: "EN", ja: "JA", zh: "ZH",
+  fr: "FR", de: "DE", es: "ES", pt: "PT", ar: "AR", ru: "RU",
+};
+
 const LEARNING_LANG_OPTIONS = [
   { value: "ko", label: "한국어로 학습" },
   { value: "en", label: "English" },
@@ -806,28 +811,27 @@ function LanguageBadge({ doc, docId }: { doc: any; docId: number }) {
   const learnLang = doc.learningLanguage ?? "ko";
   const isForeign = srcLang !== "ko" && srcLang !== learnLang;
 
+  const shortSrc = LANG_SHORT[srcLang.toLowerCase()] ?? srcLang.slice(0, 2).toUpperCase();
+  const shortLearn = LANG_SHORT[learnLang.toLowerCase()] ?? learnLang.slice(0, 2).toUpperCase();
+
   return (
     <div className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
         title="학습 언어 설정"
-        className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest px-2.5 py-1.5 border transition-colors ${
-          isForeign
-            ? "border-blue-500 text-blue-600 hover:bg-blue-50"
-            : "border-black/20 text-black/40 hover:border-black hover:text-black"
-        }`}
+        className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border border-[#E5E5E3] bg-white hover:bg-[#F8F7F5] text-[#525252] transition-colors"
       >
-        <span>{LANG_LABELS[srcLang] ?? srcLang.toUpperCase()}</span>
+        <span>{shortSrc}</span>
         {isForeign && (
           <>
-            <span className="text-black/30">→</span>
-            <span>{LANG_LABELS[learnLang] ?? learnLang.toUpperCase()}</span>
+            <span className="text-[#D4D4D2]">→</span>
+            <span>{shortLearn}</span>
           </>
         )}
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 bg-white border border-black shadow-lg z-50 min-w-[180px]">
-          <p className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-black/40 border-b border-black/10">
+        <div className="absolute right-0 top-full mt-1 bg-white border border-[#E5E5E3] rounded-xl shadow-lg z-50 min-w-[160px] overflow-hidden">
+          <p className="px-3 py-2 text-xs font-medium text-[#A3A3A3] border-b border-[#F0EFED]">
             학습 언어 선택
           </p>
           {LEARNING_LANG_OPTIONS.map((opt) => (
@@ -835,8 +839,8 @@ function LanguageBadge({ doc, docId }: { doc: any; docId: number }) {
               key={opt.value}
               onClick={() => setLangMutation.mutate({ documentId: docId, learningLanguage: opt.value })}
               disabled={setLangMutation.isPending}
-              className={`w-full text-left px-3 py-2 text-sm hover:bg-black/5 transition-colors ${
-                learnLang === opt.value ? "font-bold text-red-600" : "text-black"
+              className={`w-full text-left px-3 py-2.5 text-xs font-medium hover:bg-[#F8F7F5] transition-colors border-b border-[#F0EFED] last:border-b-0 ${
+                learnLang === opt.value ? "text-[#5B5BD6] font-semibold" : "text-[#525252]"
               }`}
             >
               {opt.label} {learnLang === opt.value && "✓"}
