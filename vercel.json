@@ -8,10 +8,4 @@
     { "source": "/api/trpc/:path*", "destination": "/api/server" },
     { "source": "/r2-storage/:path*", "destination": "/api/server" },
     { "source": "/(.*)", "destination": "/index.html" }
-  ],
-  "functions": {
-    "api/server.js": {
-      "maxDuration": 60
-    }
-  }
-}
+  ]}
