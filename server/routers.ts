@@ -723,7 +723,7 @@ async function generateFirstQuestion(
     ? `\n\nADDITIONAL KNOWLEDGE LIBRARY CONTEXT (use to enrich questions and feedback, but do NOT ask the learner to read these materials):\n${libraryContext.slice(0, 8000)}`
     : "";
   const topicContextInstruction = topicContext
-    ? `\n\nTOPIC CONTENT (from document analysis — use this to ask about specific concepts in this material):\n${topicContext}`
+    ? `\n\nTOPIC CONTENT (from document analysis — use this to ask about specific concepts in this material. The first question should introduce ONE core concept from this material, not a vague overview question):\n${topicContext}`
     : "";
   const langName = LANGUAGE_NAMES[learningLanguage] || "Korean";
   const languageInstruction = `\nIMPORTANT: The document may be written in a foreign language, but you MUST ask your question in ${langName}. The learner will also answer in ${langName}. Do NOT use the source document's language if it differs from ${langName}.`;
@@ -952,30 +952,31 @@ function extractTopicContext(
 
 // 질문 유형 3단계 난이도 매핑
 // 초반 (1~8번): 기초 이해 확인
-const QUESTION_TYPES_EASY = ["definition", "clarification"];
+// 초반 (1~8번): 기본 이해 + 간단한 적용/함의 포함 (정의 편중 방지)
+const QUESTION_TYPES_EASY = ["definition", "clarification", "application", "implication"];
 // 중반 (9~16번): 논리적 사고 요구
-const QUESTION_TYPES_MEDIUM = ["justification", "assumption", "implication", "perspective", "value", "application"];
+const QUESTION_TYPES_MEDIUM = ["justification", "assumption", "perspective", "value", "counterexample", "application"];
 // 후반 (17번~): 고차원 사고
-const QUESTION_TYPES_HARD = ["counterexample", "consistency", "synthesis", "reflection"];
+const QUESTION_TYPES_HARD = ["counterexample", "consistency", "synthesis", "reflection", "implication", "perspective"];
 
 function getDifficultyTier(answeredCount: number): { tier: string; allowedTypes: string[]; instruction: string } {
   if (answeredCount < 8) {
     return {
       tier: "easy",
       allowedTypes: QUESTION_TYPES_EASY,
-      instruction: `DIFFICULTY TIER: EASY (questions 1-8). Use ONLY these types: ${QUESTION_TYPES_EASY.join(", ")}. Focus on basic comprehension and clarification.`,
+      instruction: `DIFFICULTY TIER: EASY (questions 1-8). Use ONLY these types: ${QUESTION_TYPES_EASY.join(", ")}. Mix definition/clarification with application and implication — do NOT use definition more than twice in a row.`,
     };
   } else if (answeredCount < 16) {
     return {
       tier: "medium",
       allowedTypes: QUESTION_TYPES_MEDIUM,
-      instruction: `DIFFICULTY TIER: MEDIUM (questions 9-16). Use ONLY these types: ${QUESTION_TYPES_MEDIUM.join(", ")}. Push for reasoning, evidence, and application.`,
+      instruction: `DIFFICULTY TIER: MEDIUM (questions 9-16). Use ONLY these types: ${QUESTION_TYPES_MEDIUM.join(", ")}. Push for reasoning, evidence, different perspectives, and real-world application.`,
     };
   } else {
     return {
       tier: "hard",
       allowedTypes: QUESTION_TYPES_HARD,
-      instruction: `DIFFICULTY TIER: HARD (questions 17+). Use ONLY these types: ${QUESTION_TYPES_HARD.join(", ")}. Challenge with synthesis, counterexamples, and deep reflection.`,
+      instruction: `DIFFICULTY TIER: HARD (questions 17+). Use ONLY these types: ${QUESTION_TYPES_HARD.join(", ")}. Challenge with synthesis, counterexamples, deep reflection, and broader implications.`,
     };
   }
 }
@@ -1041,7 +1042,7 @@ async function generateNextMessage(
     ? `\nIMPORTANT: The source document may be in a foreign language. You MUST write ALL feedback and questions in ${langName2}. The learner will respond in ${langName2}.`
     : `\nIMPORTANT: Always write ALL feedback and questions in Korean (한국어). The learner will respond in Korean.`;
   const topicContextInstruction = topicContext
-    ? `\n\nTOPIC CONTENT (from document analysis — use this to ensure questions cover all key concepts and subtopics in this material):\n${topicContext}`
+    ? `\n\nTOPIC CONTENT (from document analysis — this is ALL the material the learner must cover):\n${topicContext}\n\nCONTENT COVERAGE RULE: You MUST systematically cover every major section, concept, and subtopic listed above. Do NOT stay on the same concept for more than 2 consecutive questions. Look at the conversation history and identify which concepts have NOT been discussed yet — prioritize those for the next question. Your goal is that by the end of the session, the learner has been asked about every major concept in the material.`
     : "";
   const baseRules = `CRITICAL RULES:
 - Do NOT ask the learner to read, look at, or refer to any document, book, or material.
