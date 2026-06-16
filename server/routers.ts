@@ -1027,11 +1027,47 @@ async function generateNextMessage(
   // 진행도 기반 난이도 단계 결정
   const difficultyTier = getDifficultyTier(answeredQuestions);
 
+  // ── ② 오답/어려움 개념 추적 ────────────────────────────────────────────────
+  // 대화 이력에서 학습자가 어려워했던 직전 AI 질문 개념(첫 60자)을 추출
+  const weakConcepts: string[] = [];
+  const historyArr = [...conversationHistory];
+  for (let i = 0; i < historyArr.length; i++) {
+    const m = historyArr[i];
+    if (m.role === "user" && m.messageType !== "user_question") {
+      const isWeak =
+        m.content.trim().length < 20 ||
+        /모르|잘 모르|어렵다|이해가 안|몰라|뭐지|잘 모르겠|어렵습니다/.test(m.content);
+      if (isWeak) {
+        const prevAI = historyArr[i - 1];
+        if (prevAI && prevAI.role === "ai" && prevAI.content.trim()) {
+          weakConcepts.push(prevAI.content.trim().slice(0, 60));
+        }
+      }
+    }
+  }
+  // 세션 후반(16문항 이상)이면 약점 개념 재방문 instruction 추가
+  const weakConceptsInstruction =
+    weakConcepts.length > 0 && answeredQuestions >= 16
+      ? `\n\nWEAK CONCEPT REVISIT: The learner previously struggled with these concepts:\n${weakConcepts.map((c, i) => `${i + 1}. "${c}"`).join("\n")}\nIf not already revisited, choose ONE to address again using a DIFFERENT question type. Approach from a completely new angle.`
+      : weakConcepts.length > 0
+      ? `\n\nNOTE: The learner struggled with ${weakConcepts.length} concept(s). These will be revisited after question 16.`
+      : "";
+
+  // ── ③ 답변 깊이 평가 ────────────────────────────────────────────────────────
+  // 단답(20~45자)이지만 모른다는 아닌 경우 → 더 깊이 생각하도록 feedback 방향 지시
+  const isShallowAnswer = !isUserQuestion && (
+    userMessage.trim().length >= 20 &&
+    userMessage.trim().length < 45 &&
+    !/모르|잘 모르|어렵다|이해가 안|몰라|잘 모르겠|어렵습니다/.test(userMessage)
+  );
+  const answerDepthInstruction = isShallowAnswer
+    ? `\n\nANSWER DEPTH NOTE: The learner gave a brief answer. In your 1-sentence feedback, acknowledge it then prompt elaboration ("왜 그렇게 생각하나요?" or "구체적으로 설명해주실 수 있나요?") BEFORE moving to the next main question.`
+    : "";
+
   // 학습자 답변 품질 평가: 오답/어려움 감지 시 한 단계 낮춰
-  // 답변이 매우 짧거나(어려움 신호) 또는 일반적으로 잘 모르갪다는 표현이 있으면 쉬운 유형으로 하향
   const isStruggling = !isUserQuestion && (
     userMessage.trim().length < 20 ||
-    /모르|\uc798 모르|어렵다|이해가 안|몰라|뭐지|잘 모르겠|어렵습니다|이해가 안 됨|잘 모르겠습니다/.test(userMessage)
+    /모르|잘 모르|어렵다|이해가 안|몰라|뭐지|잘 모르겠|어렵습니다|이해가 안 됨|잘 모르겠습니다/.test(userMessage)
   );
   const effectiveTier = isStruggling && difficultyTier.tier !== "easy"
     ? getDifficultyTier(Math.max(0, answeredQuestions - 8)) // 한 단계 하향
@@ -1099,7 +1135,7 @@ The learner has answered your question. Follow these strict rules:
    IMPORTANT: Questions MUST be concrete and specific — mention key terms, concepts, or scenarios from the topic. Do NOT ask vague generic questions. Do NOT give hints or guidance.${recentTypesInstruction}
 
 3. COMPLETION: The session has a MINIMUM of 24 questions. Do NOT set isTopicComplete=true unless at least 24 questions have been asked (current count: ${answeredQuestions}). Only complete after 24+ exchanges AND the topic is thoroughly covered.
-${baseRules}${openQloopInstruction}${libraryContextInstruction}
+${baseRules}${openQloopInstruction}${libraryContextInstruction}${weakConceptsInstruction}${answerDepthInstruction}
 Return a JSON with:
 {
   "feedback": "1 sentence feedback only — no confirmation openers",
@@ -2020,6 +2056,24 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
           }
         }
 
+        // ── ⑤ 세션 재개: 같은 토픽의 active 세션이 있으면 새로 만들지 않고 재개 ──
+        const existingSessions = await getSessionsByDocumentId(input.documentId, ctx.user.id);
+        const resumableSession = existingSessions.find(
+          (s) => s.status === "active" && s.startTopicId === input.topicId
+        );
+        if (resumableSession) {
+          // 기존 메시지 중 마지막 AI 질문을 가져와 firstQuestion으로 반환
+          const existingMessages = await getSessionMessages(resumableSession.id);
+          const lastAIQuestion = [...existingMessages].reverse().find(
+            (m) => m.role === "ai" && m.messageType === "question"
+          );
+          return {
+            sessionId: resumableSession.id,
+            firstQuestion: lastAIQuestion?.content ?? "",
+            resumed: true,
+          };
+        }
+
         const sessionId = await createLearningSession({
           userId: ctx.user.id,
           documentId: input.documentId,
@@ -2497,19 +2551,4 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
 
       for (const s of sessions) {
         const mode = (s as any).openQloopMode as number ?? 0;
-        const key = mode === 1 ? "open" : mode === 2 ? "curated" : "core";
-        modelMap[key].count++;
-        const score = sessionIdToScore[s.id] ?? null;
-        if (score !== null) {
-          modelMap[key].totalScore += score;
-          modelMap[key].scoredCount++;
-        }
-      }
-      return {
-        core: { count: modelMap.core.count, avgScore: modelMap.core.scoredCount > 0 ? Math.round(modelMap.core.totalScore / modelMap.core.scoredCount) : null },
-        curated: { count: modelMap.curated.count, avgScore: modelMap.curated.scoredCount > 0 ? Math.round(modelMap.curated.totalScore / modelMap.curated.scoredCount) : null },
-        open: { count: modelMap.open.count, avgScore: modelMap.open.scoredCount > 0 ? Math.round(modelMap.open.totalScore / modelMap.open.scoredCount) : null },
-      };
-    }),
-  }),
-});
+        const key = mode === 1 ? "open" : mode === 2 ?
