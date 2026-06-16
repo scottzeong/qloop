@@ -2507,4 +2507,8 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
       return {
         core: { count: modelMap.core.count, avgScore: modelMap.core.scoredCount > 0 ? Math.round(modelMap.core.totalScore / modelMap.core.scoredCount) : null },
         curated: { count: modelMap.curated.count, avgScore: modelMap.curated.scoredCount > 0 ? Math.round(modelMap.curated.totalScore / modelMap.curated.scoredCount) : null },
-        open: { count: modelMap.open.count, avgScore: modelMap.open.scoredCount > 0 ? Math.round(modelMap.open.totalScore / modelMap.ope
+        open: { count: modelMap.open.count, avgScore: modelMap.open.scoredCount > 0 ? Math.round(modelMap.open.totalScore / modelMap.open.scoredCount) : null },
+      };
+    }),
+  }),
+});
