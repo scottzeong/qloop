@@ -176,11 +176,7 @@ export default function KnowledgeLibrary() {
       <div className="max-w-5xl mx-auto px-6 py-8">
         {/* 안내 배너 */}
         <div className="mb-6 p-4 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-sm">
-          <strong>Knowledge Library</strong>는 학습자가 자신의 지식데이터로 활용하고 싶은 자료를 관리하는 것으로 CORE QLOOP에서 자신이 학습자료와 학습그룹에 추가되어 참고하는 지식데이터베이스입니다.
-          <br />
-          <span className="text-xs mt-1 block text-blue-700">
-            📌 <strong>Curated QLoop</strong> 또는 <strong>Open QLoop</strong> 모델로 학습 시 이 Library의 모든 자료가 자동으로 AI 질문 생성에 참조됩니다.
-          </span>
+          Knowledge Library는 학습자가 자신의 지식으로 활용하고 싶은 공통자료로 Curated Qloop나 Open Qloop를 활용할 때 참고하게 됩니다.
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
