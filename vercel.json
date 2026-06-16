@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "vite build",
+  "buildCommand": "vite build && npx esbuild server-vercel.ts --bundle --platform=node --packages=external --format=esm --outfile=api/server.js",
   "outputDirectory": "dist/public",
   "installCommand": "pnpm install --frozen-lockfile",
   "rewrites": [
@@ -10,7 +10,7 @@
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "functions": {
-    "api/server.ts": {
+    "api/server.js": {
       "maxDuration": 60
     }
   }

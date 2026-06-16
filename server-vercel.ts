@@ -1,9 +1,9 @@
 import express from "express";
 import type { Request, Response } from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { appRouter } from "../server/routers";
-import { createContext } from "../server/_core/context";
-import { storageGetSignedUrl } from "../server/storage";
+import { appRouter } from "./server/routers";
+import { createContext } from "./server/_core/context";
+import { storageGetSignedUrl } from "./server/storage";
 
 const app = express();
 app.use(express.json({ limit: "50mb" }));
