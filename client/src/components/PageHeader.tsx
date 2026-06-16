@@ -191,7 +191,7 @@ export default function PageHeader({
   return (
     <>
       <header
-        className={`bg-[#E8E6E3] border-b border-[#D4D4D2] z-50 ${
+        className={`bg-[#1C1C1C] border-b border-[#333333] z-50 ${
           sticky ? "sticky top-0" : ""
         }`}
       >
@@ -201,21 +201,26 @@ export default function PageHeader({
               className="flex items-center cursor-pointer flex-shrink-0"
               onClick={() => navigate("/dashboard")}
             >
-              <img src="/logo.png" alt="QLoop" className="h-7 w-auto" />
+              <img
+                src="/logo.png"
+                alt="QLoop"
+                className="h-7 w-auto"
+                style={{ filter: "brightness(0) saturate(100%) invert(27%) sepia(89%) saturate(1500%) hue-rotate(340deg) brightness(105%)" }}
+              />
             </div>
 
             {isSubPage && title && (
               <>
-                <span className="text-[#D4D4D2] text-sm">/</span>
+                <span className="text-white/30 text-sm">/</span>
                 <button
                   onClick={() => navigate(backTo)}
-                  className="flex items-center gap-1 text-xs text-[#A3A3A3] hover:text-[#0F0F0F] transition-colors font-medium"
+                  className="flex items-center gap-1 text-xs text-white/50 hover:text-white transition-colors font-medium"
                 >
                   <ArrowLeft size={11} />
                   {backLabel === "대시보드" ? "대시보드" : backLabel}
                 </button>
-                <span className="text-[#D4D4D2] text-sm">/</span>
-                <span className="text-sm font-semibold text-[#0F0F0F] truncate max-w-xs">
+                <span className="text-white/30 text-sm">/</span>
+                <span className="text-sm font-semibold text-white truncate max-w-xs">
                   {title}
                 </span>
               </>
@@ -233,8 +238,8 @@ export default function PageHeader({
                     onClick={() => navigate(item.path)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                       isActive(item.path)
-                        ? "bg-[#F0EFED] text-[#0F0F0F]"
-                        : "text-[#737373] hover:text-[#0F0F0F] hover:bg-[#F8F7F5]"
+                        ? "bg-white/15 text-white"
+                        : "text-white/60 hover:text-white hover:bg-white/10"
                     }`}
                   >
                     {item.icon}
@@ -246,8 +251,8 @@ export default function PageHeader({
                     onClick={() => navigate(adminNavItem.path)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                       isActive(adminNavItem.path)
-                        ? "bg-[#F0EFED] text-[#0F0F0F]"
-                        : "text-[#737373] hover:text-[#0F0F0F] hover:bg-[#F8F7F5]"
+                        ? "bg-white/15 text-white"
+                        : "text-white/60 hover:text-white hover:bg-white/10"
                     }`}
                   >
                     {adminNavItem.icon}
@@ -260,19 +265,19 @@ export default function PageHeader({
             {/* 세부 페이지: page-specific actions만 표시 */}
             {actions && (
               <>
-                {!isSubPage && <div className="w-px h-4 bg-[#E5E5E3] mx-1" />}
+                {!isSubPage && <div className="w-px h-4 bg-white/20 mx-1" />}
                 {actions}
               </>
             )}
 
-            <div className="flex items-center gap-2 pl-3 ml-1 border-l border-[#E5E5E3]">
-              <span className="text-xs font-semibold text-[#525252]">
+            <div className="flex items-center gap-2 pl-3 ml-1 border-l border-white/20">
+              <span className="text-xs font-semibold text-white/70">
                 {user?.name}
               </span>
               <button
                 onClick={() => setShowPwModal(true)}
                 title="비밀번호 변경"
-                className="flex items-center gap-1 text-xs text-[#A3A3A3] hover:text-[#0F0F0F] transition-colors px-2 py-1 rounded-md hover:bg-[#F8F7F5]"
+                className="flex items-center gap-1 text-xs text-white/50 hover:text-white transition-colors px-2 py-1 rounded-md hover:bg-white/10"
               >
                 <KeyRound size={11} />
               </button>
@@ -281,7 +286,7 @@ export default function PageHeader({
                   await logout();
                   window.location.href = "https://www.qloop.kr";
                 }}
-                className="flex items-center gap-1 text-xs text-[#A3A3A3] hover:text-[#0F0F0F] transition-colors px-2 py-1 rounded-md hover:bg-[#F8F7F5]"
+                className="flex items-center gap-1 text-xs text-white/50 hover:text-white transition-colors px-2 py-1 rounded-md hover:bg-white/10"
               >
                 <LogOut size={11} />
                 로그아웃
