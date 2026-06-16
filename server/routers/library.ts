@@ -507,7 +507,7 @@ export const libraryRouter = router({
       await db
         .update(documents)
         .set({ openQloopEnabled: input.enabled ? 1 : 0 })
-        .where(eq(dodocuments.id, input.documentId));
+        .where(eq(documents.id, input.documentId));
 
       return { success: true, openQloopEnabled: input.enabled };
     }),
