@@ -1506,8 +1506,8 @@ You are given ${docs.length} document(s) that belong to a learning group titled 
 Your task is to analyze ALL the documents TOGETHER and create a UNIFIED, COHERENT educational structure.
 Do NOT simply list each document separately. Instead, SYNTHESIZE the content across all documents to create:
 1. A unified chapter/topic tree that integrates concepts from all documents
-2. A unified concept map showing how concepts across all documents relate to each other
-3. A unified learning path that guides learners through all the material in the optimal order
+2. A unified concept map (max 15 nodes) using EXACTLY this schema per node: {id, label (short name), description (1-2 sentences), type ("core"|"sub"|"related"), connections (array of other node ids that this node connects to)}. Ensure connection ids reference real node ids in the same array.
+3. A unified learning path (3-6 steps) that guides learners through all the material in the optimal order
 The result should feel like a single integrated curriculum, not a collection of separate documents.
 Return ONLY valid JSON matching the schema exactly.`;
 
@@ -1576,10 +1576,12 @@ Return ONLY valid JSON matching the schema exactly.`;
                         type: "object",
                         properties: {
                           id: { type: "string" },
-                          concept: { type: "string" },
-                          relatedConcepts: { type: "array", items: { type: "string" } },
+                          label: { type: "string" },
+                          description: { type: "string" },
+                          type: { type: "string", enum: ["core", "sub", "related"] },
+                          connections: { type: "array", items: { type: "string" } },
                         },
-                        required: ["id", "concept", "relatedConcepts"],
+                        required: ["id", "label", "description", "type", "connections"],
                         additionalProperties: false,
                       },
                     },
@@ -1610,6 +1612,7 @@ Return ONLY valid JSON matching the schema exactly.`;
                     },
                   },
                   required: ["title", "summary", "documentType", "chapters", "conceptMap", "learningPath"],
+                  // conceptMap nodes must use ConceptNode schema: {id, label, description, type, connections[]}
                   additionalProperties: false,
                 },
               },
@@ -2092,15 +2095,19 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
         });
         // 첫 번째 질문 생성 — 문서 직접 참조 없이 토픽 정보만 사용
         const learningLang = (doc as any).learningLanguage || "ko";
+        // ④ 그룹 세션이면 group.structure 우선 사용
+        const startGroup = input.groupId ? await getDocumentGroupById(input.groupId) : null;
+        const structureForFirst = (startGroup as any)?.structure ?? (doc as any).structure ?? null;
         const firstTopicContext = extractTopicContext(
-          (doc as any).structure ?? null,
+          structureForFirst,
           input.topicId,
           input.topicTitle
         );
+        const firstDocTitle = startGroup ? startGroup.name : doc.title;
         const firstQuestion = await generateFirstQuestion(
           input.topicTitle,
           input.topicDescription,
-          doc.title,
+          firstDocTitle,
           openQloopMode, // open=true
           learningLang,
           libraryContext,
@@ -2139,6 +2146,9 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
 
         const doc = await getDocumentById(session.documentId);
         if (!doc) throw new Error("문서를 찾을 수 없습니다.");
+
+        // ④ 그룹 세션인 경우 group.structure를 우선 사용
+        const sessionGroup = session.groupId ? await getDocumentGroupById(session.groupId) : null;
 
         // 학습자 메시지 저장
         await createSessionMessage({
@@ -2192,15 +2202,19 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
           }
         }
 
-        // 문서 구조에서 토픽 컨텍스트 추출 (핵심 개념 + 소주제 설명)
+        // ④ 토픽 컨텍스트 추출: 그룹 세션은 group.structure 우선, 없으면 doc.structure 폴백
+        const structureForContext = (sessionGroup as any)?.structure ?? (doc as any).structure ?? null;
         const topicContext = extractTopicContext(
-          (doc as any).structure ?? null,
+          structureForContext,
           session.startTopicId ?? null,
           session.startTopicTitle ?? null
         );
 
+        // 그룹 세션에서 참조 문서 제목: 그룹 이름 사용 (통합 커리큘럼임을 AI에 전달)
+        const titleForSession = sessionGroup ? sessionGroup.name : doc.title;
+
         const aiResponse = await generateNextMessage(
-          doc.title,
+          titleForSession,
           session.startTopicTitle || "",
           history,
           input.content,
