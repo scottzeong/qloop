@@ -1592,4 +1592,12 @@ export default function DocumentDetail() {
           <div className="flex items-center gap-4 border-2 border-black px-8 py-6 bg-white">
             <div className="w-4 h-4 bg-red-600 animate-pulse" />
             <div>
-              <p className="font-bold text-sm uppercase tracking-widest">�
+              <p className="font-bold text-sm uppercase tracking-widest">학습 세션 준비 중</p>
+              <p className="text-xs text-black/50 mt-1">AI가 첫 번째 질문을 생성하고 있습니다…</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
