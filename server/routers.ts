@@ -1957,9 +1957,12 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
       .query(async ({ ctx, input }) => {
         const doc = await getDocumentById(input.documentId);
         if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
-        const storageKey = (doc as any).storageKey as string;
-        if (!storageKey) throw new Error("파일을 찾을 수 없습니다.");
-        const url = await storageGetSignedUrl(storageKey);
+        if (!doc.storageUrl) throw new Error("파일을 찾을 수 없습니다.");
+        // analyze 엔드포인트와 동일한 키 추출 방식 사용
+        const actualKey = doc.storageUrl
+          .replace(/^\/r2-storage\//, "")
+          .replace(/^\/manus-storage\//, "");
+        const url = await storageGetSignedUrl(actualKey);
         return { url, fileType: doc.fileType, title: doc.title };
       }),
 
