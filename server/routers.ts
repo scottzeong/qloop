@@ -1938,6 +1938,31 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
         return doc;
       }),
 
+    // ── ④ 분석 상태 경량 조회 (폴링용) ──────────────────────────────────────
+    getAnalysisStatus: protectedProcedure
+      .input(z.object({ documentId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const doc = await getDocumentById(input.documentId);
+        if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
+        return {
+          analysisStatus: (doc as any).analysisStatus as string,
+          analysisStep: (doc as any).analysisStep as string | null,
+          analysisError: (doc as any).analysisError as string | null,
+        };
+      }),
+
+    // ── ⑦ 문서 원문 미리보기 URL (Presigned, 15분 유효) ─────────────────────
+    getViewUrl: protectedProcedure
+      .input(z.object({ documentId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const doc = await getDocumentById(input.documentId);
+        if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
+        const storageKey = (doc as any).storageKey as string;
+        if (!storageKey) throw new Error("파일을 찾을 수 없습니다.");
+        const url = await storageGetSignedUrl(storageKey);
+        return { url, fileType: doc.fileType, title: doc.title };
+      }),
+
     // 문서 삭제
     delete: protectedProcedure
       .input(z.object({ documentId: z.number() }))
@@ -2537,6 +2562,93 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
         }
         return progressMap;
       }),
+    // ── ① 세션 완료 후 복습 리포트 ────────────────────────────────────────────
+    getReport: protectedProcedure
+      .input(z.object({ sessionId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const session = await getLearningSessionById(input.sessionId);
+        if (!session || session.userId !== ctx.user.id) throw new Error("세션을 찾을 수 없습니다.");
+        const messages = await getSessionMessages(input.sessionId);
+
+        const weakConcepts: string[] = [];
+        const strongConcepts: string[] = [];
+
+        for (let i = 0; i < messages.length; i++) {
+          const m = messages[i];
+          if (m.role === "user" && m.messageType !== "user_question") {
+            const prevAI = messages[i - 1];
+            if (!prevAI || prevAI.role !== "ai") continue;
+            const questionSnippet = prevAI.content.trim().slice(0, 80);
+            const isWeak =
+              m.content.trim().length < 20 ||
+              /모르|잘 모르|어렵다|이해가 안|몰라|뭐지|잘 모르겠|어렵습니다/.test(m.content);
+            const isStrong =
+              !isWeak && m.content.trim().length >= 60 &&
+              !/모르|잘 모르|어렵다|이해가 안|몰라/.test(m.content);
+            if (isWeak && !weakConcepts.includes(questionSnippet)) weakConcepts.push(questionSnippet);
+            else if (isStrong && !strongConcepts.includes(questionSnippet)) strongConcepts.push(questionSnippet);
+          }
+        }
+
+        const answeredCount = messages.filter((m) => m.role === "user" && m.messageType !== "user_question").length;
+        const totalAIQuestions = messages.filter((m) => m.role === "ai" && m.messageType === "question").length;
+        const masteryPct = totalAIQuestions > 0
+          ? Math.round(((answeredCount - weakConcepts.length) / totalAIQuestions) * 100)
+          : 0;
+
+        const recommendedTopics: string[] = [];
+        if (weakConcepts.length > 0 && session.startTopicTitle) {
+          recommendedTopics.push(session.startTopicTitle);
+        }
+
+        return {
+          sessionId: input.sessionId,
+          topicTitle: session.startTopicTitle ?? "",
+          answeredCount,
+          totalAIQuestions,
+          masteryPct: Math.max(0, Math.min(100, masteryPct)),
+          weakConcepts: weakConcepts.slice(0, 5),
+          strongConcepts: strongConcepts.slice(0, 5),
+          recommendedTopics,
+          summary: session.summary ?? "",
+          completedAt: session.completedAt?.toISOString() ?? null,
+        };
+      }),
+
+    // ── ② 망각곡선 기반 복습 알림 ─────────────────────────────────────────────
+    getReviewReminders: protectedProcedure.query(async ({ ctx }) => {
+      const sessions = await getSessionsByUserId(ctx.user.id);
+      const now = Date.now();
+      const WINDOW_MS = 12 * 60 * 60 * 1000;
+      const REVIEW_DAYS = [1, 3, 7];
+
+      const reminders: Array<{
+        sessionId: number;
+        topicTitle: string;
+        daysAgo: number;
+        completedAt: string;
+      }> = [];
+
+      for (const s of sessions) {
+        if (s.status !== "completed" || !(s as any).completedAt) continue;
+        const completedAt = new Date((s as any).completedAt).getTime();
+        const elapsed = now - completedAt;
+        for (const days of REVIEW_DAYS) {
+          const targetMs = days * 24 * 60 * 60 * 1000;
+          if (Math.abs(elapsed - targetMs) <= WINDOW_MS) {
+            reminders.push({
+              sessionId: s.id,
+              topicTitle: s.startTopicTitle ?? "학습 토픽",
+              daysAgo: days,
+              completedAt: new Date((s as any).completedAt).toISOString(),
+            });
+            break;
+          }
+        }
+      }
+      return reminders;
+    }),
+
     // 문서별 토픽 완성도 조회
     getTopicProgress: protectedProcedure
       .input(z.object({ documentId: z.number() }))
@@ -2622,4 +2734,10 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
         }
       }
       return {
-        core: { count: modelMap.core.co
+        core: { count: modelMap.core.count, avgScore: modelMap.core.scoredCount > 0 ? Math.round(modelMap.core.totalScore / modelMap.core.scoredCount) : null },
+        curated: { count: modelMap.curated.count, avgScore: modelMap.curated.scoredCount > 0 ? Math.round(modelMap.curated.totalScore / modelMap.curated.scoredCount) : null },
+        open: { count: modelMap.open.count, avgScore: modelMap.open.scoredCount > 0 ? Math.round(modelMap.open.totalScore / modelMap.open.scoredCount) : null },
+      };
+    }),
+  }),
+});

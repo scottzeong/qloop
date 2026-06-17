@@ -4,8 +4,9 @@ import { useLocation, useParams } from "wouter";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import PageHeader from "@/components/PageHeader";
-import { Send, CheckCircle, HelpCircle, MessageSquare, BookOpen, ChevronDown } from "lucide-react";
+import { Send, CheckCircle, HelpCircle, MessageSquare, BookOpen, ChevronDown, BarChart2, X } from "lucide-react";
 import { Streamdown } from "streamdown";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 type MessageType = "question" | "answer" | "feedback" | "user_question" | "ai_answer" | "system";
 
@@ -103,6 +104,7 @@ export default function LearningSession() {
   const [isUserQuestion, setIsUserQuestion] = useState(false);
   const [sending, setSending] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [showReport, setShowReport] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [currentModel, setCurrentModel] = useState<"core" | "curated" | "open">("core");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -126,6 +128,10 @@ export default function LearningSession() {
   const sendMessage = trpc.session.sendMessage.useMutation();
   const updateModel = trpc.session.updateModel.useMutation();
   const completeSession = trpc.session.complete.useMutation();
+  const { data: reportData, refetch: fetchReport } = trpc.session.getReport.useQuery(
+    { sessionId },
+    { enabled: false }
+  );
   const completeModule = trpc.socratic.completeModule.useMutation();
 
   const numberedMessages = useMemo(() => {
@@ -197,6 +203,9 @@ export default function LearningSession() {
         }
       }
       await refetchSession();
+      // ① 복습 리포트 자동 표시
+      await fetchReport();
+      setShowReport(true);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "세션 종료 실패");
     } finally {
@@ -480,6 +489,100 @@ export default function LearningSession() {
           )}
         </div>
       </div>
+      {/* ① 세션 완료 복습 리포트 모달 */}
+      <Dialog open={showReport} onOpenChange={setShowReport}>
+        <DialogContent className="max-w-lg w-full p-0 gap-0 overflow-hidden">
+          <div className="bg-black text-white px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <BarChart2 size={16} />
+              <span className="font-bold text-sm uppercase tracking-widest">학습 리포트</span>
+            </div>
+            <button onClick={() => setShowReport(false)} className="text-white/60 hover:text-white">
+              <X size={16} />
+            </button>
+          </div>
+          {reportData ? (
+            <div className="p-6 space-y-5">
+              {/* 토픽 & 숙련도 */}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-[#A3A3A3] mb-1">토픽</p>
+                <p className="font-bold text-base">{reportData.topicTitle}</p>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-xs font-bold uppercase tracking-widest text-[#A3A3A3]">이해도</p>
+                  <span className="text-sm font-bold" style={{ color: reportData.masteryPct >= 70 ? "var(--pm-indigo)" : reportData.masteryPct >= 40 ? "#F59E0B" : "#EF4444" }}>
+                    {reportData.masteryPct}%
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-[#F0EFED] rounded-full overflow-hidden">
+                  <div
+                    className="h-2 rounded-full transition-all duration-700"
+                    style={{
+                      width: `${reportData.masteryPct}%`,
+                      backgroundColor: reportData.masteryPct >= 70 ? "var(--pm-indigo)" : reportData.masteryPct >= 40 ? "#F59E0B" : "#EF4444",
+                    }}
+                  />
+                </div>
+                <p className="text-xs text-[#A3A3A3] mt-1">{reportData.answeredCount}개 답변 / {reportData.totalAIQuestions}개 질문</p>
+              </div>
+
+              {/* 취약 개념 */}
+              {reportData.weakConcepts.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-[#A3A3A3] mb-2">복습 필요 개념</p>
+                  <ul className="space-y-1.5">
+                    {reportData.weakConcepts.map((c, i) => (
+                      <li key={i} className="flex items-start gap-2 text-xs">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5 flex-shrink-0" />
+                        <span className="text-[#525252] leading-relaxed">{c}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* 잘 이해한 개념 */}
+              {reportData.strongConcepts.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-[#A3A3A3] mb-2">잘 이해한 개념</p>
+                  <ul className="space-y-1.5">
+                    {reportData.strongConcepts.map((c, i) => (
+                      <li key={i} className="flex items-start gap-2 text-xs">
+                        <span className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: "var(--pm-indigo)" }} />
+                        <span className="text-[#525252] leading-relaxed">{c}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* 권장 복습 */}
+              {reportData.recommendedTopics.length > 0 && (
+                <div className="border border-[#E5E5E3] rounded-xl p-4 bg-[#F8F7F5]">
+                  <p className="text-xs font-bold uppercase tracking-widest text-[#A3A3A3] mb-1.5">복습 권장</p>
+                  <p className="text-xs text-[#525252]">1일 · 3일 · 7일 후 대시보드에서 복습 알림을 확인하세요.</p>
+                  <p className="text-xs font-semibold mt-1" style={{ color: "var(--pm-indigo)" }}>
+                    → {reportData.recommendedTopics.join(", ")}
+                  </p>
+                </div>
+              )}
+
+              <button
+                onClick={() => setShowReport(false)}
+                className="w-full py-2.5 bg-black text-white text-xs font-bold uppercase tracking-widest hover:bg-black/80 transition-colors"
+              >
+                확인
+              </button>
+            </div>
+          ) : (
+            <div className="p-8 flex items-center justify-center gap-3">
+              <div className="w-3 h-3 rounded-full animate-pulse" style={{ backgroundColor: "var(--pm-indigo)" }} />
+              <span className="text-sm text-[#737373]">리포트 생성 중...</span>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -911,6 +911,11 @@ export default function DocumentDetail() {
   // QLoop 모델 선택 state
   const [qloopModel, setQloopModel] = useState<"core" | "curated" | "open">("core");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // ⑤ 세션 재시작 다이얼로그
+  const [showResumeDialog, setShowResumeDialog] = useState(false);
+  const [resumeSessionId, setResumeSessionId] = useState<number | null>(null);
+  // ⑦ PDF 미리보기 모달
+  const [showPdfViewer, setShowPdfViewer] = useState(false);
 
   const deleteDocMutation = trpc.document.delete.useMutation();
   const analyzeMutation = trpc.document.analyze.useMutation({
@@ -938,6 +943,10 @@ export default function DocumentDetail() {
   const { data: policies } = trpc.socratic.getPolicies.useQuery();
 
   const startSession = trpc.session.start.useMutation();
+  const { data: viewUrlData, refetch: refetchViewUrl } = trpc.document.getViewUrl.useQuery(
+    { documentId: docId },
+    { enabled: false } // 버튼 클릭 시에만 fetch
+  );
   const { data: myLibraryData } = trpc.library.listMyLibrary.useQuery();
   const myLibraryItems = myLibraryData?.items ?? [];
   const { data: topicProgressData } = trpc.session.getTopicProgress.useQuery(
@@ -973,7 +982,7 @@ export default function DocumentDetail() {
     setStarting(true);
     try {
       const selectedStructure = (doc as any).selectedStructure as "tree" | "conceptMap" | "learningPath" | null;
-      const { sessionId } = await startSession.mutateAsync({
+      const result = await startSession.mutateAsync({
         documentId: docId,
         topicId: pendingTopic.id,
         topicTitle: pendingTopic.title,
@@ -983,7 +992,14 @@ export default function DocumentDetail() {
         selectedStructure: selectedStructure ?? undefined,
         qloopModel,
       });
-      navigate(`/sessions/${sessionId}`);
+      if ((result as any).resumed) {
+        // 이전 세션 재개 — 사용자에게 확인 요청
+        setResumeSessionId(result.sessionId);
+        setShowResumeDialog(true);
+        setStarting(false);
+        return;
+      }
+      navigate(`/sessions/${result.sessionId}`);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "세션 시작 실패");
       setStarting(false);
@@ -1093,6 +1109,19 @@ export default function DocumentDetail() {
                 <RotateCcw size={11} /> 재분석
               </button>
             )}
+            {/* ⑦ 원문 보기 버튼 */}
+            {doc.analysisStatus === "done" && (
+              <button
+                onClick={async () => {
+                  setShowPdfViewer(true);
+                  await refetchViewUrl();
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border border-[#E5E5E3] bg-white hover:bg-[#F8F7F5] text-[#525252] transition-colors"
+                title="원문 미리보기"
+              >
+                <Search size={11} /> 원문 보기
+              </button>
+            )}
             <button
               onClick={() => setShowDeleteConfirm(true)}
               className="p-1.5 rounded-lg text-[#A3A3A3] hover:text-red-500 hover:bg-red-50 transition-colors"
@@ -1133,6 +1162,69 @@ export default function DocumentDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ⑤ 세션 재시작 확인 다이얼로그 */}
+      <AlertDialog open={showResumeDialog} onOpenChange={setShowResumeDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>이전 학습 세션이 있습니다</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>"{pendingTopic?.title}"</strong> 토픽의 진행 중인 세션이 있습니다.<br />
+              이어서 학습하시겠습니까?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setShowResumeDialog(false); setResumeSessionId(null); }}>
+              취소
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (resumeSessionId) navigate(`/sessions/${resumeSessionId}`);
+                setShowResumeDialog(false);
+              }}
+              className="bg-black text-white hover:bg-black/80"
+            >
+              이어서 학습하기
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ⑦ PDF 미리보기 모달 */}
+      <Dialog open={showPdfViewer} onOpenChange={setShowPdfViewer}>
+        <DialogContent className="max-w-5xl w-full h-[85vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-5 py-3 border-b border-[#E5E5E3] flex-shrink-0">
+            <DialogTitle className="text-sm font-bold">{doc?.title} — 원문 보기</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden">
+            {viewUrlData?.url ? (
+              doc?.fileType === "pdf" ? (
+                <iframe
+                  src={viewUrlData.url}
+                  className="w-full h-full border-0"
+                  title="문서 미리보기"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full gap-4 text-sm text-[#737373]">
+                  <p>이 파일 형식({doc?.fileType?.toUpperCase()})은 브라우저 미리보기를 지원하지 않습니다.</p>
+                  <a
+                    href={viewUrlData.url}
+                    download
+                    className="px-4 py-2 bg-black text-white text-xs font-bold uppercase tracking-widest hover:bg-black/80"
+                  >
+                    파일 다운로드
+                  </a>
+                </div>
+              )
+            ) : (
+              <div className="flex items-center justify-center h-full gap-3">
+                <div className="w-3 h-3 rounded-full animate-pulse bg-[#5B5BD6]" />
+                <span className="text-sm text-[#737373]">파일 로딩 중...</span>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <main className="flex-1 max-w-7xl mx-auto px-8 py-10 w-full">
         {/* 분석 전 */}

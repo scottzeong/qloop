@@ -19,6 +19,8 @@ import {
   X,
   FileType,
   AlignLeft,
+  Bell,
+  RefreshCw,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -90,6 +92,20 @@ export default function Dashboard() {
   const { data: sessions } = trpc.session.list.useQuery(undefined, {
     enabled: isAuthenticated,
   });
+
+  // ② 망각곡선 복습 알림
+  const { data: reviewReminders } = trpc.session.getReviewReminders.useQuery(undefined, {
+    enabled: isAuthenticated,
+    refetchInterval: 5 * 60 * 1000, // 5분마다
+  });
+
+  // ④ 분석 중 문서가 있을 때 3초마다 폴링
+  const hasAnalyzingDoc = (documents ?? []).some((d) => d.analysisStatus === "analyzing" || d.analysisStatus === "pending" && (d as any).analysisStep);
+  const { data: _analysisPolled } = trpc.document.list.useQuery(undefined, {
+    enabled: isAuthenticated && hasAnalyzingDoc,
+    refetchInterval: hasAnalyzingDoc ? 3000 : false,
+    onSuccess: () => { if (hasAnalyzingDoc) refetchDocs(); },
+  } as any);
 
   // 텍스트 입력 모드 상태
   const [uploadMode, setUploadMode] = useState<"file" | "text">("file");
@@ -379,6 +395,29 @@ export default function Dashboard() {
 
       <PageHeader />
 
+      {/* ② 망각곡선 복습 알림 배너 */}
+      {reviewReminders && reviewReminders.length > 0 && (
+        <div className="border-b border-[#E5E5E3] bg-[#FFFBEB]">
+          <div className="max-w-7xl mx-auto px-8 py-3 flex items-start gap-3">
+            <Bell size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-amber-800 mb-1">복습 알림 — 망각이 시작됩니다!</p>
+              <div className="flex flex-wrap gap-2">
+                {reviewReminders.map((r) => (
+                  <button
+                    key={r.sessionId}
+                    onClick={() => navigate(`/documents`)}
+                    className="text-xs bg-amber-100 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-lg hover:bg-amber-200 transition-colors font-medium"
+                  >
+                    {r.daysAgo}일 전 · {r.topicTitle}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="flex-1 max-w-7xl mx-auto px-8 py-12 w-full">
         <div className="grid grid-cols-12 gap-12">
           {/* Left: Upload + Groups + Docs */}
@@ -601,7 +640,7 @@ export default function Dashboard() {
                         <div className="flex items-center gap-3">
                           <div
                             className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                              doc.analysisStatus === "done" ? "bg-[#5B5BD6]" : doc.analysisStatus === "analyzing" ? "bg-amber-400" : "bg-[#D4D4D2]"
+                              doc.analysisStatus === "done" ? "bg-[#5B5BD6]" : doc.analysisStatus === "analyzing" ? "bg-amber-400 animate-pulse" : doc.analysisStatus === "error" ? "bg-red-500" : "bg-[#D4D4D2]"
                             }`}
                           />
                           <div>
@@ -610,7 +649,18 @@ export default function Dashboard() {
                               <FileTypeBadge fileType={doc.fileType} />
                             </div>
                             <p className="text-xs text-[#A3A3A3]">
-                              {doc.analysisStatus === "done" ? "분석 완료" : doc.analysisStatus === "analyzing" ? "분석 중..." : "대기 중"} · {new Date(doc.createdAt).toLocaleDateString("ko-KR")}
+                              {doc.analysisStatus === "done"
+                                ? "분석 완료"
+                                : doc.analysisStatus === "analyzing"
+                                ? (() => {
+                                    const step = (doc as any).analysisStep;
+                                    if (step === "extracting") return "텍스트 추출 중...";
+                                    if (step === "structuring") return "AI 구조 분석 중...";
+                                    return "분석 중...";
+                                  })()
+                                : doc.analysisStatus === "error"
+                                ? "분석 실패"
+                                : "분석 대기 중"} · {new Date(doc.createdAt).toLocaleDateString("ko-KR")}
                             </p>
                           </div>
                         </div>
