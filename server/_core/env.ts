@@ -1,3 +1,11 @@
+// ENCRYPTION_SECRET이 별도로 설정되지 않으면 JWT_SECRET fallback 경고
+if (process.env.NODE_ENV === "production" && !process.env.ENCRYPTION_SECRET && process.env.JWT_SECRET) {
+  console.warn(
+    "[Security] ENCRYPTION_SECRET 환경변수가 없어 JWT_SECRET을 API 키 암호화에 사용합니다. " +
+    "ENCRYPTION_SECRET을 별도로 발급하여 Vercel 환경변수에 추가하세요."
+  );
+}
+
 export const ENV = {
   appId: process.env.VITE_APP_ID ?? "qloop",
   cookieSecret: process.env.JWT_SECRET ?? "",

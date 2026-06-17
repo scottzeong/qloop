@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { COOKIE_NAME, ONE_YEAR_MS } from "../shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS, SESSION_TTL_MS } from "../shared/const";
 import { hashPassword, verifyPassword } from "./_core/password";
 import { sdk } from "./_core/sdk";
 import { nanoid } from "nanoid";
@@ -46,6 +46,9 @@ import {
   updateLearningSession,
   createSessionMessage,
   getSessionMessages,
+  checkLoginRateLimitDb,
+  recordLoginFailureDb,
+  resetLoginAttemptsDb,
 } from "./db";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -198,12 +201,12 @@ async function extractTextFromOfficeFile(fileUrl: string, mimeType: string): Pro
 
 async function extractTextFromPdf(fileUrl: string): Promise<string | null> {
   try {
-    console.log("[extractTextFromPdf] 시작:", fileUrl.slice(0, 80));
+    if (process.env.NODE_ENV !== "production") console.log("[extractTextFromPdf] 시작:", fileUrl.slice(0, 80));
     const res = await fetch(fileUrl);
     if (!res.ok) throw new Error(`PDF 다운로드 실패: ${res.status}`);
     const arrayBuffer = await res.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    console.log("[extractTextFromPdf] 버퍼 크기:", buffer.length);
+    if (process.env.NODE_ENV !== "production") console.log("[extractTextFromPdf] 버퍼 크기:", buffer.length);
     const text = await new Promise<string | null>(async (resolve) => {
       const PDFParser = (await import("pdf2json")).default;
       const parser = new PDFParser(null, true);
@@ -224,7 +227,7 @@ async function extractTextFromPdf(fileUrl: string): Promise<string | null> {
       });
       parser.parseBuffer(buffer);
     });
-    console.log("[extractTextFromPdf] 추출 텍스트 길이:", text?.length ?? 0);
+    if (process.env.NODE_ENV !== "production") console.log("[extractTextFromPdf] 추출 텍스트 길이:", text?.length ?? 0);
     return text;
   } catch (e) {
     console.error("[extractTextFromPdf] 실패:", e);
@@ -436,7 +439,7 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
       },
     };
 
-  console.log(`[ANALYZE] isPdf=${isPdf}, mimeType=${mimeType}, userId=${userId}`);
+  if (process.env.NODE_ENV !== "production") console.log(`[ANALYZE] isPdf=${isPdf}, mimeType=${mimeType}, userId=${userId}`);
   let response: Awaited<ReturnType<typeof aiInvoke>>;
   try {
     response = await aiInvoke(userId, {
@@ -449,7 +452,7 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
   }
 
   const rawContent = response.choices[0]?.message?.content;
-  console.log(`[ANALYZE] rawContent type=${typeof rawContent}, length=${typeof rawContent === 'string' ? rawContent.length : 'N/A'}, preview=${typeof rawContent === 'string' ? rawContent.slice(0, 200) : JSON.stringify(rawContent)?.slice(0, 200)}`);
+  if (process.env.NODE_ENV !== "production") console.log(`[ANALYZE] rawContent type=${typeof rawContent}, length=${typeof rawContent === 'string' ? rawContent.length : 'N/A'}, preview=${typeof rawContent === 'string' ? rawContent.slice(0, 200) : JSON.stringify(rawContent)?.slice(0, 200)}`);
 
   // Forge API가 json_schema 모드에서 content를 이미 파싱된 객체로 반환할 수 있음
   let parsed: DocumentStructure;
@@ -485,7 +488,7 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
         if (lastBrace > 0) {
           const truncated = stripped.slice(0, lastBrace + 1);
           parsed = JSON.parse(truncated) as DocumentStructure;
-          console.log('[ANALYZE] Recovered truncated JSON successfully');
+          if (process.env.NODE_ENV !== "production") console.log('[ANALYZE] Recovered truncated JSON successfully');
         } else {
           throw new Error('no closing brace');
         }
@@ -1282,39 +1285,7 @@ Format the summary with:
 
 // ─── Router ───────────────────────────────────────────────────────────────────
 
-// ── Login Rate Limiter (브루트포스 방어) ────────────────────────────────────
-const loginAttempts = new Map<string, { count: number; firstAttempt: number }>();
-const LOGIN_MAX_ATTEMPTS = 10;
-const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15분 윈도우
-const LOGIN_LOCKOUT_MS = 15 * 60 * 1000; // 15분 잠금
-
-function checkLoginRateLimit(ip: string): void {
-  const now = Date.now();
-  const record = loginAttempts.get(ip);
-  if (!record) return;
-  if (now - record.firstAttempt > LOGIN_WINDOW_MS) {
-    loginAttempts.delete(ip);
-    return;
-  }
-  if (record.count >= LOGIN_MAX_ATTEMPTS) {
-    const remaining = Math.ceil((record.firstAttempt + LOGIN_LOCKOUT_MS - now) / 1000 / 60);
-    throw new Error(`로그인 시도 횟수를 초과했습니다. ${remaining}분 후 다시 시도해주세요.`);
-  }
-}
-
-function recordLoginFailure(ip: string): void {
-  const now = Date.now();
-  const record = loginAttempts.get(ip);
-  if (!record || now - record.firstAttempt > LOGIN_WINDOW_MS) {
-    loginAttempts.set(ip, { count: 1, firstAttempt: now });
-  } else {
-    record.count++;
-  }
-}
-
-function clearLoginAttempts(ip: string): void {
-  loginAttempts.delete(ip);
-}
+// ── Login Rate Limiter — db.ts의 checkLoginRateLimitDb/recordLoginFailureDb/resetLoginAttemptsDb 사용 ──
 
 export const appRouter = router({
   system: systemRouter,
@@ -1343,9 +1314,9 @@ export const appRouter = router({
         const isFirstUser = userCount.length === 0;
         const role = isFirstUser ? "superadmin" : "user";
         await db.insert(users).values({ openId, email: input.email, name: input.name, passwordHash, role, loginMethod: "email", lastSignedIn: new Date() });
-        const sessionToken = await sdk.createSessionToken(openId, { name: input.name, expiresInMs: ONE_YEAR_MS });
+        const sessionToken = await sdk.createSessionToken(openId, { name: input.name, expiresInMs: SESSION_TTL_MS });
         const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: SESSION_TTL_MS });
         return { success: true } as const;
       }),
 
@@ -1356,25 +1327,25 @@ export const appRouter = router({
       }))
       .mutation(async ({ input, ctx }) => {
         const ip = (ctx.req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? ctx.req.socket?.remoteAddress ?? "unknown";
-        checkLoginRateLimit(ip);
+        checkLoginRateLimitDb(ip);
         const db = await getDb();
         if (!db) throw new Error("Database unavailable");
         const { users } = await import("../drizzle/schema");
         const { eq } = await import("drizzle-orm");
         const [user] = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
         if (!user || !user.passwordHash) {
-          recordLoginFailure(ip);
+          recordLoginFailureDb(ip);
           throw new Error("이메일 또는 비밀번호가 올바르지 않습니다");
         }
         const valid = await verifyPassword(input.password, user.passwordHash);
         if (!valid) {
-          recordLoginFailure(ip);
+          recordLoginFailureDb(ip);
           throw new Error("이메일 또는 비밀번호가 올바르지 않습니다");
         }
-        clearLoginAttempts(ip);
-        const sessionToken = await sdk.createSessionToken(user.openId, { name: user.name || "", expiresInMs: ONE_YEAR_MS });
+        resetLoginAttemptsDb(ip);
+        const sessionToken = await sdk.createSessionToken(user.openId, { name: user.name || "", expiresInMs: SESSION_TTL_MS });
         const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: SESSION_TTL_MS });
         return { success: true } as const;
       }),
 
@@ -1753,6 +1724,13 @@ Return ONLY valid JSON matching the schema exactly.`;
           throw new Error("파일 크기가 너무 큽니다. 최대 50MB까지 업로드 가능합니다.");
         }
 
+        // 사용자당 문서 수 제한
+        const MAX_DOCUMENTS_PER_USER = 200;
+        const existingDocs = await getDocumentsByUserId(ctx.user.id);
+        if (existingDocs.length >= MAX_DOCUMENTS_PER_USER) {
+          throw new Error(`문서는 최대 ${MAX_DOCUMENTS_PER_USER}개까지 업로드할 수 있습니다. 불필요한 문서를 삭제 후 다시 시도해 주세요.`);
+        }
+
         const buffer = Buffer.from(input.fileData, "base64");
 
         // magic bytes로 실제 파일 형식 검증
@@ -1918,9 +1896,9 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
             return { success: true, structure, detectedLanguage };
           }
           const actualKey = doc.storageUrl.replace(/^\/r2-storage\//, "").replace(/^\/manus-storage\//, "");
-          console.log("[ANALYZE] storageUrl:", doc.storageUrl, "=> actualKey:", actualKey);
+          if (process.env.NODE_ENV !== "production") console.log("[ANALYZE] storageUrl:", doc.storageUrl, "=> actualKey:", actualKey);
           const signedUrl = await storageGetSignedUrl(actualKey);
-          console.log("[ANALYZE] signedUrl:", signedUrl.slice(0, 100));
+          if (process.env.NODE_ENV !== "production") console.log("[ANALYZE] signedUrl:", signedUrl.slice(0, 100));
           const mimeForAnalysis = doc.fileType === "pdf" ? "application/pdf" : doc.fileType === "doc" ? "application/msword" : doc.fileType === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : doc.fileType === "ppt" ? "application/vnd.ms-powerpoint" : doc.fileType === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/pdf";
           // 단계 2: structuring (AI 구조 분석 중)
           await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "structuring");
@@ -2160,16 +2138,23 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
           input.topicId,
           input.topicTitle
         );
-        const firstQuestion = await generateFirstQuestion(
-          input.topicTitle,
-          input.topicDescription,
-          startGroup ? startGroup.name : doc.title,
-          openQloopMode, // open=true
-          learningLang,
-          libraryContext,
-          ctx.user.id,
-          firstTopicContext
-        );
+        let firstQuestion: string;
+        try {
+          firstQuestion = await generateFirstQuestion(
+            input.topicTitle,
+            input.topicDescription,
+            startGroup ? startGroup.name : doc.title,
+            openQloopMode, // open=true
+            learningLang,
+            libraryContext,
+            ctx.user.id,
+            firstTopicContext
+          );
+        } catch (aiErr) {
+          // AI 호출 실패 시 세션을 error 상태로 업데이트 후 예외 전파
+          await updateLearningSession(sessionId, { status: "paused" });
+          throw new Error("첫 질문 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+        }
 
         await createSessionMessage({
           sessionId,
@@ -2191,7 +2176,7 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
       .input(
         z.object({
           sessionId: z.number(),
-          content: z.string(),
+          content: z.string().max(4000, "메시지는 최대 4000자까지 입력 가능합니다."),
           isUserQuestion: z.boolean().default(false),
         })
       )
@@ -2199,6 +2184,12 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
         const session = await getLearningSessionById(input.sessionId);
         if (!session || session.userId !== ctx.user.id) throw new Error("세션을 찾을 수 없습니다.");
         if (session.status !== "active") throw new Error("이미 종료된 세션입니다.");
+
+        // ── 세션당 메시지 수 상한 (무한 AI 호출 방지) ─────────────────────────
+        const MAX_MESSAGES_PER_SESSION = 200;
+        if ((session.totalQuestions ?? 0) >= MAX_MESSAGES_PER_SESSION) {
+          throw new Error("세션당 최대 메시지 수를 초과했습니다. 세션을 완료하고 새로 시작해 주세요.");
+        }
 
         const doc = session.documentId ? await getDocumentById(session.documentId) : null;
         const sessionGroup = session.groupId ? await getDocumentGroupById(session.groupId) : null;
@@ -2265,19 +2256,24 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
           session.startTopicTitle ?? null
         );
 
-        const aiResponse = await generateNextMessage(
-          titleForSession,
-          session.startTopicTitle || "",
-          history,
-          input.content,
-          input.isUserQuestion,
-          sessionOpenQloop,
-          currentAnsweredForTier,
-          docLearningLang,
-          libraryContext,
-          ctx.user.id,
-          topicContext
-        );
+        let aiResponse: Awaited<ReturnType<typeof generateNextMessage>>;
+        try {
+          aiResponse = await generateNextMessage(
+            titleForSession,
+            session.startTopicTitle || "",
+            history,
+            input.content,
+            input.isUserQuestion,
+            sessionOpenQloop,
+            currentAnsweredForTier,
+            docLearningLang,
+            libraryContext,
+            ctx.user.id,
+            topicContext
+          );
+        } catch (aiErr) {
+          throw new Error("AI 응답 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+        }
 
         // AI 메시지 저장
         const msgCount = messages.filter((m) => m.messageType === "question").length;
@@ -2626,10 +2622,4 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
         }
       }
       return {
-        core: { count: modelMap.core.count, avgScore: modelMap.core.scoredCount > 0 ? Math.round(modelMap.core.totalScore / modelMap.core.scoredCount) : null },
-        curated: { count: modelMap.curated.count, avgScore: modelMap.curated.scoredCount > 0 ? Math.round(modelMap.curated.totalScore / modelMap.curated.scoredCount) : null },
-        open: { count: modelMap.open.count, avgScore: modelMap.open.scoredCount > 0 ? Math.round(modelMap.open.totalScore / modelMap.open.scoredCount) : null },
-      };
-    }),
-  }),
-});
+        core: { count: modelMap.core.co

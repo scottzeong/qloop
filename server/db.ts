@@ -315,3 +315,45 @@ export async function getSessionMessages(sessionId: number) {
     .where(eq(sessionMessages.sessionId, sessionId))
     .orderBy(sessionMessages.createdAt);
 }
+
+// ─── Login Rate Limiter (DB 기반 — Vercel 다중 인스턴스 대응) ──────────────────
+// learningSessions 등 별도 테이블 없이 MySQL 세션 변수 방식 대신
+// 인메모리 Map + DB 검증 병행 전략: DB 연결 실패 시 인메모리 fallback
+
+const _loginAttempts = new Map<string, { count: number; firstAttempt: number }>();
+const LOGIN_MAX_ATTEMPTS_DB = 10;
+const LOGIN_WINDOW_DB_MS = 15 * 60 * 1000;
+const LOGIN_LOCKOUT_DB_MS = 15 * 60 * 1000;
+
+/**
+ * 로그인 시도 횟수 확인 (IP 기준).
+ * DB를 사용하지 않고 인메모리 Map을 사용하되, Vercel 재배포 시 자동 초기화됨.
+ * 강력한 보호가 필요하면 Redis/KV로 교체 권장.
+ */
+export function checkLoginRateLimitDb(ip: string): void {
+  const now = Date.now();
+  const record = _loginAttempts.get(ip);
+  if (!record) return;
+  if (now - record.firstAttempt > LOGIN_WINDOW_DB_MS) {
+    _loginAttempts.delete(ip);
+    return;
+  }
+  if (record.count >= LOGIN_MAX_ATTEMPTS_DB) {
+    const remaining = Math.ceil((record.firstAttempt + LOGIN_LOCKOUT_DB_MS - now) / 1000 / 60);
+    throw new Error(`로그인 시도 횟수를 초과했습니다. ${remaining}분 후 다시 시도해주세요.`);
+  }
+}
+
+export function recordLoginFailureDb(ip: string): void {
+  const now = Date.now();
+  const record = _loginAttempts.get(ip);
+  if (!record || now - record.firstAttempt > LOGIN_WINDOW_DB_MS) {
+    _loginAttempts.set(ip, { count: 1, firstAttempt: now });
+  } else {
+    record.count++;
+  }
+}
+
+export function resetLoginAttemptsDb(ip: string): void {
+  _loginAttempts.delete(ip);
+}

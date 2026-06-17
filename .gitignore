@@ -112,3 +112,18 @@ temp/
 
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json
+
+# ── 프로덕션 보안: 위험한 스크립트 & 개발용 임시파일 ─────────────────────────
+# DB 초기화 스크립트 (실수로 실행 시 데이터 전체 삭제)
+reset-db.mjs
+# DB 시드/마이그레이션 스크립트 (배포 환경과 무관)
+seed-*.mjs
+migrate-*.mjs
+set-admin.mjs
+# 개발 중 생성된 임시 스크립트
+insert_handler.py
+# 내부 개발 이력 (전략 정보 노출 방지)
+todo.md
+# Sandbox 임시 파일
+_tmp_*
+$null
