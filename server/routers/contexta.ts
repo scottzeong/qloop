@@ -359,29 +359,29 @@ export const contextaRouter = router({
             analyzedAt: new Date().toISOString(),
           };
 
-          // Step 1: 내용 분석
+          // 6단계 병렬 실행 (~15-20s vs 순차 ~60-90s)
           await updateContextaProgress(input.documentId, "analyzing", "content");
-          analysis.contentAnalysis = await analyzeContent(text, doc.title);
-
-          // Step 2: 구조 분석
-          await updateContextaProgress(input.documentId, "analyzing", "structure");
-          analysis.structureAnalysis = await analyzeStructure(text, doc.title);
-
-          // Step 3: 논리 분석
-          await updateContextaProgress(input.documentId, "analyzing", "logic");
-          analysis.logicAnalysis = await analyzeLogic(text, doc.title);
-
-          // Step 4: 개념 요약
-          await updateContextaProgress(input.documentId, "analyzing", "concept");
-          analysis.conceptSummary = await generateConceptSummary(text, doc.title);
-
-          // Step 5: 이해 요약
-          await updateContextaProgress(input.documentId, "analyzing", "understanding");
-          analysis.understandingSummary = await generateUnderstandingSummary(text, doc.title);
-
-          // Step 6: 비판적 사고
-          await updateContextaProgress(input.documentId, "analyzing", "critical");
-          analysis.criticalThinking = await analyzeCriticalThinking(text, doc.title);
+          const [
+            contentAnalysis,
+            structureAnalysis,
+            logicAnalysis,
+            conceptSummary,
+            understandingSummary,
+            criticalThinking,
+          ] = await Promise.all([
+            analyzeContent(text, doc.title),
+            analyzeStructure(text, doc.title),
+            analyzeLogic(text, doc.title),
+            generateConceptSummary(text, doc.title),
+            generateUnderstandingSummary(text, doc.title),
+            analyzeCriticalThinking(text, doc.title),
+          ]);
+          analysis.contentAnalysis = contentAnalysis;
+          analysis.structureAnalysis = structureAnalysis;
+          analysis.logicAnalysis = logicAnalysis;
+          analysis.conceptSummary = conceptSummary;
+          analysis.understandingSummary = understandingSummary;
+          analysis.criticalThinking = criticalThinking;
 
           // 완료
           analysis.analyzedAt = new Date().toISOString();

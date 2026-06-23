@@ -922,12 +922,12 @@ function ContextaResultPanel({
   const ct = analysis.criticalThinking as Record<string, unknown> | null;
 
   const tabs = [
-    { key: "content",       label: "① 내용",   icon: <BookOpen size={14} />,      data: ca },
-    { key: "structure",     label: "② 구조",   icon: <BarChart2 size={14} />,     data: sa },
-    { key: "logic",         label: "③ 논리",   icon: <GitBranch size={14} />,     data: la },
-    { key: "concept",       label: "④ 개념",   icon: <Network size={14} />,       data: cs },
-    { key: "understanding", label: "⑤ 이해",   icon: <Lightbulb size={14} />,     data: us },
-    { key: "critical",      label: "⑥ 비판",   icon: <MessageSquare size={14} />, data: ct },
+    { key: "content",       label: "내용분석",    icon: <BookOpen size={14} />,      data: ca },
+    { key: "structure",     label: "구조분석",    icon: <BarChart2 size={14} />,     data: sa },
+    { key: "logic",         label: "논리분석",    icon: <GitBranch size={14} />,     data: la },
+    { key: "concept",       label: "개념지도",    icon: <Network size={14} />,       data: cs },
+    { key: "understanding", label: "이해 흐름도", icon: <Lightbulb size={14} />,     data: us },
+    { key: "critical",      label: "비판적 사고", icon: <MessageSquare size={14} />, data: ct },
   ];
   const [activeTab, setActiveTab] = useState("content");
 
@@ -952,13 +952,13 @@ function ContextaResultPanel({
               onClick={onStartStructureAnalysis}
               className="flex items-center gap-2 bg-black text-white text-xs font-bold uppercase tracking-widest px-4 py-1.5 hover:bg-black/80 transition-colors rounded-lg"
             >
-              학습 구조 분석 시작 <ArrowRight size={12} />
+              AI 학습구조분석 시작 <ArrowRight size={12} />
             </button>
           )}
           {isStructureAnalyzing && (
             <span className="flex items-center gap-1.5 text-xs text-[#5B5BD6] font-medium">
               <div className="w-3 h-3 border-2 border-[#5B5BD6] border-t-transparent animate-spin rounded-full" />
-              구조 분석 중…
+              학습구조분석 중…
             </span>
           )}
           {structureAnalysisDone && (
@@ -1690,7 +1690,7 @@ export default function DocumentDetail() {
           const steps: StepInfo[] = [
             { key: "uploading", label: "업로드 완료", desc: "파일이 서버에 저장되었습니다" },
             { key: "extracting", label: "파일 접근 중", desc: "AI가 파일을 읽고 있습니다" },
-            { key: "structuring", label: "AI 구조 분석 중", desc: "목차 트리, 개념 맵, 학습 경로를 추출하고 있습니다" },
+            { key: "structuring", label: "AI 학습구조분석 중", desc: "목차 트리, 개념 맵, 학습 경로를 추출하고 있습니다" },
             { key: "done", label: "분석 완료", desc: "모든 구조 추출이 완료되었습니다" },
           ];
           const currentIdx = steps.findIndex(s => s.key === step);
