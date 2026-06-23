@@ -79,6 +79,10 @@ export const documents = mysqlTable("documents", {
   learningLanguage: varchar("learningLanguage", { length: 10 }).default("ko").notNull(),
   // 분석 오류 메시지 (실패 원인 저장)
   analysisError: text("analysisError"),
+  // ─── CONTEXTA 자료 분석 (6단계 심층 분석) ───────────────────────────────────
+  contextaStatus: mysqlEnum("contextaStatus", ["pending", "analyzing", "done", "error", "skipped"]),
+  contextaStep: mysqlEnum("contextaStep", ["content", "structure", "logic", "concept", "understanding", "critical", "done", "error"]),
+  contextaAnalysis: json("contextaAnalysis"),
 });
 export type Document = typeof documents.$inferSelect;
 export type InsertDocument = typeof documents.$inferInsert;

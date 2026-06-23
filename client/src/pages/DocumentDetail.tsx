@@ -852,6 +852,276 @@ function LanguageBadge({ doc, docId }: { doc: any; docId: number }) {
   );
 }
 
+
+// ─── CONTEXTA 결과 패널 헬퍼 ──────────────────────────────────────────────────
+
+function AccordionCard({
+  title, icon, children, defaultOpen = false
+}: { title: string; icon: React.ReactNode; children: React.ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border border-[#E5E5E3] rounded-lg overflow-hidden">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-5 py-3.5 bg-white hover:bg-[#F8F7F5] transition-colors text-left"
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="text-[#5B5BD6]">{icon}</span>
+          <span className="font-bold text-sm">{title}</span>
+        </div>
+        {open ? <ChevronUp size={14} className="text-black/40" /> : <ChevronDown size={14} className="text-black/40" />}
+      </button>
+      {open && <div className="px-5 py-4 bg-[#FAFAFA] border-t border-[#E5E5E3] text-sm space-y-3">{children}</div>}
+    </div>
+  );
+}
+
+function TagList({ items }: { items: string[] }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {items.map((item, i) => (
+        <span key={i} className="text-xs bg-[#5B5BD6]/10 text-[#5B5BD6] px-2.5 py-1 rounded-full font-medium">{item}</span>
+      ))}
+    </div>
+  );
+}
+
+function BulletList({ items }: { items: unknown[] }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <ul className="space-y-1.5">
+      {items.map((item, i) => (
+        <li key={i} className="flex gap-2 text-sm text-black/70">
+          <span className="text-[#5B5BD6] font-bold mt-0.5">·</span>
+          <span>{typeof item === "string" ? item : JSON.stringify(item)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ContextaResultPanel({
+  analysis,
+  onStartStructureAnalysis,
+  structureAnalysisDone,
+  isStructureAnalyzing,
+  onRerunContexta,
+}: {
+  analysis: Record<string, unknown>;
+  onStartStructureAnalysis: () => void;
+  structureAnalysisDone: boolean;
+  isStructureAnalyzing: boolean;
+  onRerunContexta: () => void;
+}) {
+  const ca = analysis.contentAnalysis as Record<string, unknown> | null;
+  const sa = analysis.structureAnalysis as Record<string, unknown> | null;
+  const la = analysis.logicAnalysis as Record<string, unknown> | null;
+  const cs = analysis.conceptSummary as Record<string, unknown> | null;
+  const us = analysis.understandingSummary as Record<string, unknown> | null;
+  const ct = analysis.criticalThinking as Record<string, unknown> | null;
+
+  return (
+    <div className="space-y-6 mb-10">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Brain className="w-5 h-5 text-[#5B5BD6]" />
+          <h2 className="font-bold text-lg">자료 분석 결과</h2>
+        </div>
+        <button onClick={onRerunContexta} className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border border-[#E5E5E3] bg-white hover:bg-[#F8F7F5] text-[#525252] transition-colors">
+          <RotateCcw size={11} /> 재분석
+        </button>
+      </div>
+
+      {ca && (
+        <div className="bg-[#5B5BD6] text-white rounded-xl p-6 space-y-3">
+          <p className="text-xs font-bold uppercase tracking-widest opacity-70">핵심 요약</p>
+          <p className="text-base font-bold leading-snug">{ca.one_sentence_summary as string}</p>
+          <div className="flex flex-wrap gap-2 pt-1">
+            {ca.difficulty_level && <span className="text-xs bg-white/20 px-2.5 py-1 rounded-full font-medium">{ca.difficulty_level as string}</span>}
+            {ca.target_audience && <span className="text-xs bg-white/20 px-2.5 py-1 rounded-full font-medium">{ca.target_audience as string}</span>}
+          </div>
+          {ca.keywords && <TagList items={(ca.keywords as string[]).slice(0, 8)} />}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {ca && (
+          <AccordionCard title="① 내용 분석" icon={<BookOpen size={16} />} defaultOpen>
+            <div className="space-y-4">
+              {ca.core_claims && <div><p className="text-xs font-bold text-black/40 uppercase tracking-wider mb-2">핵심 주장</p><BulletList items={ca.core_claims as unknown[]} /></div>}
+              {ca.key_concepts && Array.isArray(ca.key_concepts) && ca.key_concepts.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-black/40 uppercase tracking-wider mb-2">핵심 개념</p>
+                  <div className="space-y-2">
+                    {(ca.key_concepts as Array<{name:string;definition:string;importance:string}>).map((c, i) => (
+                      <div key={i} className="bg-white border border-[#E5E5E3] rounded-lg p-3">
+                        <p className="font-bold text-sm">{c.name}</p>
+                        <p className="text-xs text-black/60 mt-1">{c.definition}</p>
+                        {c.importance && <p className="text-xs text-[#5B5BD6] mt-1">{c.importance}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {ca.important_facts && <div><p className="text-xs font-bold text-black/40 uppercase tracking-wider mb-2">중요 사실</p><BulletList items={ca.important_facts as unknown[]} /></div>}
+            </div>
+          </AccordionCard>
+        )}
+
+        {sa && (
+          <AccordionCard title="② 구조 분석" icon={<BarChart2 size={16} />}>
+            <div className="space-y-4">
+              {sa.structure_type && <div><p className="text-xs font-bold text-black/40 uppercase tracking-wider mb-2">구조 유형</p><span className="text-sm font-semibold bg-[#5B5BD6]/10 text-[#5B5BD6] px-3 py-1.5 rounded-lg">{sa.structure_type as string}</span></div>}
+              {sa.flow && Array.isArray(sa.flow) && (
+                <div>
+                  <p className="text-xs font-bold text-black/40 uppercase tracking-wider mb-2">전개 흐름</p>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {(sa.flow as string[]).map((f, i) => (
+                      <div key={i} className="flex items-center gap-1">
+                        <span className="text-xs bg-white border border-[#E5E5E3] px-2.5 py-1.5 rounded-md">{f}</span>
+                        {i < (sa.flow as string[]).length - 1 && <ArrowRight size={10} className="text-black/30" />}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {sa.section_roles && Array.isArray(sa.section_roles) && (
+                <div>
+                  <p className="text-xs font-bold text-black/40 uppercase tracking-wider mb-2">섹션 역할</p>
+                  <div className="space-y-2">
+                    {(sa.section_roles as Array<{title:string;role:string;summary:string}>).slice(0, 5).map((s, i) => (
+                      <div key={i} className="flex gap-2.5 bg-white border border-[#E5E5E3] rounded-lg p-3">
+                        <span className="text-xs font-bold text-[#5B5BD6] bg-[#5B5BD6]/10 px-2 py-0.5 rounded h-fit mt-0.5 whitespace-nowrap">{s.role}</span>
+                        <div><p className="text-xs font-semibold">{s.title}</p><p className="text-xs text-black/50 mt-0.5">{s.summary}</p></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </AccordionCard>
+        )}
+
+        {la && (
+          <AccordionCard title="③ 논리 분석" icon={<GitBranch size={16} />}>
+            <div className="space-y-4">
+              {la.overall_logic_summary && <p className="text-sm text-black/70 bg-white border border-[#E5E5E3] rounded-lg p-3">{la.overall_logic_summary as string}</p>}
+              {la.arguments && Array.isArray(la.arguments) && (
+                <div className="space-y-3">
+                  {(la.arguments as Array<{claim:string;grounds:unknown[];weaknesses:unknown[];strength:string}>).map((arg, i) => (
+                    <div key={i} className="bg-white border border-[#E5E5E3] rounded-lg p-4 space-y-2">
+                      <div className="flex items-start gap-2">
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded whitespace-nowrap ${arg.strength === "strong" ? "bg-green-100 text-green-700" : arg.strength === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"}`}>{arg.strength === "strong" ? "강" : arg.strength === "medium" ? "중" : "약"}</span>
+                        <p className="text-sm font-semibold">{arg.claim}</p>
+                      </div>
+                      {arg.grounds && arg.grounds.length > 0 && <div><p className="text-xs text-black/40 mb-1">근거</p><BulletList items={arg.grounds} /></div>}
+                      {arg.weaknesses && arg.weaknesses.length > 0 && <div><p className="text-xs text-black/40 mb-1">약점</p><BulletList items={arg.weaknesses} /></div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </AccordionCard>
+        )}
+
+        {cs && (
+          <AccordionCard title="④ 개념 요약" icon={<Network size={16} />}>
+            {cs.concepts && Array.isArray(cs.concepts) && (
+              <div className="space-y-3">
+                {(cs.concepts as Array<{name:string;definition:string;why_it_matters:string;examples:string[]}>).map((c, i) => (
+                  <div key={i} className="bg-white border border-[#E5E5E3] rounded-lg p-4 space-y-1.5">
+                    <p className="font-bold text-sm">{c.name}</p>
+                    <p className="text-xs text-black/70">{c.definition}</p>
+                    {c.why_it_matters && <p className="text-xs text-[#5B5BD6]">왜 중요한가: {c.why_it_matters}</p>}
+                    {c.examples && c.examples.length > 0 && <TagList items={c.examples.slice(0, 3)} />}
+                  </div>
+                ))}
+              </div>
+            )}
+          </AccordionCard>
+        )}
+
+        {us && (
+          <AccordionCard title="⑤ 이해 요약 · 학습 경로" icon={<Lightbulb size={16} />}>
+            <div className="space-y-4">
+              {us.plain_language_summary && <p className="text-sm text-black/70 bg-white border border-[#E5E5E3] rounded-lg p-4 leading-relaxed">{us.plain_language_summary as string}</p>}
+              {us.learning_path && Array.isArray(us.learning_path) && (
+                <div className="space-y-2">
+                  {(us.learning_path as Array<{step:number;title:string;explanation:string}>).map((s, i) => (
+                    <div key={i} className="flex gap-3 bg-white border border-[#E5E5E3] rounded-lg p-3">
+                      <span className="w-6 h-6 rounded-full bg-[#5B5BD6] text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
+                      <div><p className="text-sm font-semibold">{s.title}</p><p className="text-xs text-black/60 mt-0.5">{s.explanation}</p></div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {us.check_questions && Array.isArray(us.check_questions) && (us.check_questions as string[]).length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-black/40 uppercase tracking-wider mb-2">이해 확인 질문</p>
+                  <div className="space-y-1.5">
+                    {(us.check_questions as string[]).map((q, i) => (
+                      <div key={i} className="bg-white border border-[#E5E5E3] rounded-lg px-3.5 py-2.5 text-sm text-black/70 flex gap-2">
+                        <span className="text-[#5B5BD6] font-bold">Q{i + 1}.</span><span>{q}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </AccordionCard>
+        )}
+
+        {ct && (
+          <AccordionCard title="⑥ 비판적 사고" icon={<MessageSquare size={16} />}>
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-black/40">신뢰도</span>
+                <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${ct.reliability_score === "높음" ? "bg-green-100 text-green-700" : ct.reliability_score === "보통" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"}`}>{ct.reliability_score as string}</span>
+                {ct.reliability_reason && <span className="text-xs text-black/50">{ct.reliability_reason as string}</span>}
+              </div>
+              {ct.overall_assessment && <p className="text-sm text-black/70 bg-white border border-[#E5E5E3] rounded-lg p-3">{ct.overall_assessment as string}</p>}
+              <div className="grid grid-cols-2 gap-3">
+                {ct.strengths && (ct.strengths as string[]).length > 0 && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <p className="text-xs font-bold text-green-700 mb-2">강점</p>
+                    <BulletList items={(ct.strengths as unknown[]).slice(0, 3)} />
+                  </div>
+                )}
+                {ct.weaknesses && (ct.weaknesses as string[]).length > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <p className="text-xs font-bold text-red-700 mb-2">약점</p>
+                    <BulletList items={(ct.weaknesses as unknown[]).slice(0, 3)} />
+                  </div>
+                )}
+              </div>
+              {ct.unanswered_questions && Array.isArray(ct.unanswered_questions) && (ct.unanswered_questions as string[]).length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-black/40 uppercase tracking-wider mb-2">미답 질문</p>
+                  <BulletList items={(ct.unanswered_questions as unknown[]).slice(0, 4)} />
+                </div>
+              )}
+            </div>
+          </AccordionCard>
+        )}
+      </div>
+
+      {!structureAnalysisDone && !isStructureAnalyzing && (
+        <div className="border-2 border-dashed border-black/20 rounded-xl p-8 text-center space-y-4">
+          <p className="text-xs font-bold uppercase tracking-widest text-black/40">Step 2</p>
+          <p className="font-bold text-base">학습 구조 분석</p>
+          <p className="text-sm text-black/50 max-w-sm mx-auto">
+            자료 분석이 완료되었습니다. 이제 목차 트리, 개념 맵, 학습 경로를 생성해 학습 세션을 시작하세요.
+          </p>
+          <button onClick={onStartStructureAnalysis} className="bg-black text-white font-bold uppercase tracking-widest px-8 py-3 hover:bg-black/80 transition-colors text-sm">
+            학습 구조 분석 시작 →
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Open QLoop Toggle ───────────────────────────────────────────────────────
 
 function OpenQloopToggle({ documentId }: { documentId: number }) {
@@ -896,7 +1166,7 @@ export default function DocumentDetail() {
       // 분석 중일 때 2초마다 폴링하여 단계 업데이트 반영
       refetchInterval: (query) => {
         const d = query.state.data as any;
-        return d?.analysisStatus === "analyzing" ? 2000 : false;
+        return (d?.analysisStatus === "analyzing" || d?.contextaStatus === "analyzing") ? 2000 : false;
       },
     }
   );
@@ -918,6 +1188,10 @@ export default function DocumentDetail() {
   const [showPdfViewer, setShowPdfViewer] = useState(false);
 
   const deleteDocMutation = trpc.document.delete.useMutation();
+  const contextaRunMutation = trpc.contexta.runAnalysis.useMutation({
+    onSuccess: () => { refetch(); },
+    onError: (e) => toast.error(`자료 분석 실패: ${e.message}`),
+  });
   const analyzeMutation = trpc.document.analyze.useMutation({
     onSuccess: () => {
       toast.success("AI 분석이 완료되었습니다.");
@@ -956,6 +1230,12 @@ export default function DocumentDetail() {
   const topicProgress: Record<string, "completed" | "active"> = (topicProgressData as Record<string, "completed" | "active">) ?? {};
   const structure = doc?.structure as DocumentStructure | null;;
   const isAnalyzing = doc?.analysisStatus === "analyzing" || analyzeMutation.isPending;
+  const contextaStatus = (doc as any)?.contextaStatus as string | null | undefined;
+  const contextaStep = (doc as any)?.contextaStep as string | null | undefined;
+  const contextaAnalysis = (doc as any)?.contextaAnalysis as Record<string, unknown> | null;
+  const isContextaAnalyzing = contextaStatus === "analyzing" || contextaRunMutation.isPending;
+  const contextaDone = contextaStatus === "done";
+  const showContextaStart = !contextaStatus || contextaStatus === "pending";
 
   // 학습 시작 전 평가 선택 모달 표시
   const handleSelectTopic = (topic: TopicNode) => {
@@ -1227,24 +1507,109 @@ export default function DocumentDetail() {
       </Dialog>
 
       <main className="flex-1 max-w-7xl mx-auto px-8 py-10 w-full">
-        {/* 분석 전 */}
-        {doc.analysisStatus === "pending" && (
-          <div className="border border-black p-12 text-center space-y-5">
-            <div className="w-6 h-6 bg-red-600 mx-auto" />
-            <div>
-              <p className="font-bold text-lg">AI 분석을 시작하세요</p>
-              <p className="text-sm text-black/50 mt-2 max-w-md mx-auto">
-                PDF를 분석하여 목차 트리, 개념 맵, 핵심 카드, 타임라인, 비교표, 학습 경로를 동시에 생성합니다.
-              </p>
+
+        {/* ══ STAGE 1: 자료 분석 (CONTEXTA) ══════════════════════════════════ */}
+
+        {/* 자료 분석 시작 전 */}
+        {showContextaStart && !isContextaAnalyzing && (
+          <div className="border border-black p-12 text-center space-y-5 mb-8">
+            <div className="flex items-center justify-center gap-2">
+              <Brain className="w-7 h-7 text-[#5B5BD6]" />
+              <p className="font-bold text-xl">자료 분석</p>
             </div>
+            <p className="text-sm text-black/50 max-w-lg mx-auto leading-relaxed">
+              학습 전 AI가 문서를 6단계로 심층 분석합니다.<br />
+              내용 · 구조 · 논리 · 개념 · 이해 · 비판적 사고를 순차적으로 파악해 드립니다.
+            </p>
             <button
-              onClick={() => analyzeMutation.mutate({ documentId: docId })}
-              className="bg-red-600 text-white font-bold uppercase tracking-widest px-6 py-2.5 hover:bg-red-700 transition-colors text-sm"
+              onClick={() => contextaRunMutation.mutate({ documentId: docId })}
+              disabled={contextaRunMutation.isPending}
+              className="bg-[#5B5BD6] text-white font-bold uppercase tracking-widest px-8 py-3 hover:bg-[#4747B5] transition-colors text-sm disabled:opacity-50"
             >
-              AI 분석 시작
+              자료 분석 시작
             </button>
           </div>
         )}
+
+        {/* 자료 분석 진행 중 — 6단계 진행바 */}
+        {isContextaAnalyzing && (() => {
+          const ctxSteps = [
+            { key: "content",       label: "내용 분석",   icon: BookOpen },
+            { key: "structure",     label: "구조 분석",   icon: BarChart2 },
+            { key: "logic",         label: "논리 분석",   icon: GitBranch },
+            { key: "concept",       label: "개념 요약",   icon: Network },
+            { key: "understanding", label: "이해 요약",   icon: Lightbulb },
+            { key: "critical",      label: "비판적 사고", icon: MessageSquare },
+          ];
+          const currentIdx = ctxSteps.findIndex(s => s.key === contextaStep);
+          const activeIdx = currentIdx >= 0 ? currentIdx : 0;
+          return (
+            <div className="border border-[#5B5BD6] p-10 text-center space-y-8 mb-8">
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-[#5B5BD6] border-t-transparent animate-spin" />
+                <p className="font-bold text-lg">자료를 분석하고 있습니다</p>
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-2 max-w-3xl mx-auto">
+                {ctxSteps.map((s, i) => {
+                  const Icon = s.icon;
+                  const done = i < activeIdx;
+                  const active = i === activeIdx;
+                  return (
+                    <div key={s.key} className="flex items-center">
+                      <div className="flex flex-col items-center gap-1.5">
+                        <div className={`w-9 h-9 rounded-full border-2 flex items-center justify-center transition-all ${
+                          done ? "bg-[#5B5BD6] border-[#5B5BD6] text-white" :
+                          active ? "bg-[#5B5BD6]/10 border-[#5B5BD6] text-[#5B5BD6] animate-pulse" :
+                          "bg-white border-gray-200 text-gray-300"
+                        }`}>
+                          {done ? <CheckCircle2 size={15} /> : <Icon size={15} />}
+                        </div>
+                        <span className={`text-xs font-semibold whitespace-nowrap ${
+                          active ? "text-[#5B5BD6]" : done ? "text-black/70" : "text-gray-300"
+                        }`}>{s.label}</span>
+                      </div>
+                      {i < ctxSteps.length - 1 && (
+                        <div className={`w-8 h-0.5 mx-1 mb-5 ${i < activeIdx ? "bg-[#5B5BD6]" : "bg-gray-200"}`} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-black/40">각 단계를 순차적으로 분석합니다 · 약 30~60초 소요</p>
+            </div>
+          );
+        })()}
+
+        {/* 자료 분석 오류 */}
+        {contextaStatus === "error" && !isContextaAnalyzing && (
+          <div className="border border-red-600 p-6 space-y-4 mb-8">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600" />
+              <p className="font-bold text-red-600">자료 분석 중 오류가 발생했습니다.</p>
+            </div>
+            <button
+              onClick={() => contextaRunMutation.mutate({ documentId: docId })}
+              disabled={contextaRunMutation.isPending}
+              className="flex items-center gap-2 bg-red-600 text-white text-xs font-bold uppercase tracking-widest px-4 py-2 hover:bg-red-700 transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> 자료 분석 재시도
+            </button>
+          </div>
+        )}
+
+        {/* 자료 분석 결과 패널 */}
+        {contextaDone && contextaAnalysis && (
+          <ContextaResultPanel
+            analysis={contextaAnalysis}
+            onStartStructureAnalysis={() => { analyzeMutation.mutate({ documentId: docId }); }}
+            structureAnalysisDone={doc.analysisStatus === "done"}
+            isStructureAnalyzing={isAnalyzing}
+            onRerunContexta={() => contextaRunMutation.mutate({ documentId: docId })}
+          />
+        )}
+
+        {/* ══ STAGE 2: 학습 구조 분석 (QLOOP) — contextaDone 이후에만 표시 ══ */}
+        {(contextaDone || contextaStatus === "skipped") && <>
 
         {/* 분석 중 - 단계별 진행 표시 */}
         {isAnalyzing && (() => {
@@ -1262,7 +1627,6 @@ export default function DocumentDetail() {
             <div className="border border-black p-12 text-center space-y-6">
               <div className="w-8 h-8 border-2 border-black border-t-transparent animate-spin mx-auto" />
               <p className="font-bold text-lg">AI가 문서를 분석하고 있습니다</p>
-              {/* 단계 표시바 - 4단계 전체 */}
               <div className="flex items-center justify-center gap-0 max-w-2xl mx-auto">
                 {steps.map((s, i) => (
                   <div key={s.key} className="flex items-center">
@@ -1279,9 +1643,7 @@ export default function DocumentDetail() {
                       }`}>{s.label}</span>
                     </div>
                     {i < steps.length - 1 && (
-                      <div className={`w-12 h-0.5 mx-1 mb-5 ${
-                        i < activeIdx ? "bg-black" : "bg-gray-200"
-                      }`} />
+                      <div className={`w-12 h-0.5 mx-1 mb-5 ${i < activeIdx ? "bg-black" : "bg-gray-200"}`} />
                     )}
                   </div>
                 ))}
@@ -1301,14 +1663,12 @@ export default function DocumentDetail() {
                 <p className="text-sm text-black/60">아래 안내를 확인하고 분석 재시도해 주세요.</p>
               </div>
             </div>
-            {/* 실제 에러 메시지 표시 */}
             {(doc as any).analysisError && (
               <div className="bg-red-50 border border-red-300 p-3 rounded">
                 <p className="text-xs font-bold text-red-700 mb-1">오류 상세:</p>
                 <p className="text-xs text-red-600 font-mono break-all">{(doc as any).analysisError}</p>
               </div>
             )}
-            {/* 파일 형식별 압축 안내 */}
             <div className="bg-red-50 border border-red-200 p-4 rounded space-y-2 text-sm">
               <p className="font-bold text-red-700">파일 크기 또는 형식 문제일 수 있습니다:</p>
               <ul className="space-y-1 text-red-600">
@@ -1368,7 +1728,6 @@ export default function DocumentDetail() {
 
           return (
             <div className="space-y-0 border-2 border-red-600">
-              {/* 헤더 */}
               <div className="px-8 py-5 border-b-2 border-red-600 flex items-center gap-4">
                 <div className="w-4 h-4 bg-red-600 flex-shrink-0" />
                 <div className="flex-1">
@@ -1376,8 +1735,6 @@ export default function DocumentDetail() {
                   <p className="text-sm text-black/50 mt-0.5">각 구조를 클릭해 미리본 후, 원하는 구조를 최종 확정하세요.</p>
                 </div>
               </div>
-
-              {/* 구조 선택 카드 3개 */}
               <div className="grid grid-cols-3 divide-x-2 divide-black/10">
                 {structures.map((s) => {
                   const isSelected = previewStructure === s.key;
@@ -1403,18 +1760,13 @@ export default function DocumentDetail() {
                           <span className="w-2 h-2 bg-red-400 inline-block" /> 미리보기 중
                         </div>
                       )}
-                      {!s.available && (
-                        <div className="mt-3 text-xs text-black/30">데이터 없음</div>
-                      )}
+                      {!s.available && <div className="mt-3 text-xs text-black/30">데이터 없음</div>}
                     </button>
                   );
                 })}
               </div>
-
-              {/* 미리보기 영역 */}
               {previewStructure && (
                 <div className="border-t-2 border-black/10">
-                  {/* 미리보기 헤더 + 확정 버튼 */}
                   <div className="px-8 py-4 bg-black/[0.03] border-b border-black/10 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
                       <span className="text-xs font-bold uppercase tracking-widest text-black/40">미리보기</span>
@@ -1434,7 +1786,6 @@ export default function DocumentDetail() {
                       )}
                     </button>
                   </div>
-                  {/* 실제 미리보기 내용 (학습 시작 버튼 없이 읽기 전용) */}
                   <div className="px-8 py-6 max-h-[60vh] overflow-y-auto">
                     {previewStructure === "tree" && (
                       <TreeView structure={structure} onSelectTopic={() => {}} topicProgress={{}} previewOnly={true} />
@@ -1460,8 +1811,6 @@ export default function DocumentDetail() {
                   </div>
                 </div>
               )}
-
-              {/* 미리보기 전 안내 */}
               {!previewStructure && (
                 <div className="px-8 py-10 text-center border-t-2 border-black/10">
                   <p className="text-sm text-black/40">위 카드를 클릭하면 해당 구조의 전체 내용을 미리볼 수 있습니다.</p>
@@ -1474,7 +1823,6 @@ export default function DocumentDetail() {
         {/* 분석 완료 - 구조 선택 후 */}
         {doc.analysisStatus === "done" && structure && !isAnalyzing && (doc as any).structureLocked === 1 && (
           <div className="space-y-6">
-            {/* 요약 + 통계 */}
             <div className="grid grid-cols-12 gap-0 border border-black">
               <div className="col-span-8 p-5 border-r border-black">
                 <p className="text-xs font-bold uppercase tracking-widest text-black/40 mb-2">문서 요약</p>
@@ -1499,8 +1847,6 @@ export default function DocumentDetail() {
                 </div>
               </div>
             </div>
-
-            {/* 선택된 구조만 표시 */}
             <div>
               {(doc as any).selectedStructure === "tree" && <TreeView structure={structure} onSelectTopic={handleSelectTopic} topicProgress={topicProgress} />}
               {(doc as any).selectedStructure === "conceptMap" && <ConceptMapView nodes={structure.conceptMap ?? []} structure={structure} onSelectTopic={handleSelectTopic} onStartFromNode={handleStartFromNode} topicProgress={topicProgress} />}
@@ -1508,6 +1854,8 @@ export default function DocumentDetail() {
             </div>
           </div>
         )}
+
+        </>}
       </main>
 
       {/* 평가 선택 모달 */}

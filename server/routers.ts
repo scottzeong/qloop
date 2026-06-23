@@ -13,6 +13,7 @@ import { notifyOwner } from "./_core/notification";
 import { socraticRouter } from "./routers/socratic";
 import { libraryRouter } from "./routers/library";
 import { aiConnectionRouter } from "./routers/aiConnection";
+import { contextaRouter } from "./routers/contexta";
 import { getDb } from "./db";
 import {
   questions,
@@ -1292,6 +1293,7 @@ export const appRouter = router({
   socratic: socraticRouter,
   library: libraryRouter,
   aiConnection: aiConnectionRouter,
+  contexta: contextaRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
 
@@ -2650,6 +2652,87 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
         }
       }
       return reminders;
+    }),
+
+    // ── ③ 학습자 성취 통계 (마이페이지용) ───────────────────────────────────
+    getStats: protectedProcedure.query(async ({ ctx }) => {
+      const sessions = await getSessionsByUserId(ctx.user.id);
+      const visible = sessions.filter((s) => s.status === "active" || s.status === "completed");
+      const completed = visible.filter((s) => s.status === "completed");
+
+      const totalAnswered = visible.reduce((acc, s) => acc + (s.answeredQuestions ?? 0), 0);
+      const MIN_Q = 24;
+
+      // 연속 학습 기록 (streak) — completedAt 또는 createdAt 기준
+      const activityDates = new Set<string>();
+      for (const s of visible) {
+        const d = (s as any).completedAt ?? s.createdAt;
+        if (d) activityDates.add(new Date(d).toISOString().slice(0, 10));
+      }
+      const today = new Date();
+      let currentStreak = 0;
+      let longestStreak = 0;
+      let streak = 0;
+      for (let i = 0; i < 365; i++) {
+        const dt = new Date(today);
+        dt.setDate(dt.getDate() - i);
+        const key = dt.toISOString().slice(0, 10);
+        if (activityDates.has(key)) {
+          streak++;
+          if (i === 0 || currentStreak > 0) currentStreak = streak;
+        } else {
+          if (i === 0) currentStreak = 0; // 오늘 활동 없으면 streak 0
+          longestStreak = Math.max(longestStreak, streak);
+          streak = 0;
+        }
+      }
+      longestStreak = Math.max(longestStreak, streak);
+
+      // 12주 활동 히트맵 (주별 세션 수)
+      const weeklyActivity: Array<{ date: string; count: number }> = [];
+      for (let w = 11; w >= 0; w--) {
+        const weekStart = new Date(today);
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay() - w * 7);
+        let count = 0;
+        for (let d = 0; d < 7; d++) {
+          const day = new Date(weekStart);
+          day.setDate(day.getDate() + d);
+          const key = day.toISOString().slice(0, 10);
+          if (activityDates.has(key)) count++;
+        }
+        weeklyActivity.push({ date: weekStart.toISOString().slice(0, 10), count });
+      }
+
+      // 84일 일별 히트맵 (GitHub style)
+      const dailyActivity: Array<{ date: string; count: number }> = [];
+      for (let i = 83; i >= 0; i--) {
+        const dt = new Date(today);
+        dt.setDate(dt.getDate() - i);
+        const key = dt.toISOString().slice(0, 10);
+        const dayCount = visible.filter((s) => {
+          const d = (s as any).completedAt ?? s.createdAt;
+          return d && new Date(d).toISOString().slice(0, 10) === key;
+        }).length;
+        dailyActivity.push({ date: key, count: dayCount });
+      }
+
+      // 토픽별 숙련도
+      const topicMastery = completed.slice(0, 20).map((s) => ({
+        topic: s.startTopicTitle ?? "알 수 없는 토픽",
+        pct: Math.min(100, Math.round(((s.answeredQuestions ?? 0) / MIN_Q) * 100)),
+        completedAt: (s as any).completedAt?.toISOString() ?? s.createdAt.toISOString(),
+      }));
+
+      return {
+        totalSessions: visible.length,
+        completedSessions: completed.length,
+        totalAnswered,
+        currentStreak,
+        longestStreak,
+        weeklyActivity,
+        dailyActivity,
+        topicMastery,
+      };
     }),
 
     // 문서별 토픽 완성도 조회
