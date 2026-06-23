@@ -2488,4 +2488,69 @@ Return ONLY valid JSON matching the schema exactly.`;
     delete: protectedProcedure
       .input(z.object({ sessionId: z.number() }))
       .mutation(async ({ ctx, input }) => {
-  
+        const db = await getDb();
+        if (!db) throw new Error("Database unavailable");
+        const session = await getLearningSessionById(input.sessionId);
+        if (!session || session.userId !== ctx.user.id) throw new Error("세션을 찾을 수 없습니다.");
+        const { sessionMessages, questionEvaluations, moduleEvaluations: meTable, learningSessions } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        // 관련 데이터 삭제 (순서: 메시지 → 평가 → 모듈 평가 → 세션)
+        await db.delete(sessionMessages).where(eq(sessionMessages.sessionId, input.sessionId));
+        await db.delete(questionEvaluations).where(eq(questionEvaluations.sessionId, input.sessionId));
+        await db.delete(meTable).where(eq(meTable.sessionId, input.sessionId));
+        await db.delete(learningSessions).where(eq(learningSessions.id, input.sessionId));
+        return { success: true } as const;
+      }),
+
+    // QLoop 모델별 세션 통계 (moduleEvaluations.moduleScore 기반 실제 점수 계산)
+    getModelStats: protectedProcedure.query(async ({ ctx }) => {
+      const sessions = await getSessionsByUserId(ctx.user.id);
+      const modelMap: Record<string, { count: number; totalScore: number; scoredCount: number }> = {
+        core: { count: 0, totalScore: 0, scoredCount: 0 },
+        curated: { count: 0, totalScore: 0, scoredCount: 0 },
+        open: { count: 0, totalScore: 0, scoredCount: 0 },
+      };
+
+      // 완료된 세션의 moduleEvaluations에서 실제 점수를 가져옴
+      const db = await getDb();
+      const sessionIdToScore: Record<number, number> = {};
+      if (db) {
+        const completedSessionIds = sessions
+          .filter((s) => s.status === "completed")
+          .map((s) => s.id);
+        if (completedSessionIds.length > 0) {
+          const evals = await db
+            .select({ sessionId: moduleEvaluations.sessionId, moduleScore: moduleEvaluations.moduleScore })
+            .from(moduleEvaluations)
+            .where(
+              and(
+                eq(moduleEvaluations.learnerId, ctx.user.id),
+                inArray(moduleEvaluations.sessionId, completedSessionIds)
+              )
+            );
+          for (const e of evals) {
+            if (e.sessionId && e.moduleScore != null) {
+              sessionIdToScore[e.sessionId] = e.moduleScore;
+            }
+          }
+        }
+      }
+
+      for (const s of sessions) {
+        const mode = (s as any).openQloopMode as number ?? 0;
+        const key = mode === 1 ? "open" : mode === 2 ? "curated" : "core";
+        modelMap[key].count++;
+        const score = sessionIdToScore[s.id] ?? null;
+        if (score !== null) {
+          modelMap[key].totalScore += score;
+          modelMap[key].scoredCount++;
+        }
+      }
+      return {
+        core: { count: modelMap.core.count, avgScore: modelMap.core.scoredCount > 0 ? Math.round(modelMap.core.totalScore / modelMap.core.scoredCount) : null },
+        curated: { count: modelMap.curated.count, avgScore: modelMap.curated.scoredCount > 0 ? Math.round(modelMap.curated.totalScore / modelMap.curated.scoredCount) : null },
+        open: { count: modelMap.open.count, avgScore: modelMap.open.scoredCount > 0 ? Math.round(modelMap.open.totalScore / modelMap.open.scoredCount) : null },
+      };
+    }),
+  }),
+});
