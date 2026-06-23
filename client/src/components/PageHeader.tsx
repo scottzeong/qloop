@@ -12,6 +12,7 @@ import {
   X,
   Eye,
   EyeOff,
+  User,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
@@ -171,6 +172,7 @@ export default function PageHeader({
     { path: "/library", icon: <Library size={13} />, label: "라이브러리" },
     { path: "/ai-connection", icon: <Cpu size={13} />, label: "AI 연결" },
     { path: "/profile/socratic", icon: <Brain size={13} />, label: "프로필" },
+    { path: "/my", icon: <User size={13} />, label: "MY" },
   ];
 
   const adminNavItem = {

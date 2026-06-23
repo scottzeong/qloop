@@ -987,7 +987,7 @@ function ContextaResultPanel({
           <div className="flex bg-[#F8F7F5]">
             {/* 그룹 레이블 */}
             <div className="flex items-center px-2.5 border-r border-[#E5E5E3]">
-              <span className="text-[9px] font-black uppercase tracking-widest text-[#5B5BD6]/60 whitespace-nowrap">자료분석</span>
+              <div className="bg-black text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded whitespace-nowrap">자료분석</div>
             </div>
             {tabs.map(tab => (
               <button
@@ -1008,9 +1008,8 @@ function ContextaResultPanel({
 
           {/* ════ 구분 배지 (레이블 겸 구분선) ════ */}
           <div className="flex items-center flex-shrink-0 bg-black/[0.03] border-x-2 border-black/10 px-2.5">
-            <div className="flex items-center gap-1 bg-black text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded whitespace-nowrap">
-              <GitBranch size={8} />
-              AI 학습구조
+            <div className="bg-black text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded whitespace-nowrap">
+              학습구조
             </div>
           </div>
 

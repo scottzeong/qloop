@@ -4,7 +4,7 @@ import { useLocation, useParams } from "wouter";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import PageHeader from "@/components/PageHeader";
-import { Send, CheckCircle, HelpCircle, MessageSquare, BookOpen, ChevronDown, BarChart2, X } from "lucide-react";
+import { Send, CheckCircle, HelpCircle, MessageSquare, BookOpen, ChevronDown, BarChart2, X, PanelLeft } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 
@@ -46,7 +46,7 @@ function MessageBubble({ msg, questionNumber }: { msg: Message & { questionTypeN
 
   return (
     <div className={`flex ${isAI ? "justify-start" : "justify-end"} mb-5`}>
-      <div className={`max-w-[78%] ${isAI ? "" : "order-2"}`}>
+      <div className={`max-w-[88%] sm:max-w-[78%] ${isAI ? "" : "order-2"}`}>
         {/* Role label */}
         <div className={`flex items-center gap-2 mb-1.5 ${isAI ? "" : "justify-end"}`}>
           {isAI ? (
@@ -106,6 +106,7 @@ export default function LearningSession() {
   const [completing, setCompleting] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
   const [currentModel, setCurrentModel] = useState<"core" | "curated" | "open">("core");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -230,7 +231,7 @@ export default function LearningSession() {
 
   if (!session) {
     return (
-      <div className="min-h-screen bg-[#EDECEA] flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-[#EDECEA] flex items-center justify-center">
         <div className="flex items-center gap-3">
           <div className="w-3 h-3 rounded-full animate-pulse" style={{ backgroundColor: "var(--pm-indigo)" }} />
           <span className="pm-label">세션 로딩 중</span>
@@ -240,7 +241,7 @@ export default function LearningSession() {
   }
 
   return (
-    <div className="min-h-screen bg-[#EDECEA] flex flex-col">
+    <div className="min-h-[100dvh] bg-[#EDECEA] flex flex-col">
       <PageHeader
         title={session.startTopicTitle ?? ""}
         backTo={(session as any).groupId ? `/groups/${(session as any).groupId}` : `/documents/${session.documentId}`}
@@ -249,11 +250,19 @@ export default function LearningSession() {
 
       {/* Session control bar */}
       <div className="sticky top-14 z-40 bg-white border-b border-[#E5E5E3]">
-        <div className="max-w-7xl mx-auto px-6 h-10 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-10 flex items-center justify-between gap-2 sm:gap-4">
+          {/* Mobile sidebar toggle */}
+          <button
+            className="md:hidden flex items-center justify-center w-7 h-7 rounded-md hover:bg-[#F0EFED] transition-colors flex-shrink-0"
+            onClick={() => setShowSidebar((v) => !v)}
+            title="진행 현황"
+          >
+            <PanelLeft size={15} className="text-[#737373]" />
+          </button>
           {/* Progress */}
-          <div className="flex items-center gap-2.5">
-            <span className="pm-label">진도</span>
-            <div className="w-24 bg-[#E5E5E3] h-1 rounded-full overflow-hidden">
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            <span className="pm-label hidden sm:block">진도</span>
+            <div className="w-16 sm:w-24 bg-[#E5E5E3] h-1 rounded-full overflow-hidden">
               <div
                 className="h-1 rounded-full transition-all duration-500"
                 style={{ width: `${progress}%`, backgroundColor: "var(--pm-indigo)" }}
@@ -331,10 +340,34 @@ export default function LearningSession() {
         </div>
       </div>
 
-      <div className="flex-1 flex max-w-7xl mx-auto w-full">
+      <div className="flex-1 flex max-w-7xl mx-auto w-full relative">
+        {/* Mobile sidebar overlay */}
+        {showSidebar && (
+          <div
+            className="md:hidden fixed inset-0 bg-black/40 z-30"
+            onClick={() => setShowSidebar(false)}
+          />
+        )}
         {/* Sidebar */}
-        <div className="w-60 flex-shrink-0 bg-white border-r border-[#E5E5E3] p-5 sticky top-[96px] h-[calc(100vh-96px)] overflow-y-auto">
-          <p className="pm-label mb-4">학습 진행 상황</p>
+        <div className={`
+          ${showSidebar ? "translate-x-0" : "-translate-x-full"} md:translate-x-0
+          fixed md:sticky md:top-[96px]
+          top-0 left-0 z-40 md:z-auto
+          h-[100dvh] md:h-[calc(100vh-96px)]
+          w-72 md:w-60 flex-shrink-0
+          bg-white border-r border-[#E5E5E3] p-5
+          overflow-y-auto
+          transition-transform duration-200 ease-in-out
+        `}>
+          <div className="flex items-center justify-between mb-4">
+            <p className="pm-label">학습 진행 상황</p>
+            <button
+              className="md:hidden text-[#A3A3A3] hover:text-[#0F0F0F] transition-colors"
+              onClick={() => setShowSidebar(false)}
+            >
+              <X size={15} />
+            </button>
+          </div>
 
           <div className="space-y-2.5 mb-5">
             {[
@@ -384,7 +417,7 @@ export default function LearningSession() {
         {/* Main chat area */}
         <div className="flex-1 flex flex-col">
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-8 py-7">
+          <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-5 sm:py-7">
             {!messages || messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full gap-4">
                 <BookOpen size={32} className="text-[#D4D4D2]" />
@@ -418,7 +451,7 @@ export default function LearningSession() {
 
           {/* Input area */}
           {!isCompleted ? (
-            <div className="bg-white border-t border-[#E5E5E3] px-7 py-5">
+            <div className="bg-white border-t border-[#E5E5E3] px-4 sm:px-7 py-4 sm:py-5" style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}>
               {/* Mode toggle - pill segment */}
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex items-center bg-[#F0EFED] rounded-lg p-1 gap-0.5">
@@ -468,7 +501,7 @@ export default function LearningSession() {
               </div>
             </div>
           ) : (
-            <div className="bg-white border-t border-[#E5E5E3] px-7 py-5">
+            <div className="bg-white border-t border-[#E5E5E3] px-4 sm:px-7 py-4 sm:py-5" style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}>
               <div className="flex items-center gap-4">
                 <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "var(--pm-indigo-light)" }}>
                   <CheckCircle size={18} style={{ color: "var(--pm-indigo)" }} />
