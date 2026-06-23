@@ -903,16 +903,22 @@ function BulletList({ items }: { items: unknown[] }) {
 
 function ContextaResultPanel({
   analysis,
-  onStartStructureAnalysis,
   structureAnalysisDone,
   isStructureAnalyzing,
+  structure,
   onRerunContexta,
+  onSetStructure,
+  isSettingStructure,
+  structureLocked,
 }: {
   analysis: Record<string, unknown>;
-  onStartStructureAnalysis: () => void;
   structureAnalysisDone: boolean;
   isStructureAnalyzing: boolean;
+  structure: DocumentStructure | null;
   onRerunContexta: () => void;
+  onSetStructure: (type: "tree" | "conceptMap" | "learningPath") => void;
+  isSettingStructure: boolean;
+  structureLocked: boolean;
 }) {
   const ca = analysis.contentAnalysis as Record<string, unknown> | null;
   const sa = analysis.structureAnalysis as Record<string, unknown> | null;
@@ -930,43 +936,29 @@ function ContextaResultPanel({
     { key: "critical",      label: "비판적 사고", icon: <MessageSquare size={14} />, data: ct },
   ];
   const [activeTab, setActiveTab] = useState("content");
+  const [activeStructTab, setActiveStructTab] = useState<"tree" | "conceptMap" | "learningPath" | null>(null);
+
+  const structTabs = [
+    { key: "tree" as const,         label: "목차 트리",  available: !!(structure?.chapters?.length) },
+    { key: "conceptMap" as const,   label: "개념 맵",    available: !!(structure?.conceptMap?.length) },
+    { key: "learningPath" as const, label: "학습 경로",  available: !!(structure?.learningPath?.length) },
+  ];
 
   return (
     <div className="space-y-4 mb-10">
 
-      {/* ── 헤더: 타이틀 + 버튼들 ── */}
+      {/* ── 헤더: 타이틀 + 재분석 버튼 ── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <Brain className="w-5 h-5 text-[#5B5BD6]" />
           <h2 className="font-bold text-lg">자료 분석 결과</h2>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onRerunContexta}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-[#E5E5E3] bg-white hover:bg-[#F8F7F5] text-[#525252] transition-colors"
-          >
-            <RotateCcw size={11} /> 재분석
-          </button>
-          {!structureAnalysisDone && !isStructureAnalyzing && (
-            <button
-              onClick={onStartStructureAnalysis}
-              className="flex items-center gap-2 bg-black text-white text-xs font-bold uppercase tracking-widest px-4 py-1.5 hover:bg-black/80 transition-colors rounded-lg"
-            >
-              AI 학습구조분석 시작 <ArrowRight size={12} />
-            </button>
-          )}
-          {isStructureAnalyzing && (
-            <span className="flex items-center gap-1.5 text-xs text-[#5B5BD6] font-medium">
-              <div className="w-3 h-3 border-2 border-[#5B5BD6] border-t-transparent animate-spin rounded-full" />
-              학습구조분석 중…
-            </span>
-          )}
-          {structureAnalysisDone && (
-            <span className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
-              <CheckCircle2 size={13} /> 학습 구조 완료
-            </span>
-          )}
-        </div>
+        <button
+          onClick={onRerunContexta}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-[#E5E5E3] bg-white hover:bg-[#F8F7F5] text-[#525252] transition-colors"
+        >
+          <RotateCcw size={11} /> 재분석
+        </button>
       </div>
 
       {/* ── 핵심 요약 카드 (항상 상단 표시) ── */}
@@ -985,21 +977,56 @@ function ContextaResultPanel({
       {/* ── 탭 바 ── */}
       <div className="border border-[#E5E5E3] rounded-xl overflow-hidden">
         <div className="flex border-b border-[#E5E5E3] bg-[#F8F7F5] overflow-x-auto">
+          {/* ① 자료분석 6탭 */}
           {tabs.map(tab => (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => { setActiveTab(tab.key); setActiveStructTab(null); }}
               className={`flex items-center gap-1.5 px-4 py-3 text-xs font-semibold whitespace-nowrap transition-colors border-b-2 -mb-px ${
-                activeTab === tab.key
+                activeTab === tab.key && !activeStructTab
                   ? "border-[#5B5BD6] text-[#5B5BD6] bg-white"
                   : "border-transparent text-black/50 hover:text-black/70 hover:bg-white/60"
               } ${!tab.data ? "opacity-30 cursor-not-allowed pointer-events-none" : ""}`}
               disabled={!tab.data}
             >
-              <span className={activeTab === tab.key ? "text-[#5B5BD6]" : "text-black/40"}>{tab.icon}</span>
+              <span className={activeTab === tab.key && !activeStructTab ? "text-[#5B5BD6]" : "text-black/40"}>{tab.icon}</span>
               {tab.label}
             </button>
           ))}
+
+          {/* 구분선 */}
+          <div className="w-px bg-[#E5E5E3] my-2 mx-1 flex-shrink-0" />
+
+          {/* ② 학습구조 탭 그룹 */}
+          {isStructureAnalyzing ? (
+            <div className="flex items-center gap-1.5 px-4 text-xs text-black/35 whitespace-nowrap">
+              <div className="w-3 h-3 border-2 border-black/25 border-t-transparent animate-spin rounded-full" />
+              학습구조 분석중
+            </div>
+          ) : structureAnalysisDone ? (
+            structTabs.map(stab => (
+              <button
+                key={stab.key}
+                onClick={() => { setActiveStructTab(stab.key); setActiveTab(""); }}
+                disabled={!stab.available}
+                className={`flex items-center gap-1.5 px-4 py-3 text-xs font-semibold whitespace-nowrap transition-colors border-b-2 -mb-px ${
+                  activeStructTab === stab.key
+                    ? "border-black text-black bg-black/5"
+                    : "border-transparent text-black/45 hover:text-black/70 hover:bg-white/60"
+                } ${!stab.available ? "opacity-30 cursor-not-allowed pointer-events-none" : ""}`}
+              >
+                {stab.label}
+                {structureLocked && stab.key === (structure as any)?._selectedStructure && (
+                  <Lock size={9} className="text-black/40 ml-0.5" />
+                )}
+              </button>
+            ))
+          ) : (
+            <div className="flex items-center gap-1.5 px-4 text-xs text-black/30 whitespace-nowrap">
+              <div className="w-1.5 h-1.5 rounded-full bg-black/20" />
+              학습구조 대기중
+            </div>
+          )}
         </div>
 
         {/* ── 탭 콘텐츠 ── */}
@@ -1188,6 +1215,63 @@ function ContextaResultPanel({
             </div>
           )}
 
+          {/* 학습구조 탭 콘텐츠 */}
+          {activeStructTab && structureAnalysisDone && structure && (
+            <div className="space-y-4">
+              {/* 확정 버튼 / 확정 완료 표시 */}
+              {structureLocked ? (
+                <div className="flex items-center gap-2 pb-2 border-b border-[#E5E5E3]">
+                  <CheckCircle2 size={14} className="text-green-600" />
+                  <span className="text-xs font-semibold text-green-600">학습 구조 확정됨</span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between pb-2 border-b border-[#E5E5E3]">
+                  <span className="text-xs text-black/40 font-medium">미리보기 후 원하는 구조로 학습을 시작하세요</span>
+                  <button
+                    onClick={() => onSetStructure(activeStructTab)}
+                    disabled={isSettingStructure}
+                    className="flex items-center gap-2 bg-black text-white text-xs font-bold uppercase tracking-widest px-4 py-2 hover:bg-black/80 transition-colors disabled:opacity-50 rounded-lg"
+                  >
+                    {isSettingStructure
+                      ? <><span className="w-3 h-3 border border-white border-t-transparent animate-spin rounded-full" /> 확정 중…</>
+                      : <>이 구조로 학습하기 <ArrowRight size={11} /></>}
+                  </button>
+                </div>
+              )}
+              {/* 구조 미리보기 */}
+              <div className="max-h-[420px] overflow-y-auto">
+                {activeStructTab === "tree" && (
+                  <TreeView structure={structure} onSelectTopic={() => {}} topicProgress={{}} previewOnly={true} />
+                )}
+                {activeStructTab === "conceptMap" && (
+                  <ConceptMapView
+                    nodes={structure.conceptMap ?? []}
+                    structure={structure}
+                    onSelectTopic={() => {}}
+                    onStartFromNode={() => {}}
+                    topicProgress={{}}
+                    previewOnly={true}
+                  />
+                )}
+                {activeStructTab === "learningPath" && (
+                  <LearningPathView
+                    steps={structure.learningPath ?? []}
+                    onStartStep={() => {}}
+                    topicProgress={{}}
+                    previewOnly={true}
+                  />
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 학습구조 탭 클릭했으나 데이터 없음 */}
+          {activeStructTab && structureAnalysisDone && !structure && (
+            <div className="flex items-center justify-center h-40 text-xs text-black/40">
+              학습 구조 데이터를 불러올 수 없습니다
+            </div>
+          )}
+
         </div>
       </div>
     </div>
@@ -1260,9 +1344,11 @@ export default function DocumentDetail() {
   const [showPdfViewer, setShowPdfViewer] = useState(false);
 
   const deleteDocMutation = trpc.document.delete.useMutation();
+  const [contextaStarted, setContextaStarted] = useState(false);
   const contextaRunMutation = trpc.contexta.runAnalysis.useMutation({
+    onMutate: () => setContextaStarted(true),
     onSuccess: () => { refetch(); },
-    onError: (e) => toast.error(`자료 분석 실패: ${e.message}`),
+    onError: (e) => { setContextaStarted(false); toast.error(`자료 분석 실패: ${e.message}`); },
   });
   const analyzeMutation = trpc.document.analyze.useMutation({
     onSuccess: () => {
@@ -1305,9 +1391,9 @@ export default function DocumentDetail() {
   const contextaStatus = (doc as any)?.contextaStatus as string | null | undefined;
   const contextaStep = (doc as any)?.contextaStep as string | null | undefined;
   const contextaAnalysis = (doc as any)?.contextaAnalysis as Record<string, unknown> | null;
-  const isContextaAnalyzing = contextaStatus === "analyzing" || contextaRunMutation.isPending;
   const contextaDone = contextaStatus === "done";
-  const showContextaStart = !contextaStatus || contextaStatus === "pending";
+  const isContextaAnalyzing = contextaStatus === "analyzing" || contextaRunMutation.isPending || (contextaStarted && !contextaDone);
+  const showContextaStart = !contextaStarted && (!contextaStatus || contextaStatus === "pending");
 
   // 학습 시작 전 평가 선택 모달 표시
   const handleSelectTopic = (topic: TopicNode) => {
@@ -1590,11 +1676,14 @@ export default function DocumentDetail() {
               <p className="font-bold text-xl">자료 분석</p>
             </div>
             <p className="text-sm text-black/50 max-w-lg mx-auto leading-relaxed">
-              학습 전 AI가 문서를 6단계로 심층 분석합니다.<br />
-              내용 · 구조 · 논리 · 개념 · 이해 · 비판적 사고를 순차적으로 파악해 드립니다.
+              AI가 문서를 자료분석(6단계)과 학습구조분석을 동시에 진행합니다.<br />
+              내용 · 구조 · 논리 · 개념 · 이해 · 비판적 사고 + 목차 트리 · 개념 맵 · 학습 경로
             </p>
             <button
-              onClick={() => contextaRunMutation.mutate({ documentId: docId })}
+              onClick={() => {
+                contextaRunMutation.mutate({ documentId: docId });
+                analyzeMutation.mutate({ documentId: docId });
+              }}
               disabled={contextaRunMutation.isPending}
               className="bg-[#5B5BD6] text-white font-bold uppercase tracking-widest px-8 py-3 hover:bg-[#4747B5] transition-colors text-sm disabled:opacity-50"
             >
@@ -1647,7 +1736,7 @@ export default function DocumentDetail() {
                   );
                 })}
               </div>
-              <p className="text-xs text-black/40">각 단계를 순차적으로 분석합니다 · 약 30~60초 소요</p>
+              <p className="text-xs text-black/40">6개 분석 + 학습구조 병렬 진행 중 · 약 15~25초 소요</p>
             </div>
           );
         })()}
@@ -1673,10 +1762,13 @@ export default function DocumentDetail() {
         {contextaDone && contextaAnalysis && (
           <ContextaResultPanel
             analysis={contextaAnalysis}
-            onStartStructureAnalysis={() => { analyzeMutation.mutate({ documentId: docId }); }}
             structureAnalysisDone={doc.analysisStatus === "done"}
             isStructureAnalyzing={isAnalyzing}
-            onRerunContexta={() => contextaRunMutation.mutate({ documentId: docId })}
+            structure={structure}
+            onRerunContexta={() => { contextaRunMutation.mutate({ documentId: docId }); analyzeMutation.mutate({ documentId: docId }); }}
+            onSetStructure={(type) => setStructureMutation.mutate({ documentId: docId, structure: type })}
+            isSettingStructure={setStructureMutation.isPending}
+            structureLocked={(doc as any).structureLocked === 1}
           />
         )}
 
