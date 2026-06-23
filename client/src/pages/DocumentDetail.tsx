@@ -947,15 +947,20 @@ function ContextaResultPanel({
   return (
     <div className="space-y-4 mb-10">
 
-      {/* ── 헤더: 타이틀 + 재분석 버튼 ── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-2">
-          <Brain className="w-5 h-5 text-[#5B5BD6]" />
-          <h2 className="font-bold text-lg">자료 분석 결과</h2>
+      {/* ── 헤더: 타이틀 + 서브타이틀 + 재분석 버튼 ── */}
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div className="flex items-start gap-2.5">
+          <Brain className="w-5 h-5 text-[#5B5BD6] mt-0.5 flex-shrink-0" />
+          <div>
+            <h2 className="font-bold text-lg leading-tight">자료 분석 결과</h2>
+            <p className="text-[11px] text-black/40 mt-0.5 leading-snug">
+              6개의 자료분석으로 자료의 내용을 파악하고 3개의 학습구조분석 중 하나를 선택해 학습하세요
+            </p>
+          </div>
         </div>
         <button
           onClick={onRerunContexta}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-[#E5E5E3] bg-white hover:bg-[#F8F7F5] text-[#525252] transition-colors"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-[#E5E5E3] bg-white hover:bg-[#F8F7F5] text-[#525252] transition-colors flex-shrink-0"
         >
           <RotateCcw size={11} /> 재분석
         </button>
@@ -976,57 +981,71 @@ function ContextaResultPanel({
 
       {/* ── 탭 바 ── */}
       <div className="border border-[#E5E5E3] rounded-xl overflow-hidden">
-        <div className="flex border-b border-[#E5E5E3] bg-[#F8F7F5] overflow-x-auto">
-          {/* ① 자료분석 6탭 */}
-          {tabs.map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => { setActiveTab(tab.key); setActiveStructTab(null); }}
-              className={`flex items-center gap-1.5 px-4 py-3 text-xs font-semibold whitespace-nowrap transition-colors border-b-2 -mb-px ${
-                activeTab === tab.key && !activeStructTab
-                  ? "border-[#5B5BD6] text-[#5B5BD6] bg-white"
-                  : "border-transparent text-black/50 hover:text-black/70 hover:bg-white/60"
-              } ${!tab.data ? "opacity-30 cursor-not-allowed pointer-events-none" : ""}`}
-              disabled={!tab.data}
-            >
-              <span className={activeTab === tab.key && !activeStructTab ? "text-[#5B5BD6]" : "text-black/40"}>{tab.icon}</span>
-              {tab.label}
-            </button>
-          ))}
+        <div className="flex border-b border-[#E5E5E3] overflow-x-auto">
 
-          {/* 구분선 */}
-          <div className="w-px bg-[#E5E5E3] my-2 mx-1 flex-shrink-0" />
-
-          {/* ② 학습구조 탭 그룹 */}
-          {isStructureAnalyzing ? (
-            <div className="flex items-center gap-1.5 px-4 text-xs text-black/35 whitespace-nowrap">
-              <div className="w-3 h-3 border-2 border-black/25 border-t-transparent animate-spin rounded-full" />
-              학습구조 분석중
+          {/* ════ 자료분석 그룹 ════ */}
+          <div className="flex bg-[#F8F7F5]">
+            {/* 그룹 레이블 */}
+            <div className="flex items-center px-2.5 border-r border-[#E5E5E3]">
+              <span className="text-[9px] font-black uppercase tracking-widest text-[#5B5BD6]/60 whitespace-nowrap">자료분석</span>
             </div>
-          ) : structureAnalysisDone ? (
-            structTabs.map(stab => (
+            {tabs.map(tab => (
               <button
-                key={stab.key}
-                onClick={() => { setActiveStructTab(stab.key); setActiveTab(""); }}
-                disabled={!stab.available}
-                className={`flex items-center gap-1.5 px-4 py-3 text-xs font-semibold whitespace-nowrap transition-colors border-b-2 -mb-px ${
-                  activeStructTab === stab.key
-                    ? "border-black text-black bg-black/5"
-                    : "border-transparent text-black/45 hover:text-black/70 hover:bg-white/60"
-                } ${!stab.available ? "opacity-30 cursor-not-allowed pointer-events-none" : ""}`}
+                key={tab.key}
+                onClick={() => { setActiveTab(tab.key); setActiveStructTab(null); }}
+                className={`flex items-center gap-1.5 px-3.5 py-3 text-xs font-semibold whitespace-nowrap transition-colors border-b-2 -mb-px ${
+                  activeTab === tab.key && !activeStructTab
+                    ? "border-[#5B5BD6] text-[#5B5BD6] bg-white"
+                    : "border-transparent text-black/45 hover:text-black/70 hover:bg-white/50"
+                } ${!tab.data ? "opacity-30 cursor-not-allowed pointer-events-none" : ""}`}
+                disabled={!tab.data}
               >
-                {stab.label}
-                {structureLocked && stab.key === (structure as any)?._selectedStructure && (
-                  <Lock size={9} className="text-black/40 ml-0.5" />
-                )}
+                <span className={activeTab === tab.key && !activeStructTab ? "text-[#5B5BD6]" : "text-black/35"}>{tab.icon}</span>
+                {tab.label}
               </button>
-            ))
-          ) : (
-            <div className="flex items-center gap-1.5 px-4 text-xs text-black/30 whitespace-nowrap">
-              <div className="w-1.5 h-1.5 rounded-full bg-black/20" />
-              학습구조 대기중
+            ))}
+          </div>
+
+          {/* ════ 구분 배지 (레이블 겸 구분선) ════ */}
+          <div className="flex items-center flex-shrink-0 bg-black/[0.03] border-x-2 border-black/10 px-2.5">
+            <div className="flex items-center gap-1 bg-black text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded whitespace-nowrap">
+              <GitBranch size={8} />
+              AI 학습구조
             </div>
-          )}
+          </div>
+
+          {/* ════ 학습구조 탭 그룹 ════ */}
+          <div className="flex bg-[#111]/[0.03]">
+            {isStructureAnalyzing ? (
+              <div className="flex items-center gap-2 px-5 text-xs text-black/40 whitespace-nowrap">
+                <div className="w-3 h-3 border-2 border-black/30 border-t-transparent animate-spin rounded-full" />
+                분석중…
+              </div>
+            ) : structureAnalysisDone ? (
+              structTabs.map(stab => (
+                <button
+                  key={stab.key}
+                  onClick={() => { setActiveStructTab(stab.key); setActiveTab(""); }}
+                  disabled={!stab.available}
+                  className={`flex items-center gap-1.5 px-4 py-3 text-xs font-semibold whitespace-nowrap transition-all border-b-2 -mb-px ${
+                    activeStructTab === stab.key
+                      ? "border-black text-black bg-black/[0.07]"
+                      : "border-transparent text-black/50 hover:text-black hover:bg-black/[0.05]"
+                  } ${!stab.available ? "opacity-25 cursor-not-allowed pointer-events-none" : ""}`}
+                >
+                  {stab.label}
+                  {structureLocked && stab.key === (structure as any)?._selectedStructure && (
+                    <Lock size={8} className="text-black/40 ml-0.5" />
+                  )}
+                </button>
+              ))
+            ) : (
+              <div className="flex items-center gap-1.5 px-5 text-xs text-black/25 whitespace-nowrap">
+                대기중
+              </div>
+            )}
+          </div>
+
         </div>
 
         {/* ── 탭 콘텐츠 ── */}
