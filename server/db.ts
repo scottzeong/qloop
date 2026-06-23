@@ -1,4 +1,4 @@
-import { eq, desc, and, isNull } from "drizzle-orm";
+import { eq, desc, and, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
@@ -26,6 +26,32 @@ export async function getDb() {
     }
   }
   return _db;
+}
+
+// ─── Startup Migrations ───────────────────────────────────────────────────────
+// 스키마와 DB가 불일치할 때 자동으로 컬럼을 추가
+export async function runStartupMigrations() {
+  const db = await getDb();
+  if (!db) return;
+
+  const alters = [
+    `ALTER TABLE \`documents\` ADD COLUMN \`contextaStatus\` ENUM('pending','analyzing','done','error','skipped') NULL AFTER \`analysisError\``,
+    `ALTER TABLE \`documents\` ADD COLUMN \`contextaStep\` ENUM('content','structure','logic','concept','understanding','critical','done','error') NULL AFTER \`contextaStatus\``,
+    `ALTER TABLE \`documents\` ADD COLUMN \`contextaAnalysis\` JSON NULL AFTER \`contextaStep\``,
+  ];
+
+  for (const query of alters) {
+    try {
+      await db.execute(sql.raw(query));
+      console.log("[Migration] OK:", query.slice(23, 70));
+    } catch (e: any) {
+      if (e?.cause?.errno === 1060 || e?.errno === 1060) {
+        // ER_DUP_FIELDNAME — 이미 존재, 무시
+      } else {
+        console.error("[Migration] FAILED:", e?.message, "| cause:", e?.cause?.message, "| errno:", e?.cause?.errno);
+      }
+    }
+  }
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────────

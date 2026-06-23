@@ -4,7 +4,7 @@ import { useLocation, useParams } from "wouter";
 import { useState } from "react";
 import { toast } from "sonner";
 import PageHeader from "@/components/PageHeader";
-import { Trash2, Lock, RotateCcw, CheckCircle2, AlertCircle, Search, X } from "lucide-react";
+import { Trash2, Lock, RotateCcw, CheckCircle2, AlertCircle, Search, X, Brain, ChevronDown, ChevronUp, BookOpen, BarChart2, GitBranch, Network, Lightbulb, MessageSquare, ArrowRight } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
