@@ -921,23 +921,60 @@ function ContextaResultPanel({
   const us = analysis.understandingSummary as Record<string, unknown> | null;
   const ct = analysis.criticalThinking as Record<string, unknown> | null;
 
+  const tabs = [
+    { key: "content",       label: "① 내용",   icon: <BookOpen size={14} />,      data: ca },
+    { key: "structure",     label: "② 구조",   icon: <BarChart2 size={14} />,     data: sa },
+    { key: "logic",         label: "③ 논리",   icon: <GitBranch size={14} />,     data: la },
+    { key: "concept",       label: "④ 개념",   icon: <Network size={14} />,       data: cs },
+    { key: "understanding", label: "⑤ 이해",   icon: <Lightbulb size={14} />,     data: us },
+    { key: "critical",      label: "⑥ 비판",   icon: <MessageSquare size={14} />, data: ct },
+  ];
+  const [activeTab, setActiveTab] = useState("content");
+
   return (
-    <div className="space-y-6 mb-10">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 mb-10">
+
+      {/* ── 헤더: 타이틀 + 버튼들 ── */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <Brain className="w-5 h-5 text-[#5B5BD6]" />
           <h2 className="font-bold text-lg">자료 분석 결과</h2>
         </div>
-        <button onClick={onRerunContexta} className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border border-[#E5E5E3] bg-white hover:bg-[#F8F7F5] text-[#525252] transition-colors">
-          <RotateCcw size={11} /> 재분석
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onRerunContexta}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-[#E5E5E3] bg-white hover:bg-[#F8F7F5] text-[#525252] transition-colors"
+          >
+            <RotateCcw size={11} /> 재분석
+          </button>
+          {!structureAnalysisDone && !isStructureAnalyzing && (
+            <button
+              onClick={onStartStructureAnalysis}
+              className="flex items-center gap-2 bg-black text-white text-xs font-bold uppercase tracking-widest px-4 py-1.5 hover:bg-black/80 transition-colors rounded-lg"
+            >
+              학습 구조 분석 시작 <ArrowRight size={12} />
+            </button>
+          )}
+          {isStructureAnalyzing && (
+            <span className="flex items-center gap-1.5 text-xs text-[#5B5BD6] font-medium">
+              <div className="w-3 h-3 border-2 border-[#5B5BD6] border-t-transparent animate-spin rounded-full" />
+              구조 분석 중…
+            </span>
+          )}
+          {structureAnalysisDone && (
+            <span className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
+              <CheckCircle2 size={13} /> 학습 구조 완료
+            </span>
+          )}
+        </div>
       </div>
 
+      {/* ── 핵심 요약 카드 (항상 상단 표시) ── */}
       {ca && (
-        <div className="bg-[#5B5BD6] text-white rounded-xl p-6 space-y-3">
+        <div className="bg-[#5B5BD6] text-white rounded-xl p-5 space-y-2.5">
           <p className="text-xs font-bold uppercase tracking-widest opacity-70">핵심 요약</p>
           <p className="text-base font-bold leading-snug">{ca.one_sentence_summary as string}</p>
-          <div className="flex flex-wrap gap-2 pt-1">
+          <div className="flex flex-wrap gap-2 pt-0.5">
             {ca.difficulty_level && <span className="text-xs bg-white/20 px-2.5 py-1 rounded-full font-medium">{ca.difficulty_level as string}</span>}
             {ca.target_audience && <span className="text-xs bg-white/20 px-2.5 py-1 rounded-full font-medium">{ca.target_audience as string}</span>}
           </div>
@@ -945,17 +982,44 @@ function ContextaResultPanel({
         </div>
       )}
 
-      <div className="space-y-3">
-        {ca && (
-          <AccordionCard title="① 내용 분석" icon={<BookOpen size={16} />} defaultOpen>
+      {/* ── 탭 바 ── */}
+      <div className="border border-[#E5E5E3] rounded-xl overflow-hidden">
+        <div className="flex border-b border-[#E5E5E3] bg-[#F8F7F5] overflow-x-auto">
+          {tabs.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-1.5 px-4 py-3 text-xs font-semibold whitespace-nowrap transition-colors border-b-2 -mb-px ${
+                activeTab === tab.key
+                  ? "border-[#5B5BD6] text-[#5B5BD6] bg-white"
+                  : "border-transparent text-black/50 hover:text-black/70 hover:bg-white/60"
+              } ${!tab.data ? "opacity-30 cursor-not-allowed pointer-events-none" : ""}`}
+              disabled={!tab.data}
+            >
+              <span className={activeTab === tab.key ? "text-[#5B5BD6]" : "text-black/40"}>{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── 탭 콘텐츠 ── */}
+        <div className="p-5 bg-white min-h-[260px]">
+
+          {/* ① 내용 분석 */}
+          {activeTab === "content" && ca && (
             <div className="space-y-4">
-              {ca.core_claims && <div><p className="text-xs font-bold text-black/40 uppercase tracking-wider mb-2">핵심 주장</p><BulletList items={ca.core_claims as unknown[]} /></div>}
+              {ca.core_claims && (
+                <div>
+                  <p className="text-xs font-bold text-black/40 uppercase tracking-wider mb-2">핵심 주장</p>
+                  <BulletList items={ca.core_claims as unknown[]} />
+                </div>
+              )}
               {ca.key_concepts && Array.isArray(ca.key_concepts) && ca.key_concepts.length > 0 && (
                 <div>
                   <p className="text-xs font-bold text-black/40 uppercase tracking-wider mb-2">핵심 개념</p>
                   <div className="space-y-2">
                     {(ca.key_concepts as Array<{name:string;definition:string;importance:string}>).map((c, i) => (
-                      <div key={i} className="bg-white border border-[#E5E5E3] rounded-lg p-3">
+                      <div key={i} className="bg-[#FAFAFA] border border-[#E5E5E3] rounded-lg p-3">
                         <p className="font-bold text-sm">{c.name}</p>
                         <p className="text-xs text-black/60 mt-1">{c.definition}</p>
                         {c.importance && <p className="text-xs text-[#5B5BD6] mt-1">{c.importance}</p>}
@@ -964,22 +1028,31 @@ function ContextaResultPanel({
                   </div>
                 </div>
               )}
-              {ca.important_facts && <div><p className="text-xs font-bold text-black/40 uppercase tracking-wider mb-2">중요 사실</p><BulletList items={ca.important_facts as unknown[]} /></div>}
+              {ca.important_facts && (
+                <div>
+                  <p className="text-xs font-bold text-black/40 uppercase tracking-wider mb-2">중요 사실</p>
+                  <BulletList items={ca.important_facts as unknown[]} />
+                </div>
+              )}
             </div>
-          </AccordionCard>
-        )}
+          )}
 
-        {sa && (
-          <AccordionCard title="② 구조 분석" icon={<BarChart2 size={16} />}>
+          {/* ② 구조 분석 */}
+          {activeTab === "structure" && sa && (
             <div className="space-y-4">
-              {sa.structure_type && <div><p className="text-xs font-bold text-black/40 uppercase tracking-wider mb-2">구조 유형</p><span className="text-sm font-semibold bg-[#5B5BD6]/10 text-[#5B5BD6] px-3 py-1.5 rounded-lg">{sa.structure_type as string}</span></div>}
+              {sa.structure_type && (
+                <div>
+                  <p className="text-xs font-bold text-black/40 uppercase tracking-wider mb-2">구조 유형</p>
+                  <span className="text-sm font-semibold bg-[#5B5BD6]/10 text-[#5B5BD6] px-3 py-1.5 rounded-lg">{sa.structure_type as string}</span>
+                </div>
+              )}
               {sa.flow && Array.isArray(sa.flow) && (
                 <div>
                   <p className="text-xs font-bold text-black/40 uppercase tracking-wider mb-2">전개 흐름</p>
                   <div className="flex flex-wrap gap-2 items-center">
                     {(sa.flow as string[]).map((f, i) => (
                       <div key={i} className="flex items-center gap-1">
-                        <span className="text-xs bg-white border border-[#E5E5E3] px-2.5 py-1.5 rounded-md">{f}</span>
+                        <span className="text-xs bg-[#FAFAFA] border border-[#E5E5E3] px-2.5 py-1.5 rounded-md">{f}</span>
                         {i < (sa.flow as string[]).length - 1 && <ArrowRight size={10} className="text-black/30" />}
                       </div>
                     ))}
@@ -991,7 +1064,7 @@ function ContextaResultPanel({
                   <p className="text-xs font-bold text-black/40 uppercase tracking-wider mb-2">섹션 역할</p>
                   <div className="space-y-2">
                     {(sa.section_roles as Array<{title:string;role:string;summary:string}>).slice(0, 5).map((s, i) => (
-                      <div key={i} className="flex gap-2.5 bg-white border border-[#E5E5E3] rounded-lg p-3">
+                      <div key={i} className="flex gap-2.5 bg-[#FAFAFA] border border-[#E5E5E3] rounded-lg p-3">
                         <span className="text-xs font-bold text-[#5B5BD6] bg-[#5B5BD6]/10 px-2 py-0.5 rounded h-fit mt-0.5 whitespace-nowrap">{s.role}</span>
                         <div><p className="text-xs font-semibold">{s.title}</p><p className="text-xs text-black/50 mt-0.5">{s.summary}</p></div>
                       </div>
@@ -1000,19 +1073,23 @@ function ContextaResultPanel({
                 </div>
               )}
             </div>
-          </AccordionCard>
-        )}
+          )}
 
-        {la && (
-          <AccordionCard title="③ 논리 분석" icon={<GitBranch size={16} />}>
+          {/* ③ 논리 분석 */}
+          {activeTab === "logic" && la && (
             <div className="space-y-4">
-              {la.overall_logic_summary && <p className="text-sm text-black/70 bg-white border border-[#E5E5E3] rounded-lg p-3">{la.overall_logic_summary as string}</p>}
+              {la.overall_logic_summary && (
+                <p className="text-sm text-black/70 bg-[#FAFAFA] border border-[#E5E5E3] rounded-lg p-3">{la.overall_logic_summary as string}</p>
+              )}
               {la.arguments && Array.isArray(la.arguments) && (
                 <div className="space-y-3">
                   {(la.arguments as Array<{claim:string;grounds:unknown[];weaknesses:unknown[];strength:string}>).map((arg, i) => (
-                    <div key={i} className="bg-white border border-[#E5E5E3] rounded-lg p-4 space-y-2">
+                    <div key={i} className="bg-[#FAFAFA] border border-[#E5E5E3] rounded-lg p-4 space-y-2">
                       <div className="flex items-start gap-2">
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded whitespace-nowrap ${arg.strength === "strong" ? "bg-green-100 text-green-700" : arg.strength === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"}`}>{arg.strength === "strong" ? "강" : arg.strength === "medium" ? "중" : "약"}</span>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded whitespace-nowrap ${
+                          arg.strength === "strong" ? "bg-green-100 text-green-700" :
+                          arg.strength === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"
+                        }`}>{arg.strength === "strong" ? "강" : arg.strength === "medium" ? "중" : "약"}</span>
                         <p className="text-sm font-semibold">{arg.claim}</p>
                       </div>
                       {arg.grounds && arg.grounds.length > 0 && <div><p className="text-xs text-black/40 mb-1">근거</p><BulletList items={arg.grounds} /></div>}
@@ -1022,38 +1099,41 @@ function ContextaResultPanel({
                 </div>
               )}
             </div>
-          </AccordionCard>
-        )}
+          )}
 
-        {cs && (
-          <AccordionCard title="④ 개념 요약" icon={<Network size={16} />}>
-            {cs.concepts && Array.isArray(cs.concepts) && (
-              <div className="space-y-3">
-                {(cs.concepts as Array<{name:string;definition:string;why_it_matters:string;examples:string[]}>).map((c, i) => (
-                  <div key={i} className="bg-white border border-[#E5E5E3] rounded-lg p-4 space-y-1.5">
+          {/* ④ 개념 요약 */}
+          {activeTab === "concept" && cs && (
+            <div className="space-y-3">
+              {cs.concepts && Array.isArray(cs.concepts) &&
+                (cs.concepts as Array<{name:string;definition:string;why_it_matters:string;examples:string[]}>).map((c, i) => (
+                  <div key={i} className="bg-[#FAFAFA] border border-[#E5E5E3] rounded-lg p-4 space-y-1.5">
                     <p className="font-bold text-sm">{c.name}</p>
                     <p className="text-xs text-black/70">{c.definition}</p>
                     {c.why_it_matters && <p className="text-xs text-[#5B5BD6]">왜 중요한가: {c.why_it_matters}</p>}
                     {c.examples && c.examples.length > 0 && <TagList items={c.examples.slice(0, 3)} />}
                   </div>
-                ))}
-              </div>
-            )}
-          </AccordionCard>
-        )}
+                ))
+              }
+            </div>
+          )}
 
-        {us && (
-          <AccordionCard title="⑤ 이해 요약 · 학습 경로" icon={<Lightbulb size={16} />}>
+          {/* ⑤ 이해 요약 */}
+          {activeTab === "understanding" && us && (
             <div className="space-y-4">
-              {us.plain_language_summary && <p className="text-sm text-black/70 bg-white border border-[#E5E5E3] rounded-lg p-4 leading-relaxed">{us.plain_language_summary as string}</p>}
+              {us.plain_language_summary && (
+                <p className="text-sm text-black/70 bg-[#FAFAFA] border border-[#E5E5E3] rounded-lg p-4 leading-relaxed">{us.plain_language_summary as string}</p>
+              )}
               {us.learning_path && Array.isArray(us.learning_path) && (
-                <div className="space-y-2">
-                  {(us.learning_path as Array<{step:number;title:string;explanation:string}>).map((s, i) => (
-                    <div key={i} className="flex gap-3 bg-white border border-[#E5E5E3] rounded-lg p-3">
-                      <span className="w-6 h-6 rounded-full bg-[#5B5BD6] text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
-                      <div><p className="text-sm font-semibold">{s.title}</p><p className="text-xs text-black/60 mt-0.5">{s.explanation}</p></div>
-                    </div>
-                  ))}
+                <div>
+                  <p className="text-xs font-bold text-black/40 uppercase tracking-wider mb-2">권장 학습 순서</p>
+                  <div className="space-y-2">
+                    {(us.learning_path as Array<{step:number;title:string;explanation:string}>).map((s, i) => (
+                      <div key={i} className="flex gap-3 bg-[#FAFAFA] border border-[#E5E5E3] rounded-lg p-3">
+                        <span className="w-6 h-6 rounded-full bg-[#5B5BD6] text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
+                        <div><p className="text-sm font-semibold">{s.title}</p><p className="text-xs text-black/60 mt-0.5">{s.explanation}</p></div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
               {us.check_questions && Array.isArray(us.check_questions) && (us.check_questions as string[]).length > 0 && (
@@ -1061,7 +1141,7 @@ function ContextaResultPanel({
                   <p className="text-xs font-bold text-black/40 uppercase tracking-wider mb-2">이해 확인 질문</p>
                   <div className="space-y-1.5">
                     {(us.check_questions as string[]).map((q, i) => (
-                      <div key={i} className="bg-white border border-[#E5E5E3] rounded-lg px-3.5 py-2.5 text-sm text-black/70 flex gap-2">
+                      <div key={i} className="bg-[#FAFAFA] border border-[#E5E5E3] rounded-lg px-3.5 py-2.5 text-sm text-black/70 flex gap-2">
                         <span className="text-[#5B5BD6] font-bold">Q{i + 1}.</span><span>{q}</span>
                       </div>
                     ))}
@@ -1069,18 +1149,22 @@ function ContextaResultPanel({
                 </div>
               )}
             </div>
-          </AccordionCard>
-        )}
+          )}
 
-        {ct && (
-          <AccordionCard title="⑥ 비판적 사고" icon={<MessageSquare size={16} />}>
+          {/* ⑥ 비판적 사고 */}
+          {activeTab === "critical" && ct && (
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <span className="text-xs font-bold uppercase tracking-wider text-black/40">신뢰도</span>
-                <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${ct.reliability_score === "높음" ? "bg-green-100 text-green-700" : ct.reliability_score === "보통" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"}`}>{ct.reliability_score as string}</span>
+                <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                  ct.reliability_score === "높음" ? "bg-green-100 text-green-700" :
+                  ct.reliability_score === "보통" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"
+                }`}>{ct.reliability_score as string}</span>
                 {ct.reliability_reason && <span className="text-xs text-black/50">{ct.reliability_reason as string}</span>}
               </div>
-              {ct.overall_assessment && <p className="text-sm text-black/70 bg-white border border-[#E5E5E3] rounded-lg p-3">{ct.overall_assessment as string}</p>}
+              {ct.overall_assessment && (
+                <p className="text-sm text-black/70 bg-[#FAFAFA] border border-[#E5E5E3] rounded-lg p-3">{ct.overall_assessment as string}</p>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 {ct.strengths && (ct.strengths as string[]).length > 0 && (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-3">
@@ -1102,22 +1186,10 @@ function ContextaResultPanel({
                 </div>
               )}
             </div>
-          </AccordionCard>
-        )}
-      </div>
+          )}
 
-      {!structureAnalysisDone && !isStructureAnalyzing && (
-        <div className="border-2 border-dashed border-black/20 rounded-xl p-8 text-center space-y-4">
-          <p className="text-xs font-bold uppercase tracking-widest text-black/40">Step 2</p>
-          <p className="font-bold text-base">학습 구조 분석</p>
-          <p className="text-sm text-black/50 max-w-sm mx-auto">
-            자료 분석이 완료되었습니다. 이제 목차 트리, 개념 맵, 학습 경로를 생성해 학습 세션을 시작하세요.
-          </p>
-          <button onClick={onStartStructureAnalysis} className="bg-black text-white font-bold uppercase tracking-widest px-8 py-3 hover:bg-black/80 transition-colors text-sm">
-            학습 구조 분석 시작 →
-          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -1194,7 +1266,7 @@ export default function DocumentDetail() {
   });
   const analyzeMutation = trpc.document.analyze.useMutation({
     onSuccess: () => {
-      toast.success("AI 분석이 완료되었습니다.");
+      // 분석은 백그라운드에서 실행됨 — 완료는 폴링으로 감지, 여기선 toast 없음
       refetch();
     },
     onError: (e) => toast.error(`분석 실패: ${e.message}`),

@@ -236,296 +236,140 @@ async function extractTextFromPdf(fileUrl: string): Promise<string | null> {
   }
 }
 
+// ─── Analysis Helpers ────────────────────────────────────────────────────────
+
+/** JSON 응답 파싱 헬퍼 (마크다운 코드블록 제거 + 잘린 JSON 복구) */
+function parseStructureJson(rawContent: unknown): Record<string, unknown> {
+  if (!rawContent) return {};
+  if (typeof rawContent === "object") return rawContent as Record<string, unknown>;
+  let s = (rawContent as string).trim();
+  s = s.replace(/^```(?:json)?[\s\S]*?\n/, "").replace(/\n```[\s\S]*$/, "").trim();
+  if (s.startsWith("```")) s = s.replace(/^```[^\n]*/, "").trim();
+  if (s.endsWith("```")) s = s.replace(/```$/, "").trim();
+  const start = s.indexOf("{");
+  if (start > 0) s = s.slice(start);
+  const end = s.lastIndexOf("}");
+  if (end !== -1 && end < s.length - 1) s = s.slice(0, end + 1);
+  try { return JSON.parse(s); } catch {
+    const last = s.lastIndexOf("}");
+    if (last > 0) try { return JSON.parse(s.slice(0, last + 1)); } catch {}
+    return {};
+  }
+}
+
+/** Unicode 분포로 언어 감지 — LLM 호출 없이 즉시 */
+function detectLangFromText(text: string): string {
+  const sample = text.slice(0, 2000);
+  const len = sample.length || 1;
+  if ((sample.match(/[가-힣]/g) || []).length / len > 0.03) return "ko";
+  if ((sample.match(/[ぁ-ヿ]/g) || []).length / len > 0.03) return "ja";
+  if ((sample.match(/[一-鿿]/g) || []).length / len > 0.03) return "zh";
+  return "en";
+}
+
+/**
+ * 3개 병렬 LLM 호출로 문서 구조 분석
+ * (목차 트리 / 개념맵+카드 / 학습경로) — 단일 호출 대비 ~3x 속도 개선
+ */
+async function analyzeContentInParallel(
+  docText: string,
+  docTitle: string,
+  userId: number | null = null
+): Promise<DocumentStructure & { detectedLanguage?: string }> {
+  const truncated = docText.length > 25000 ? docText.slice(0, 25000) + "\n...[truncated]" : docText;
+  const userMsg = `Document title: "${docTitle}"\n\nContent:\n${truncated}`;
+
+  const [r1, r2, r3] = await Promise.all([
+    // Call 1: 목차 트리 + 메타데이터
+    aiInvoke(userId, {
+      messages: [
+        {
+          role: "system" as const,
+          content: `You are an educational content analyzer. Extract the chapter/topic hierarchy from the document.
+Return ONLY raw JSON (no markdown, no explanation):
+{"title":string,"summary":string,"documentType":"textbook"|"research"|"manual"|"report"|"narrative"|"reference"|"other","chapters":[{"id":string,"title":string,"order":number,"topics":[{"id":string,"title":string,"description":string,"order":number,"subtopics":[{"id":string,"title":string,"description":string,"order":number}]}]}]}
+Use the document's language.`,
+        },
+        { role: "user" as const, content: userMsg },
+      ],
+    }),
+    // Call 2: 개념맵 + 핵심개념카드
+    aiInvoke(userId, {
+      messages: [
+        {
+          role: "system" as const,
+          content: `You are an educational content analyzer. Extract a concept map and key concept cards from the document.
+Return ONLY raw JSON (no markdown, no explanation):
+{"conceptMap":[{"id":string,"label":string,"description":string,"type":"core"|"sub"|"related","connections":[string]}],"keyConceptCards":[{"id":string,"term":string,"definition":string,"example":string,"relatedTerms":[string],"importance":"high"|"medium"|"low"}]}
+Max 8 concept map nodes. Max 10 key concept cards. Use the document's language.`,
+        },
+        { role: "user" as const, content: userMsg },
+      ],
+    }),
+    // Call 3: 학습경로
+    aiInvoke(userId, {
+      messages: [
+        {
+          role: "system" as const,
+          content: `You are an educational content analyzer. Create a recommended learning path for the document.
+Return ONLY raw JSON (no markdown, no explanation):
+{"learningPath":[{"id":string,"order":number,"title":string,"description":string,"topicIds":[string],"estimatedMinutes":number}]}
+3-5 steps. Use the document's language.`,
+        },
+        { role: "user" as const, content: userMsg },
+      ],
+    }),
+  ]);
+
+  const p1 = parseStructureJson(r1.choices[0]?.message?.content);
+  const p2 = parseStructureJson(r2.choices[0]?.message?.content);
+  const p3 = parseStructureJson(r3.choices[0]?.message?.content);
+
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`[ANALYZE] parallel done — chapters=${Array.isArray(p1.chapters) ? (p1.chapters as unknown[]).length : 0}, concepts=${Array.isArray(p2.conceptMap) ? (p2.conceptMap as unknown[]).length : 0}, path=${Array.isArray(p3.learningPath) ? (p3.learningPath as unknown[]).length : 0}`);
+  }
+
+  return {
+    title: (p1.title as string) || docTitle,
+    summary: (p1.summary as string) || "",
+    documentType: (p1.documentType as DocumentStructure["documentType"]) || "other",
+    chapters: Array.isArray(p1.chapters) ? (p1.chapters as ChapterNode[]) : [],
+    conceptMap: Array.isArray(p2.conceptMap) ? (p2.conceptMap as ConceptNode[]) : [],
+    keyConceptCards: Array.isArray(p2.keyConceptCards) ? (p2.keyConceptCards as ConceptCard[]) : [],
+    timeline: [],
+    comparisonTables: [],
+    learningPath: Array.isArray(p3.learningPath) ? (p3.learningPath as LearningPathStep[]) : [],
+    detectedLanguage: detectLangFromText(truncated),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function analyzeDocumentStructure(
   fileUrl: string,
   docTitle: string,
   mimeType: string = "application/pdf",
   userId: number | null = null
 ): Promise<DocumentStructure & { detectedLanguage?: string }> {
-  const systemPrompt = `You are an expert educational content analyzer.
-Analyze the provided document comprehensively and extract its structure in MULTIPLE formats simultaneously.
-Return a single JSON object containing ALL of the following fields:
-
-1. title (string): Document title
-2. summary (string): Brief summary
-3. documentType (string): One of: textbook, research, manual, report, narrative, reference, other
-4. chapters (array): Hierarchical chapter/topic/subtopic tree. Each chapter: {id, title, order, topics[]}. Each topic: {id, title, description, order, subtopics[]}. Each subtopic: {id, title, description, order}.
-5. conceptMap (array, max 15): Key concept nodes. Each: {id, label, description, type (core/sub/related), connections (array of other node ids)}
-6. keyConceptCards (array, max 20): Important terms. Each: {id, term, definition, example, relatedTerms[], importance (high/medium/low)}
-7. timeline (array): Chronological events IF applicable, else []. Each: {id, period, title, description, significance}
-8. comparisonTables (array): Comparison tables IF applicable, else []. Each: {title, headers[], rows[]}. Each row: {id, subject, values[] (values in same order as headers)}
-9. learningPath (array, 3-6 steps): Recommended learning steps. Each: {id, order, title, description, topicIds[], estimatedMinutes}
-
-Be thorough. Use the same language as the document (Korean if Korean).
-Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
-
-  // 모든 파일 형식(PDF 포함)을 텍스트 추출 후 텍스트로 분석
-  // (이전 PDF file_url 방식은 Forge API에서 파싱 실패 발생)
+  if (process.env.NODE_ENV !== "production") console.log(`[ANALYZE] isPdf=${mimeType === "application/pdf"}, mimeType=${mimeType}, userId=${userId}`);
   const isPdf = mimeType === "application/pdf";
-  let userContent: Message["content"];
   let extractedText: string | null = null;
 
   if (isPdf) {
     extractedText = await extractTextFromPdf(fileUrl);
-    if (extractedText && extractedText.trim().length >= 50) {
-      const truncated = extractedText.length > 50000 ? extractedText.slice(0, 50000) + "\n...[truncated]" : extractedText;
-      userContent = `Please analyze this document titled "${docTitle}".\n\nDocument content:\n${truncated}\n\nReturn the hierarchical structure as JSON.`;
-    } else {
+    if (!extractedText || extractedText.trim().length < 50) {
       throw new Error("PDF에서 텍스트를 추출할 수 없습니다. 스캔된 이미지 PDF는 지원되지 않습니다. 텍스트가 포함된 PDF를 업로드해주세요.");
     }
   } else {
-    // Word/PPT: 텍스트 추출 후 텍스트로 분석
     extractedText = await extractTextFromOfficeFile(fileUrl, mimeType);
     if (!extractedText || extractedText.trim().length < 50) {
       throw new Error("파일에서 텍스트를 추출할 수 없습니다. 파일이 손상되었거나 내용이 없습니다.");
     }
-    const truncated = extractedText.length > 50000 ? extractedText.slice(0, 50000) + "\n...[truncated]" : extractedText;
-    userContent = `Please analyze this document titled "${docTitle}".\n\nDocument content:\n${truncated}\n\nReturn the hierarchical structure as JSON.`;
   }
 
-  // PDF 모드: response_format 없이 호출 (Forge API는 file_url + json_schema 동시 미지원)
-  // 텍스트 모드(Word/PPT): json_schema로 구조화 출력 요청
-  const baseMessages: Message[] = [
-    { role: "system", content: systemPrompt },
-    { role: "user" as const, content: userContent },
-  ];
-
-  const jsonSchema = {
-    type: "json_schema" as const,
-    json_schema: {
-        name: "document_structure",
-        strict: true,
-        schema: {
-          type: "object",
-          properties: {
-            title: { type: "string" },
-            summary: { type: "string" },
-            documentType: { type: "string", enum: ["textbook", "research", "manual", "report", "narrative", "reference", "other"] },
-            chapters: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  id: { type: "string" },
-                  title: { type: "string" },
-                  order: { type: "integer" },
-                  topics: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        id: { type: "string" },
-                        title: { type: "string" },
-                        description: { type: "string" },
-                        order: { type: "integer" },
-                        subtopics: {
-                          type: "array",
-                          items: {
-                            type: "object",
-                            properties: {
-                              id: { type: "string" },
-                              title: { type: "string" },
-                              description: { type: "string" },
-                              order: { type: "integer" },
-                            },
-                            required: ["id", "title", "description", "order"],
-                            additionalProperties: false,
-                          },
-                        },
-                      },
-                      required: ["id", "title", "description", "order", "subtopics"],
-                      additionalProperties: false,
-                    },
-                  },
-                },
-                required: ["id", "title", "order", "topics"],
-                additionalProperties: false,
-              },
-            },
-            conceptMap: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  id: { type: "string" },
-                  label: { type: "string" },
-                  description: { type: "string" },
-                  type: { type: "string", enum: ["core", "sub", "related"] },
-                  connections: { type: "array", items: { type: "string" } },
-                },
-                required: ["id", "label", "description", "type", "connections"],
-                additionalProperties: false,
-              },
-            },
-            keyConceptCards: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  id: { type: "string" },
-                  term: { type: "string" },
-                  definition: { type: "string" },
-                  example: { type: "string" },
-                  relatedTerms: { type: "array", items: { type: "string" } },
-                  importance: { type: "string", enum: ["high", "medium", "low"] },
-                },
-                required: ["id", "term", "definition", "example", "relatedTerms", "importance"],
-                additionalProperties: false,
-              },
-            },
-            timeline: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  id: { type: "string" },
-                  period: { type: "string" },
-                  title: { type: "string" },
-                  description: { type: "string" },
-                  significance: { type: "string" },
-                },
-                required: ["id", "period", "title", "description", "significance"],
-                additionalProperties: false,
-              },
-            },
-            comparisonTables: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  title: { type: "string" },
-                  headers: { type: "array", items: { type: "string" } },
-                  rows: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        id: { type: "string" },
-                        subject: { type: "string" },
-                        values: {
-                          type: "array",
-                          items: { type: "string" },
-                          description: "Column values in the same order as headers",
-                        },
-                      },
-                      required: ["id", "subject", "values"],
-                      additionalProperties: false,
-                    },
-                  },
-                },
-                required: ["title", "headers", "rows"],
-                additionalProperties: false,
-              },
-            },
-            learningPath: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  id: { type: "string" },
-                  order: { type: "integer" },
-                  title: { type: "string" },
-                  description: { type: "string" },
-                  topicIds: { type: "array", items: { type: "string" } },
-                  estimatedMinutes: { type: "integer" },
-                },
-                required: ["id", "order", "title", "description", "topicIds", "estimatedMinutes"],
-                additionalProperties: false,
-              },
-            },
-          },
-          required: ["title", "summary", "documentType", "chapters", "conceptMap", "keyConceptCards", "timeline", "comparisonTables", "learningPath"],
-          additionalProperties: false,
-        },
-      },
-    };
-
-  if (process.env.NODE_ENV !== "production") console.log(`[ANALYZE] isPdf=${isPdf}, mimeType=${mimeType}, userId=${userId}`);
-  let response: Awaited<ReturnType<typeof aiInvoke>>;
-  try {
-    response = await aiInvoke(userId, {
-      messages: baseMessages,
-      ...(isPdf ? {} : { response_format: jsonSchema }),
-    });
-  } catch (invokeErr) {
-    console.error(`[ANALYZE] aiInvoke error:`, invokeErr);
-    throw invokeErr;
-  }
-
-  const rawContent = response.choices[0]?.message?.content;
-  if (process.env.NODE_ENV !== "production") console.log(`[ANALYZE] rawContent type=${typeof rawContent}, length=${typeof rawContent === 'string' ? rawContent.length : 'N/A'}, preview=${typeof rawContent === 'string' ? rawContent.slice(0, 200) : JSON.stringify(rawContent)?.slice(0, 200)}`);
-
-  // Forge API가 json_schema 모드에서 content를 이미 파싱된 객체로 반환할 수 있음
-  let parsed: DocumentStructure;
-  if (!rawContent) {
-    throw new Error("AI 분석 결과를 받지 못했습니다. (빈 응답)");
-  } else if (typeof rawContent === "object") {
-    // 이미 파싱된 JSON 객체
-    parsed = rawContent as unknown as DocumentStructure;
-  } else {
-    // 문자열 → JSON 파싱
-    // stripped를 catch 블록에서도 접근 가능하도록 try 블록 밖에 선언
-    let stripped = (rawContent as string).trim();
-    // 마크다운 코드 블록 제거 (```json ... ``` 형태, 멀티라인 대응)
-    stripped = stripped.replace(/^```(?:json)?[\s\S]*?\n/, "").replace(/\n```[\s\S]*$/, "").trim();
-    if (stripped.startsWith('```')) stripped = stripped.replace(/^```[^\n]*/, '').trim();
-    if (stripped.endsWith('```')) stripped = stripped.replace(/```$/, '').trim();
-    // 시작 { 이전 텍스트 제거
-    const jsonStart = stripped.indexOf('{');
-    if (jsonStart > 0) stripped = stripped.slice(jsonStart);
-    // 마지막 } 이후 텍스트 제거
-    const jsonEnd = stripped.lastIndexOf('}');
-    if (jsonEnd !== -1 && jsonEnd < stripped.length - 1) stripped = stripped.slice(0, jsonEnd + 1);
-    try {
-      parsed = JSON.parse(stripped) as DocumentStructure;
-    } catch (parseErr) {
-      const fullContent = rawContent as string;
-      console.error(`[ANALYZE] JSON parse error. length=${fullContent.length}`);
-      console.error(`[ANALYZE] First 1000: ${fullContent.slice(0, 1000)}`);
-      console.error(`[ANALYZE] Last 500: ${fullContent.slice(-500)}`);
-      // 잘린 JSON 복구 시도: 마지막 완전한 } 위치까지만 파싱
-      try {
-        const lastBrace = stripped.lastIndexOf('}');
-        if (lastBrace > 0) {
-          const truncated = stripped.slice(0, lastBrace + 1);
-          parsed = JSON.parse(truncated) as DocumentStructure;
-          if (process.env.NODE_ENV !== "production") console.log('[ANALYZE] Recovered truncated JSON successfully');
-        } else {
-          throw new Error('no closing brace');
-        }
-      } catch {
-        throw new Error(`AI 분석 결과를 파싱하지 못했습니다: ${fullContent.slice(0, 200)}`);
-      }
-    }
-  }
-
-  if (!parsed.title) parsed.title = docTitle;
-  if (!parsed.summary) parsed.summary = "";
-  if (!Array.isArray(parsed.chapters)) parsed.chapters = [];
-  if (!Array.isArray(parsed.conceptMap)) parsed.conceptMap = [];
-  if (!Array.isArray(parsed.keyConceptCards)) parsed.keyConceptCards = [];
-  if (!Array.isArray(parsed.timeline)) parsed.timeline = [];
-  if (!Array.isArray(parsed.comparisonTables)) parsed.comparisonTables = [];
-  if (!Array.isArray(parsed.learningPath)) parsed.learningPath = [];
-  if (!parsed.documentType) parsed.documentType = "other";
-
-  // 원문 언어 감지: 첫 번째 토픽 제목으로 언어 판단
-  let detectedLanguage = "ko";
-  try {
-    const sampleText = parsed.chapters?.[0]?.title || parsed.title || docTitle || "";
-    const langResp = await aiInvoke(userId, {
-      messages: [
-        { role: "system", content: "Detect the language of the given text and return ONLY the ISO 639-1 language code (e.g. en, ko, ja, zh, fr, de, es, pt, ar). Return nothing else." },
-        { role: "user", content: sampleText },
-      ],
-    });
-    const raw = langResp.choices[0]?.message?.content;
-    const code = (typeof raw === "string" ? raw.trim().toLowerCase() : "").slice(0, 5);
-    if (/^[a-z]{2}(-[a-z]{2})?$/.test(code)) detectedLanguage = code.slice(0, 2);
-  } catch (_) { /* 감지 실패 시 ko 폴백 */ }
-
-  return { ...parsed, detectedLanguage };
+  return analyzeContentInParallel(extractedText, docTitle, userId);
 }
+
 
 /**
  * 텍스트 콘텐츠를 직접 분석하는 공통 함수 (fileType=text 문서용)
@@ -535,81 +379,9 @@ async function analyzeTextContent(
   docTitle: string,
   userId: number | null = null
 ): Promise<DocumentStructure & { detectedLanguage?: string }> {
-  const systemPrompt = `You are an expert educational content analyzer.
-Analyze the provided document comprehensively and extract its structure in MULTIPLE formats simultaneously.
-Return a single JSON object containing ALL of the following fields:
-
-1. title (string): Document title
-2. summary (string): Brief summary
-3. documentType (string): One of: textbook, research, manual, report, narrative, reference, other
-4. chapters (array): Hierarchical chapter/topic/subtopic tree. Each chapter: {id, title, order, topics[]}. Each topic: {id, title, description, order, subtopics[]}. Each subtopic: {id, title, description, order}.
-5. conceptMap (array, max 15): Key concept nodes. Each: {id, label, description, type (core/sub/related), connections (array of other node ids)}
-6. keyConceptCards (array, max 20): Important terms. Each: {id, term, definition, example, relatedTerms[], importance (high/medium/low)}
-7. timeline (array): Chronological events IF applicable, else []. Each: {id, period, title, description, significance}
-8. comparisonTables (array): Comparison tables IF applicable, else []. Each: {title, headers[], rows[]}. Each row: {id, subject, values[] (values in same order as headers)}
-9. learningPath (array, 3-6 steps): Recommended learning steps. Each: {id, order, title, description, topicIds[], estimatedMinutes}
-
-Be thorough. Use the same language as the document (Korean if Korean).
-Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
-  const truncated = text.length > 50000 ? text.slice(0, 50000) + "\n...[truncated]" : text;
-  const response = await aiInvoke(userId, {
-    messages: [
-      { role: "system" as const, content: systemPrompt },
-      { role: "user" as const, content: `Please analyze this document titled "${docTitle}".\n\nDocument content:\n${truncated}\n\nReturn the hierarchical structure as JSON.` },
-    ],
-  });
-  const rawContent = response.choices[0]?.message?.content;
-  if (!rawContent) throw new Error("AI 분석 결과를 받지 못했습니다. (빈 응답)");
-  let parsed: DocumentStructure;
-  if (typeof rawContent === "object") {
-    parsed = rawContent as unknown as DocumentStructure;
-  } else {
-    let stripped = (rawContent as string).trim();
-    stripped = stripped.replace(/^```(?:json)?[\s\S]*?\n/, "").replace(/\n```[\s\S]*$/, "").trim();
-    if (stripped.startsWith('```')) stripped = stripped.replace(/^```[^\n]*/, '').trim();
-    if (stripped.endsWith('```')) stripped = stripped.replace(/```$/, '').trim();
-    const jsonStart = stripped.indexOf('{');
-    if (jsonStart > 0) stripped = stripped.slice(jsonStart);
-    const jsonEnd = stripped.lastIndexOf('}');
-    if (jsonEnd !== -1 && jsonEnd < stripped.length - 1) stripped = stripped.slice(0, jsonEnd + 1);
-    try {
-      parsed = JSON.parse(stripped) as DocumentStructure;
-    } catch {
-      // 잘린 JSON 복구 시도
-      const lastBrace = stripped.lastIndexOf('}');
-      if (lastBrace > 0) {
-        try { parsed = JSON.parse(stripped.slice(0, lastBrace + 1)) as DocumentStructure; }
-        catch { throw new Error(`AI 분석 결과를 파싱하지 못했습니다: ${(rawContent as string).slice(0, 200)}`); }
-      } else {
-        throw new Error(`AI 분석 결과를 파싱하지 못했습니다: ${(rawContent as string).slice(0, 200)}`);
-      }
-    }
-  }
-  if (!parsed.title) parsed.title = docTitle;
-  if (!parsed.summary) parsed.summary = "";
-  if (!Array.isArray(parsed.chapters)) parsed.chapters = [];
-  if (!Array.isArray(parsed.conceptMap)) parsed.conceptMap = [];
-  if (!Array.isArray(parsed.keyConceptCards)) parsed.keyConceptCards = [];
-  if (!Array.isArray(parsed.timeline)) parsed.timeline = [];
-  if (!Array.isArray(parsed.comparisonTables)) parsed.comparisonTables = [];
-  if (!Array.isArray(parsed.learningPath)) parsed.learningPath = [];
-  if (!parsed.documentType) parsed.documentType = "other";
-  // 언어 감지
-  let detectedLanguage = "ko";
-  try {
-    const sampleText = parsed.chapters?.[0]?.title || parsed.title || docTitle || "";
-    const langResp = await aiInvoke(userId, {
-      messages: [
-        { role: "system", content: "Detect the language of the given text and return ONLY the ISO 639-1 language code (e.g. en, ko, ja, zh, fr, de, es, pt, ar). Return nothing else." },
-        { role: "user", content: sampleText },
-      ],
-    });
-    const raw = langResp.choices[0]?.message?.content;
-    const code = (typeof raw === "string" ? raw.trim().toLowerCase() : "").slice(0, 5);
-    if (/^[a-z]{2}(-[a-z]{2})?$/.test(code)) detectedLanguage = code.slice(0, 2);
-  } catch (_) { /* 감지 실패 시 ko 폴백 */ }
-  return { ...parsed, detectedLanguage };
+  return analyzeContentInParallel(text, docTitle, userId);
 }
+
 
 /**
  * 첫 번째 질문 생성 — 문서를 직접 참조하지 않고 토픽 제목/설명만으로 질문 생성
@@ -1811,58 +1583,13 @@ Return ONLY valid JSON matching the schema exactly.`;
         await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "structuring");
         // 분석을 백그라운드에서 실행하고 즉시 반환
         (async () => { try {
-          // 텍스트를 직접 analyzeDocumentStructure에 전달
-          const truncated = input.text.length > 50000 ? input.text.slice(0, 50000) + "\n...[truncated]" : input.text;
-          const systemPrompt = `You are an expert educational content analyzer.
-Analyze the provided document comprehensively and extract its structure in MULTIPLE formats simultaneously.
-Return a single JSON object containing ALL of the following fields:
-
-1. title (string): Document title
-2. summary (string): Brief summary
-3. documentType (string): One of: textbook, research, manual, report, narrative, reference, other
-4. chapters (array): Hierarchical chapter/topic/subtopic tree. Each chapter: {id, title, order, topics[]}. Each topic: {id, title, description, order, subtopics[]}. Each subtopic: {id, title, description, order}.
-5. conceptMap (array, max 15): Key concept nodes. Each: {id, label, description, type (core/sub/related), connections (array of other node ids)}
-6. keyConceptCards (array, max 20): Important terms. Each: {id, term, definition, example, relatedTerms[], importance (high/medium/low)}
-7. timeline (array): Chronological events IF applicable, else []. Each: {id, period, title, description, significance}
-8. comparisonTables (array): Comparison tables IF applicable, else []. Each: {title, headers[], rows[]}. Each row: {id, subject, values[] (values in same order as headers)}
-9. learningPath (array, 3-6 steps): Recommended learning steps. Each: {id, order, title, description, topicIds[], estimatedMinutes}
-
-Be thorough. Use the same language as the document (Korean if Korean).
-Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
-          const response = await aiInvoke(ctx.user.id, {
-            messages: [
-              { role: "system" as const, content: systemPrompt },
-              { role: "user" as const, content: `Please analyze this document titled "${doc.title}".\n\nDocument content:\n${truncated}\n\nReturn the hierarchical structure as JSON.` },
-            ],
-          });
-          const rawContent = response.choices[0]?.message?.content;
-          if (!rawContent) throw new Error("AI 분석 결과를 받지 못했습니다. (빈 응답)");
-          let parsed: Record<string, unknown>;
-          if (typeof rawContent === "object") {
-            parsed = rawContent as Record<string, unknown>;
-          } else {
-            let stripped = (rawContent as string).trim();
-            stripped = stripped.replace(/^```(?:json)?[\s\S]*?\n/, "").replace(/\n```[\s\S]*$/, "").trim();
-            if (stripped.startsWith('```')) stripped = stripped.replace(/^```[^\n]*/, '').trim();
-            if (stripped.endsWith('```')) stripped = stripped.replace(/```$/, '').trim();
-            const jsonStart = stripped.indexOf('{');
-            if (jsonStart > 0) stripped = stripped.slice(jsonStart);
-            const jsonEnd = stripped.lastIndexOf('}');
-            if (jsonEnd !== -1 && jsonEnd < stripped.length - 1) stripped = stripped.slice(0, jsonEnd + 1);
-            try { parsed = JSON.parse(stripped); } catch {
-              throw new Error(`AI 분석 결과를 파싱하지 못했습니다: ${(rawContent as string).slice(0, 200)}`);
-            }
+          const structureResult = await analyzeContentInParallel(input.text, doc.title, ctx.user.id);
+          const { detectedLanguage, ...structure } = structureResult;
+          if (detectedLanguage) {
+            const db2 = await getDb();
+            if (db2) await db2.update(documents).set({ sourceLanguage: detectedLanguage }).where(eq(documents.id, input.documentId));
           }
-          if (!parsed.title) parsed.title = doc.title;
-          if (!parsed.summary) parsed.summary = "";
-          if (!Array.isArray(parsed.chapters)) parsed.chapters = [];
-          if (!Array.isArray(parsed.conceptMap)) parsed.conceptMap = [];
-          if (!Array.isArray(parsed.keyConceptCards)) parsed.keyConceptCards = [];
-          if (!Array.isArray(parsed.timeline)) parsed.timeline = [];
-          if (!Array.isArray(parsed.comparisonTables)) parsed.comparisonTables = [];
-          if (!Array.isArray(parsed.learningPath)) parsed.learningPath = [];
-          if (!parsed.documentType) parsed.documentType = "other";
-          await updateDocumentAnalysis(input.documentId, "done", parsed, undefined, "done");
+          await updateDocumentAnalysis(input.documentId, "done", structure, undefined, "done");
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : String(e);
           await updateDocumentAnalysis(input.documentId, "error", undefined, undefined, "error", errMsg);
@@ -2761,69 +2488,4 @@ Return ONLY raw valid JSON. No markdown, no code blocks, no explanation.`;
     delete: protectedProcedure
       .input(z.object({ sessionId: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const db = await getDb();
-        if (!db) throw new Error("Database unavailable");
-        const session = await getLearningSessionById(input.sessionId);
-        if (!session || session.userId !== ctx.user.id) throw new Error("세션을 찾을 수 없습니다.");
-        const { sessionMessages, questionEvaluations, moduleEvaluations: meTable, learningSessions } = await import("../drizzle/schema");
-        const { eq } = await import("drizzle-orm");
-        // 관련 데이터 삭제 (순서: 메시지 → 평가 → 모듈 평가 → 세션)
-        await db.delete(sessionMessages).where(eq(sessionMessages.sessionId, input.sessionId));
-        await db.delete(questionEvaluations).where(eq(questionEvaluations.sessionId, input.sessionId));
-        await db.delete(meTable).where(eq(meTable.sessionId, input.sessionId));
-        await db.delete(learningSessions).where(eq(learningSessions.id, input.sessionId));
-        return { success: true } as const;
-      }),
-
-    // QLoop 모델별 세션 통계 (moduleEvaluations.moduleScore 기반 실제 점수 계산)
-    getModelStats: protectedProcedure.query(async ({ ctx }) => {
-      const sessions = await getSessionsByUserId(ctx.user.id);
-      const modelMap: Record<string, { count: number; totalScore: number; scoredCount: number }> = {
-        core: { count: 0, totalScore: 0, scoredCount: 0 },
-        curated: { count: 0, totalScore: 0, scoredCount: 0 },
-        open: { count: 0, totalScore: 0, scoredCount: 0 },
-      };
-
-      // 완료된 세션의 moduleEvaluations에서 실제 점수를 가져옴
-      const db = await getDb();
-      const sessionIdToScore: Record<number, number> = {};
-      if (db) {
-        const completedSessionIds = sessions
-          .filter((s) => s.status === "completed")
-          .map((s) => s.id);
-        if (completedSessionIds.length > 0) {
-          const evals = await db
-            .select({ sessionId: moduleEvaluations.sessionId, moduleScore: moduleEvaluations.moduleScore })
-            .from(moduleEvaluations)
-            .where(
-              and(
-                eq(moduleEvaluations.learnerId, ctx.user.id),
-                inArray(moduleEvaluations.sessionId, completedSessionIds)
-              )
-            );
-          for (const e of evals) {
-            if (e.sessionId && e.moduleScore != null) {
-              sessionIdToScore[e.sessionId] = e.moduleScore;
-            }
-          }
-        }
-      }
-
-      for (const s of sessions) {
-        const mode = (s as any).openQloopMode as number ?? 0;
-        const key = mode === 1 ? "open" : mode === 2 ? "curated" : "core";
-        modelMap[key].count++;
-        const score = sessionIdToScore[s.id] ?? null;
-        if (score !== null) {
-          modelMap[key].totalScore += score;
-          modelMap[key].scoredCount++;
-        }
-      }
-      return {
-        core: { count: modelMap.core.count, avgScore: modelMap.core.scoredCount > 0 ? Math.round(modelMap.core.totalScore / modelMap.core.scoredCount) : null },
-        curated: { count: modelMap.curated.count, avgScore: modelMap.curated.scoredCount > 0 ? Math.round(modelMap.curated.totalScore / modelMap.curated.scoredCount) : null },
-        open: { count: modelMap.open.count, avgScore: modelMap.open.scoredCount > 0 ? Math.round(modelMap.open.totalScore / modelMap.open.scoredCount) : null },
-      };
-    }),
-  }),
-});
+  

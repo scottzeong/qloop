@@ -169,11 +169,10 @@ export default function Dashboard() {
 
         if (!groupId) {
           setUploadProgress(60);
-          toast.info(`${ALLOWED_TYPES[file.type]} 분석 중...`, { duration: 3000 });
           await analyzeMutation.mutateAsync({ documentId });
           setUploadProgress(100);
-          toast.success("분석 완료! 문서가 준비되었습니다.");
           await refetchDocs();
+          // 문서 페이지로 이동 (analysisStatus "analyzing" 상태로 진입 → 폴링으로 완료 감지)
           navigate(`/documents/${documentId}`);
         } else {
           toast.success("파일이 그룹에 추가되었습니다.");
@@ -211,12 +210,12 @@ export default function Dashboard() {
         title: textTitle.trim(),
         text: textContent.trim(),
       });
-      toast.info("텍스트 분석 중...", { duration: 5000 });
+      // 분석 요청 전송 (서버에서 백그라운드 처리 후 즉시 반환)
       await analyzeTextMutation.mutateAsync({ documentId, text: textContent.trim() });
-      toast.success("분석 완료! 문서가 준비되었습니다.");
       setTextTitle("");
       setTextContent("");
       await refetchDocs();
+      // 문서 페이지로 이동 (analysisStatus "analyzing" 상태로 진입 → 폴링으로 완료 감지)
       navigate(`/documents/${documentId}`);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "분석 실패");
