@@ -22,26 +22,67 @@ import type {
   ProviderName,
 } from "./types";
 
+// ─── 연결 정보 캐싱 (요청 간 DB 조회 최소화) ────────────────────────────────
+
+interface _CachedConn {
+  providerName: ProviderName | null;
+  apiKeyEncrypted: string | null;
+  selectedModel: string | null;
+  ts: number;
+}
+
+const _connCache = new Map<number, _CachedConn>();
+const _CONN_CACHE_TTL = 60_000; // 60초
+
+/**
+ * 사용자 AI 연결 정보를 캐시와 함께 조회 (요청당 최대 1회 DB SELECT)
+ */
+async function _getCachedConn(userId: number): Promise<_CachedConn> {
+  const now = Date.now();
+  const hit = _connCache.get(userId);
+  if (hit && now - hit.ts < _CONN_CACHE_TTL) return hit;
+
+  const empty: _CachedConn = { providerName: null, apiKeyEncrypted: null, selectedModel: null, ts: now };
+  try {
+    const db = await getDb();
+    if (!db) { _connCache.set(userId, empty); return empty; }
+    const rows = await db
+      .select()
+      .from(aiConnections)
+      .where(and(eq(aiConnections.userId, userId), eq(aiConnections.isDefault, 1)))
+      .limit(1);
+    if (rows.length === 0) { _connCache.set(userId, empty); return empty; }
+    const conn = rows[0];
+    const result: _CachedConn = {
+      providerName: conn.providerName as ProviderName,
+      apiKeyEncrypted: conn.apiKeyEncrypted,
+      selectedModel: conn.selectedModel,
+      ts: now,
+    };
+    _connCache.set(userId, result);
+    return result;
+  } catch {
+    return empty;
+  }
+}
+
+/**
+ * 사용자 AI 연결 캐시 무효화 (AI 설정 변경 시 호출)
+ */
+export function invalidateUserConnectionCache(userId: number): void {
+  _connCache.delete(userId);
+}
+
 /**
  * 사용자의 Default AI Provider 어댑터를 반환
  * 설정이 없으면 null 반환 (시스템 기본 사용)
  */
 export async function getUserAIAdapter(userId: number): Promise<AIProviderAdapter | null> {
   try {
-    const db = await getDb();
-    if (!db) return null;
-    const connections = await db
-      .select()
-      .from(aiConnections)
-      .where(and(eq(aiConnections.userId, userId), eq(aiConnections.isDefault, 1)))
-      .limit(1);
-
-    if (connections.length === 0) return null;
-
-    const conn = connections[0];
+    const conn = await _getCachedConn(userId);
+    if (!conn.providerName || !conn.apiKeyEncrypted) return null;
     const apiKey = decryptApiKey(conn.apiKeyEncrypted);
-
-    return createProviderAdapter(conn.providerName as ProviderName, apiKey, conn.selectedModel);
+    return createProviderAdapter(conn.providerName, apiKey, conn.selectedModel ?? "");
   } catch {
     return null;
   }
@@ -52,15 +93,8 @@ export async function getUserAIAdapter(userId: number): Promise<AIProviderAdapte
  */
 export async function getUserProviderName(userId: number): Promise<ProviderName | null> {
   try {
-    const db = await getDb();
-    if (!db) return null;
-    const connections = await db
-      .select()
-      .from(aiConnections)
-      .where(and(eq(aiConnections.userId, userId), eq(aiConnections.isDefault, 1)))
-      .limit(1);
-    if (connections.length === 0) return null;
-    return connections[0].providerName as ProviderName;
+    const conn = await _getCachedConn(userId);
+    return conn.providerName;
   } catch {
     return null;
   }
@@ -226,35 +260,24 @@ export async function aiInvoke(
 ): Promise<{ choices: Array<{ message: { content: string } }> }> {
   // 사용자 어댑터 확인
   if (userId) {
-    // getUserAIAdapter를 통해 DB 조회 (mock 호환)
-    const adapter = await getUserAIAdapter(userId);
-    if (adapter) {
-      // Provider 이름 조회 (PDF 처리 분기용)
-      const providerName = await getUserProviderName(userId);
+    // 캐시된 연결 정보 단일 조회 (DB 1회)
+    const connInfo = await _getCachedConn(userId);
+    const adapter = connInfo.providerName && connInfo.apiKeyEncrypted
+      ? (() => { try { return createProviderAdapter(connInfo.providerName!, decryptApiKey(connInfo.apiKeyEncrypted!), connInfo.selectedModel ?? ""); } catch { return null; } })()
+      : null;
 
-      // PDF file_url이 포함된 경우 각 Provider별 네이티브 PDF 처리
-      if (providerName && hasPdfFileUrl(params.messages)) {
-        // API Key와 모델 정보를 다시 조회
-        const db = await getDb();
-        if (db) {
-          const connections = await db
-            .select()
-            .from(aiConnections)
-            .where(and(eq(aiConnections.userId, userId), eq(aiConnections.isDefault, 1)))
-            .limit(1);
-          if (connections.length > 0) {
-            const conn = connections[0];
-            const apiKey = decryptApiKey(conn.apiKeyEncrypted);
-            const content = await invokePdfWithProvider(
-              providerName,
-              apiKey,
-              conn.selectedModel,
-              params.messages,
-              params.response_format
-            );
-            return { choices: [{ message: { content } }] };
-          }
-        }
+    if (adapter) {
+      // PDF file_url이 포함된 경우 각 Provider별 네이티브 PDF 처리 (추가 DB 조회 없음)
+      if (connInfo.providerName && connInfo.apiKeyEncrypted && hasPdfFileUrl(params.messages)) {
+        const apiKey = decryptApiKey(connInfo.apiKeyEncrypted);
+        const content = await invokePdfWithProvider(
+          connInfo.providerName,
+          apiKey,
+          connInfo.selectedModel ?? "",
+          params.messages,
+          params.response_format
+        );
+        return { choices: [{ message: { content } }] };
       }
 
       // 일반 텍스트 요청: 기존 어댑터 방식

@@ -1335,14 +1335,25 @@ export default function DocumentDetail() {
 
   const { data: doc, isLoading, refetch } = trpc.document.get.useQuery(
     { documentId: docId },
+    { enabled: isAuthenticated && !!docId }
+  );
+
+  // 분석 중일 때 경량 상태 엔드포인트만 2초 폴링 (전체 문서 JSON 반복 수신 방지)
+  const isCurrentlyAnalyzing =
+    doc?.analysisStatus === "analyzing" || (doc as any)?.contextaStatus === "analyzing";
+  trpc.document.getAnalysisStatus.useQuery(
+    { documentId: docId },
     {
-      enabled: isAuthenticated && !!docId,
-      // 분석 중일 때 2초마다 폴링하여 단계 업데이트 반영
-      refetchInterval: (query) => {
-        const d = query.state.data as any;
-        return (d?.analysisStatus === "analyzing" || d?.contextaStatus === "analyzing") ? 2000 : false;
+      enabled: isAuthenticated && !!docId && isCurrentlyAnalyzing,
+      refetchInterval: 2000,
+      onSuccess: (status) => {
+        // 분석 완료 또는 오류 시 전체 문서 1회 재조회
+        const done =
+          (status.analysisStatus !== "analyzing" && status.analysisStatus !== "pending") ||
+          (status.contextaStatus !== null && status.contextaStatus !== "analyzing");
+        if (done) refetch();
       },
-    }
+    } as any
   );
 
   // 구조 선택 state: null=미선택, 'tree'|'conceptMap'|'learningPath'=미리보기 중

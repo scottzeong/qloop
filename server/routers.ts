@@ -1109,8 +1109,9 @@ export const appRouter = router({
         if (existing.length > 0) throw new Error("이미 사용 중인 이메일입니다");
         const openId = nanoid();
         const passwordHash = await hashPassword(input.password);
-        const userCount = await db.select().from(users);
-        const isFirstUser = userCount.length === 0;
+        const { sql: sqlFn } = await import("drizzle-orm");
+        const [countRow] = await db.select({ count: sqlFn<number>`COUNT(*)` }).from(users);
+        const isFirstUser = Number(countRow?.count ?? 1) === 0;
         const role = isFirstUser ? "superadmin" : "user";
         await db.insert(users).values({ openId, email: input.email, name: input.name, passwordHash, role, loginMethod: "email", lastSignedIn: new Date() });
         const sessionToken = await sdk.createSessionToken(openId, { name: input.name, expiresInMs: SESSION_TTL_MS });
@@ -1532,6 +1533,11 @@ Return ONLY valid JSON matching the schema exactly.`;
 
         const buffer = Buffer.from(input.fileData, "base64");
 
+        // 실제 버퍼 크기 재검증 (클라이언트가 fileSize를 속일 수 있으므로)
+        if (buffer.length > MAX_FILE_SIZE) {
+          throw new Error("파일 크기가 너무 큽니다. 최대 50MB까지 업로드 가능합니다.");
+        }
+
         // magic bytes로 실제 파일 형식 검증
         const MAGIC_BYTES: Record<string, number[][]> = {
           "application/pdf": [[0x25, 0x50, 0x44, 0x46]], // %PDF
@@ -1574,8 +1580,8 @@ Return ONLY valid JSON matching the schema exactly.`;
     uploadText: protectedProcedure
       .input(
         z.object({
-          title: z.string().min(1, "제목을 입력해주세요."),
-          text: z.string().min(10, "내용을 10자 이상 입력해주세요."),
+          title: z.string().min(1, "제목을 입력해주세요.").max(512),
+          text: z.string().min(10, "내용을 10자 이상 입력해주세요.").max(500_000, "텍스트는 최대 500,000자까지 입력 가능합니다."),
           groupId: z.number().optional(),
           learningLanguage: z.string().default("ko"),
         })
@@ -1702,6 +1708,7 @@ Return ONLY valid JSON matching the schema exactly.`;
           analysisStatus: (doc as any).analysisStatus as string,
           analysisStep: (doc as any).analysisStep as string | null,
           analysisError: (doc as any).analysisError as string | null,
+          contextaStatus: (doc as any).contextaStatus as string | null,
         };
       }),
 
@@ -1776,7 +1783,7 @@ Return ONLY valid JSON matching the schema exactly.`;
         await db.update(documents).set({ learningLanguage: input.learningLanguage }).where(eq(documents.id, input.documentId));
         return { success: true };
       }),
-    // 재분석 (학습 구조 잠금 초기화 포함)
+    // 재분석 (학습 구조 잠금 초기화 포함) — fire-and-forget으로 즉시 반환
     reanalyze: protectedProcedure
       .input(z.object({ documentId: z.number() }))
       .mutation(async ({ ctx, input }) => {
@@ -1792,8 +1799,8 @@ Return ONLY valid JSON matching the schema exactly.`;
           analysisStep: "extracting",
           structure: null,
         }).where(eq(documents.id, input.documentId));
-        try {
-          // 텍스트 타입 문서: S3에서 텍스트 읽어서 분석
+        // 분석을 백그라운드에서 실행하고 즉시 반환 (Vercel 타임아웃 방지)
+        (async () => { try {
           if (doc.fileType === "text") {
             const signedUrl = await storageGetSignedUrl(doc.storageKey);
             const res = await fetch(signedUrl);
@@ -1807,7 +1814,7 @@ Return ONLY valid JSON matching the schema exactly.`;
               if (db3) await db3.update(documents).set({ sourceLanguage: detectedLanguage }).where(eq(documents.id, input.documentId));
             }
             await updateDocumentAnalysis(input.documentId, "done", structure, undefined, "done");
-            return { success: true, structure, detectedLanguage };
+            return;
           }
           const actualKey = doc.storageUrl.replace(/^\/r2-storage\//, "").replace(/^\/manus-storage\//, "");
           const signedUrl = await storageGetSignedUrl(actualKey);
@@ -1815,20 +1822,17 @@ Return ONLY valid JSON matching the schema exactly.`;
           await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "structuring");
           const structureResult = await analyzeDocumentStructure(signedUrl, doc.title, mimeForAnalysis, ctx.user.id);
           const { detectedLanguage, ...structure } = structureResult;
-          // 원문 언어 저장
           if (detectedLanguage) {
-            const db2 = await getDb();
-            if (db2) {
-              await db2.update(documents).set({ sourceLanguage: detectedLanguage }).where(eq(documents.id, input.documentId));
-            }
+            const dbLang = await getDb();
+            if (dbLang) await dbLang.update(documents).set({ sourceLanguage: detectedLanguage }).where(eq(documents.id, input.documentId));
           }
           await updateDocumentAnalysis(input.documentId, "done", structure, undefined, "done");
-          return { success: true, structure, detectedLanguage };
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : String(e);
           await updateDocumentAnalysis(input.documentId, "error", undefined, undefined, "error", errMsg);
-          throw e;
         }
+        })();
+        return { success: true };
       }),
   }),
 
@@ -1994,7 +1998,9 @@ Return ONLY valid JSON matching the schema exactly.`;
         // 대화 히스토리 조회
         const messages = await getSessionMessages(input.sessionId);
         // questionTypeName을 messageType에 포함하여 generateNextMessage에서 이전 질문 유형 추적 가능
-        const history = messages.map((m) => ({
+        // 최근 40개 메시지만 LLM에 전달 (토큰 과부하 방지, 오래된 대화는 생략)
+        const MAX_HISTORY = 40;
+        const history = messages.slice(-MAX_HISTORY).map((m) => ({
           role: m.role,
           content: m.content,
           // AI 질문 메시지에 questionTypeName이 있으면 "question:TYPE" 형식으로 저장
@@ -2089,7 +2095,7 @@ Return ONLY valid JSON matching the schema exactly.`;
                     questionId: prevQId,
                     questionTypeId: prevQ.questionTypeId,
                     responseText: input.content,
-                    sourceContext: `${doc.title} > ${session.startTopicTitle}`,
+                    sourceContext: `${doc?.title ?? sessionGroup?.name ?? ""} > ${session.startTopicTitle}`,
                     userId: ctx.user.id,
                   }).catch(console.warn);
                 }
@@ -2495,10 +2501,10 @@ Return ONLY valid JSON matching the schema exactly.`;
     getTopicProgress: protectedProcedure
       .input(z.object({ documentId: z.number() }))
       .query(async ({ ctx, input }) => {
-        const sessions = await getSessionsByUserId(ctx.user.id);
+        // 전체 세션 로드 대신 documentId로 직접 조회
+        const sessions = await getSessionsByDocumentId(input.documentId, ctx.user.id);
         const progressMap: Record<string, string> = {};
         for (const s of sessions) {
-          if (s.documentId !== input.documentId) continue;
           if (s.currentTopicId) {
             if (!progressMap[s.currentTopicId] || progressMap[s.currentTopicId] !== "completed") {
               progressMap[s.currentTopicId] = "active";

@@ -85,6 +85,14 @@ export default function Dashboard() {
 
   const { data: documents, refetch: refetchDocs } = trpc.document.list.useQuery(undefined, {
     enabled: isAuthenticated,
+    // 분석 중인 문서가 있을 때만 3초 폴링 (단일 쿼리로 통합)
+    refetchInterval: (query) => {
+      const docs = (query.state.data as typeof documents) ?? [];
+      const analyzing = docs.some(
+        (d) => d.analysisStatus === "analyzing" || (d.analysisStatus === "pending" && (d as any).analysisStep)
+      );
+      return analyzing ? 3000 : false;
+    },
   });
   const { data: groups, refetch: refetchGroups } = trpc.group.list.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -98,14 +106,6 @@ export default function Dashboard() {
     enabled: isAuthenticated,
     refetchInterval: 5 * 60 * 1000, // 5분마다
   });
-
-  // ④ 분석 중 문서가 있을 때 3초마다 폴링
-  const hasAnalyzingDoc = (documents ?? []).some((d) => d.analysisStatus === "analyzing" || d.analysisStatus === "pending" && (d as any).analysisStep);
-  const { data: _analysisPolled } = trpc.document.list.useQuery(undefined, {
-    enabled: isAuthenticated && hasAnalyzingDoc,
-    refetchInterval: hasAnalyzingDoc ? 3000 : false,
-    onSuccess: () => { if (hasAnalyzingDoc) refetchDocs(); },
-  } as any);
 
   // 텍스트 입력 모드 상태
   const [uploadMode, setUploadMode] = useState<"file" | "text">("file");

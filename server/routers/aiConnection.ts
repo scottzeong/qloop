@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { aiConnections } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { encryptApiKey, decryptApiKey, maskApiKey } from "../ai/crypto";
-import { createProviderAdapter } from "../ai/aiRouter";
+import { createProviderAdapter, invalidateUserConnectionCache } from "../ai/aiRouter";
 import type { ProviderName } from "../ai/types";
 
 const PROVIDER_MODELS: Record<ProviderName, string[]> = {
@@ -145,6 +145,7 @@ export const aiConnectionRouter = router({
         });
       }
 
+      invalidateUserConnectionCache(ctx.user.id);
       return { success: true };
     }),
 
@@ -172,6 +173,7 @@ export const aiConnectionRouter = router({
       }
 
       await db.delete(aiConnections).where(eq(aiConnections.id, input.connectionId));
+      invalidateUserConnectionCache(ctx.user.id);
       return { success: true };
     }),
 
@@ -257,6 +259,7 @@ export const aiConnectionRouter = router({
         .set({ isDefault: 1 })
         .where(eq(aiConnections.id, input.connectionId));
 
+      invalidateUserConnectionCache(ctx.user.id);
       return { success: true };
     }),
 
@@ -282,6 +285,7 @@ export const aiConnectionRouter = router({
           )
         );
 
+      invalidateUserConnectionCache(ctx.user.id);
       return { success: true };
     }),
 });
