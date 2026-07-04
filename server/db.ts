@@ -38,6 +38,7 @@ export async function runStartupMigrations() {
     `ALTER TABLE \`documents\` ADD COLUMN \`contextaStatus\` ENUM('pending','analyzing','done','error','skipped') NULL AFTER \`analysisError\``,
     `ALTER TABLE \`documents\` ADD COLUMN \`contextaStep\` ENUM('content','structure','logic','concept','understanding','critical','done','error') NULL AFTER \`contextaStatus\``,
     `ALTER TABLE \`documents\` ADD COLUMN \`contextaAnalysis\` JSON NULL AFTER \`contextaStep\``,
+    `ALTER TABLE \`learningSessions\` ADD COLUMN \`learnerLevel\` ENUM('student','college','general') NOT NULL DEFAULT 'general' AFTER \`libraryContextIds\``,
   ];
 
   for (const query of alters) {

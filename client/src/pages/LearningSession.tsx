@@ -278,6 +278,12 @@ export default function LearningSession() {
                 세션 완료
               </span>
             )}
+            {/* 학습자 레벨 배지 */}
+            {session && (session as any).learnerLevel && (session as any).learnerLevel !== "general" && (
+              <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg border border-[#5B5BD6]/30 bg-[#5B5BD6]/10 text-[#5B5BD6] whitespace-nowrap">
+                {(session as any).learnerLevel === "student" ? "Student" : "College"}
+              </span>
+            )}
             {/* QLoop 모델 선택 */}
             {!isCompleted && (
               <div className="relative">

@@ -1354,6 +1354,8 @@ export default function DocumentDetail() {
   const [evalEnabled, setEvalEnabled] = useState<boolean | null>(null);
   // QLoop 모델 선택 state
   const [qloopModel, setQloopModel] = useState<"core" | "curated" | "open">("core");
+  // 학습자 레벨 선택 state
+  const [learnerLevel, setLearnerLevel] = useState<"student" | "college" | "general">("general");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // ⑤ 세션 재시작 다이얼로그
   const [showResumeDialog, setShowResumeDialog] = useState(false);
@@ -1447,6 +1449,7 @@ export default function DocumentDetail() {
         evaluationPolicyId: evalEnabled ? (selectedPolicyId ?? undefined) : undefined,
         selectedStructure: selectedStructure ?? undefined,
         qloopModel,
+        learnerLevel,
       });
       if ((result as any).resumed) {
         // 이전 세션 재개 — 사용자에게 확인 요청
@@ -2074,6 +2077,30 @@ export default function DocumentDetail() {
                 )}
               </div>
             )}
+            {/* 학습자 레벨 선택 */}
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-black/50 mb-3">학습자 레벨 선택 <span className="text-red-600">*필수</span></p>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { key: "student", label: "Student", age: "13세 이하", desc: "쉬운 말과 친근한 예시로 설명해요" },
+                  { key: "college", label: "College", age: "14–18세", desc: "표준 학습 수준의 질문과 설명" },
+                  { key: "general", label: "General", age: "19세 이상", desc: "전문 용어와 심화 분석 포함" },
+                ] as const).map(({ key, label, age, desc }) => (
+                  <button
+                    key={key}
+                    onClick={() => setLearnerLevel(key)}
+                    className={`border-2 p-3 text-left transition-colors ${
+                      learnerLevel === key ? "border-[#5B5BD6] bg-[#5B5BD6] text-white" : "border-black/20 hover:border-[#5B5BD6]/50"
+                    }`}
+                  >
+                    <div className={`text-sm font-black mb-0.5 ${learnerLevel === key ? "" : "text-black"}`}>{label}</div>
+                    <div className={`text-[10px] font-bold mb-1 ${learnerLevel === key ? "opacity-80" : "text-[#5B5BD6]"}`}>{age}</div>
+                    <div className={`text-[10px] leading-tight ${learnerLevel === key ? "opacity-70" : "text-black/40"}`}>{desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* QLoop 모델 선택 */}
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-black/50 mb-3">QLoop 모델 선택 <span className="text-red-600">*필수</span></p>

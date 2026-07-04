@@ -114,6 +114,8 @@ export const learningSessions = mysqlTable("learningSessions", {
   selectedStructure: mysqlEnum("selectedStructure", ["tree", "conceptMap", "learningPath"]),
   // 학습 시 포함할 Knowledge Library 자료 ID 목록 (JSON 배열)
   libraryContextIds: json("libraryContextIds").$type<number[]>(),
+  // 학습자 레벨 (질문 표현 난이도 조정)
+  learnerLevel: mysqlEnum("learnerLevel", ["student", "college", "general"]).default("general").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   completedAt: timestamp("completedAt"),

@@ -394,6 +394,28 @@ const LANGUAGE_NAMES: Record<string, string> = {
   ar: "Arabic", ru: "Russian", it: "Italian", nl: "Dutch",
 };
 
+// 학습자 레벨별 질문 스타일 지침
+const LEARNER_LEVEL_INSTRUCTIONS: Record<string, string> = {
+  student: `\n\nLEARNER LEVEL: Student (age 13 and under)
+LANGUAGE & STYLE RULES:
+- Use very simple, everyday Korean. Short sentences only. No more than 2 sentences per question.
+- Replace any technical or academic terms with simple words (e.g., "개념" → "생각", "논리" → "이유", "분석" → "살펴보기").
+- Use relatable analogies from daily life (school, games, food, friends, hobbies).
+- Ask one small, concrete thing at a time. Never ask abstract "why" questions without a concrete hook.
+- Tone: friendly, encouraging, like a kind older friend. Use informal speech (해요체 or 반말).
+- Keep feedback to one very short praise sentence before the next question.
+- Example style: "그러면 이 부분에서 무엇이 가장 재미있었어?" or "왜 그렇게 생각해? 예를 들어서 설명해줄 수 있어?"`,
+  college: `\n\nLEARNER LEVEL: College-level student (age 14–18)
+LANGUAGE & STYLE RULES:
+- Use clear, standard Korean suitable for high school students. Can use common academic terms but define unfamiliar ones briefly.
+- Questions can be 1–3 sentences. Moderately complex reasoning is fine.
+- Use relatable examples (current events, pop culture, social issues, career goals).
+- Can ask "why" and "how" questions with some analytical depth.
+- Tone: respectful and motivating. Use 해요체.
+- Example style: "이 개념이 실생활에서 어떻게 활용될 수 있을까요?" or "다른 관점에서 보면 어떤 점이 달라질까요?"`,
+  general: ``, // 기본값: 기존 동작 유지
+};
+
 /**
  * Open QLoop: 인터넷 검색으로 토픽 관련 최신 컨텍스트 수집
  */
@@ -486,7 +508,8 @@ async function generateFirstQuestion(
   learningLanguage = "ko",
   libraryContext = "",
   userId: number | null = null,
-  topicContext = ""
+  topicContext = "",
+  learnerLevel: "student" | "college" | "general" = "general"
 ): Promise<string> {
   let webContext = "";
   if (openQloopMode) {
@@ -517,7 +540,7 @@ CRITICAL RULES:
 - The question should be open-ended and thought-provoking.
 - Assess the learner's baseline understanding of the topic concept itself.
 - Be directly related to the topic.
-- Use the same language as the topic title (Korean if Korean).${openQloopInstruction}${languageInstruction}${libraryContextInstruction}${topicContextInstruction}
+- Use the same language as the topic title (Korean if Korean).${openQloopInstruction}${languageInstruction}${libraryContextInstruction}${topicContextInstruction}${LEARNER_LEVEL_INSTRUCTIONS[learnerLevel] ?? ""}
 Return only the question text, nothing else.`,
       },
       {
@@ -830,7 +853,8 @@ async function generateNextMessage(
   learningLanguage = "ko",
   libraryContext = "",
   userId: number | null = null,
-  topicContext = "" // 문서 구조에서 추출한 토픽 설명 + 핵심 개념 카드
+  topicContext = "", // 문서 구조에서 추출한 토픽 설명 + 핵심 개념 카드
+  learnerLevel: "student" | "college" | "general" = "general"
 ): Promise<{ content: string; messageType: string; isTopicComplete: boolean; questionType?: string }> {
   // Open QLoop: 대화 초반(1~3번째 답변)에만 웹 검색 수행 (비용 절감)
   let webContextForNext = "";
@@ -916,11 +940,12 @@ async function generateNextMessage(
   const topicContextInstruction = topicContext
     ? `\n\nTOPIC CONTENT (from document analysis — this is ALL the material the learner must cover):\n${topicContext}\n\nCONTENT COVERAGE RULE: You MUST systematically cover every major section, concept, and subtopic listed above. Do NOT stay on the same concept for more than 2 consecutive questions. Look at the conversation history and identify which concepts have NOT been discussed yet — prioritize those for the next question. Your goal is that by the end of the session, the learner has been asked about every major concept in the material.`
     : "";
+  const learnerLevelInstruction = LEARNER_LEVEL_INSTRUCTIONS[learnerLevel] ?? "";
   const baseRules = `CRITICAL RULES:
 - Do NOT ask the learner to read, look at, or refer to any document, book, or material.
 - Do NOT say things like "according to the document", "as described in the text", "what does the document say about...".
 - All questions and feedback must be based on the learner's own thinking and understanding.
-- Use the same language as the conversation (Korean if Korean).${langInstruction2}${topicContextInstruction}`;
+- Use the same language as the conversation (Korean if Korean).${langInstruction2}${topicContextInstruction}${learnerLevelInstruction}`;
 
   if (isUserQuestion) {
     const response = await aiInvoke(userId, {
@@ -1822,6 +1847,7 @@ Return ONLY valid JSON matching the schema exactly.`;
           evaluationPolicyId: z.number().optional(),
           selectedStructure: z.enum(["tree", "conceptMap", "learningPath"]).optional(),
           qloopModel: z.enum(["core", "curated", "open"]).default("core"),
+          learnerLevel: z.enum(["student", "college", "general"]).default("general"),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -1885,6 +1911,7 @@ Return ONLY valid JSON matching the schema exactly.`;
           evaluationPolicyId: input.evaluationPolicyId ?? null,
           selectedStructure: input.selectedStructure ?? null,
           libraryContextIds: null, // qloopModel로 대체 (Curated/Open은 런타임에 자동 로드)
+          learnerLevel: input.learnerLevel,
         });
         // 첫 번째 질문 생성 — 문서 직접 참조 없이 토픽 정보만 사용
         const learningLang = (doc as any).learningLanguage || "ko";
@@ -1905,7 +1932,8 @@ Return ONLY valid JSON matching the schema exactly.`;
             learningLang,
             libraryContext,
             ctx.user.id,
-            firstTopicContext
+            firstTopicContext,
+            input.learnerLevel
           );
         } catch (aiErr) {
           // AI 호출 실패 시 세션을 error 상태로 업데이트 후 예외 전파
@@ -2026,7 +2054,8 @@ Return ONLY valid JSON matching the schema exactly.`;
             docLearningLang,
             libraryContext,
             ctx.user.id,
-            topicContext
+            topicContext,
+            ((session as any).learnerLevel as "student" | "college" | "general") ?? "general"
           );
         } catch (aiErr) {
           throw new Error("AI 응답 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
