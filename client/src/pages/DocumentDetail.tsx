@@ -1458,7 +1458,7 @@ export default function DocumentDetail() {
         setStarting(false);
         return;
       }
-      navigate(`/sessions/${result.sessionId}`);
+      navigate(`/sessions/${result.sessionId}?level=${learnerLevel}`);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "세션 시작 실패");
       setStarting(false);

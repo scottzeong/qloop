@@ -1,6 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { useLocation, useParams } from "wouter";
+import { useLocation, useParams, useSearch } from "wouter";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import PageHeader from "@/components/PageHeader";
@@ -108,6 +108,13 @@ export default function LearningSession() {
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [currentModel, setCurrentModel] = useState<"core" | "curated" | "open">("core");
+  const search = useSearch();
+  const [learnerLevel, setLearnerLevel] = useState<"student" | "college" | "general">(() => {
+    const params = new URLSearchParams(search);
+    const lvl = params.get("level");
+    if (lvl === "student" || lvl === "college") return lvl;
+    return "general";
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -172,7 +179,7 @@ export default function LearningSession() {
     setInput("");
     setSending(true);
     try {
-      const result = await sendMessage.mutateAsync({ sessionId, content, isUserQuestion });
+      const result = await sendMessage.mutateAsync({ sessionId, content, isUserQuestion, learnerLevel });
       await refetchMessages();
       await refetchSession();
       if (result.isTopicComplete) toast.success("토픽 학습 완료!", { duration: 3000 });
@@ -279,9 +286,9 @@ export default function LearningSession() {
               </span>
             )}
             {/* 학습자 레벨 배지 */}
-            {session && (session as any).learnerLevel && (session as any).learnerLevel !== "general" && (
+            {learnerLevel !== "general" && (
               <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg border border-[#5B5BD6]/30 bg-[#5B5BD6]/10 text-[#5B5BD6] whitespace-nowrap">
-                {(session as any).learnerLevel === "student" ? "Student" : "College"}
+                {learnerLevel === "student" ? "Student" : "College"}
               </span>
             )}
             {/* QLoop 모델 선택 */}

@@ -1911,7 +1911,6 @@ Return ONLY valid JSON matching the schema exactly.`;
           evaluationPolicyId: input.evaluationPolicyId ?? null,
           selectedStructure: input.selectedStructure ?? null,
           libraryContextIds: null, // qloopModel로 대체 (Curated/Open은 런타임에 자동 로드)
-          learnerLevel: input.learnerLevel,
         });
         // 첫 번째 질문 생성 — 문서 직접 참조 없이 토픽 정보만 사용
         const learningLang = (doc as any).learningLanguage || "ko";
@@ -1963,6 +1962,7 @@ Return ONLY valid JSON matching the schema exactly.`;
           sessionId: z.number(),
           content: z.string().max(4000, "메시지는 최대 4000자까지 입력 가능합니다."),
           isUserQuestion: z.boolean().default(false),
+          learnerLevel: z.enum(["student", "college", "general"]).default("general"),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -2055,7 +2055,7 @@ Return ONLY valid JSON matching the schema exactly.`;
             libraryContext,
             ctx.user.id,
             topicContext,
-            ((session as any).learnerLevel as "student" | "college" | "general") ?? "general"
+            input.learnerLevel
           );
         } catch (aiErr) {
           throw new Error("AI 응답 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
