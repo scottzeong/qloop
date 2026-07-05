@@ -133,21 +133,27 @@ export function AIChatBox({
   const [minHeightForLastMessage, setMinHeightForLastMessage] = useState(0);
 
   useEffect(() => {
-    if (containerRef.current && inputAreaRef.current) {
-      const containerHeight = containerRef.current.offsetHeight;
-      const inputHeight = inputAreaRef.current.offsetHeight;
-      const scrollAreaHeight = containerHeight - inputHeight;
+    const recalculate = () => {
+      if (containerRef.current && inputAreaRef.current) {
+        const containerHeight = containerRef.current.offsetHeight;
+        const inputHeight = inputAreaRef.current.offsetHeight;
+        const scrollAreaHeight = containerHeight - inputHeight;
 
-      // Reserve space for:
-      // - padding (p-4 = 32px top+bottom)
-      // - user message: 40px (item height) + 16px (margin-top from space-y-4) = 56px
-      // Note: margin-bottom is not counted because it naturally pushes the assistant message down
-      const userMessageReservedHeight = 56;
-      const calculatedHeight = scrollAreaHeight - 32 - userMessageReservedHeight;
+        // Reserve space for:
+        // - padding (p-4 = 32px top+bottom)
+        // - user message: 40px (item height) + 16px (margin-top from space-y-4) = 56px
+        // Note: margin-bottom is not counted because it naturally pushes the assistant message down
+        const userMessageReservedHeight = 56;
+        const calculatedHeight = scrollAreaHeight - 32 - userMessageReservedHeight;
 
-      setMinHeightForLastMessage(Math.max(0, calculatedHeight));
-    }
-  }, []);
+        setMinHeightForLastMessage(Math.max(0, calculatedHeight));
+      }
+    };
+
+    recalculate();
+    window.addEventListener("resize", recalculate);
+    return () => window.removeEventListener("resize", recalculate);
+  }, [displayMessages.length]);
 
   // Scroll to bottom helper function with smooth animation
   const scrollToBottom = () => {

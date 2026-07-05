@@ -1,4 +1,4 @@
-import { eq, desc, and, isNull, sql } from "drizzle-orm";
+import { eq, desc, and, isNull, sql, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
@@ -301,6 +301,17 @@ export async function getSessionsByDocumentId(documentId: number, userId: number
     .select()
     .from(learningSessions)
     .where(and(eq(learningSessions.documentId, documentId), eq(learningSessions.userId, userId)))
+    .orderBy(desc(learningSessions.createdAt));
+}
+
+/** 여러 문서의 세션을 한 번의 쿼리로 조회 (N+1 방지) */
+export async function getSessionsByDocumentIds(documentIds: number[], userId: number) {
+  const db = await getDb();
+  if (!db || documentIds.length === 0) return [];
+  return db
+    .select()
+    .from(learningSessions)
+    .where(and(inArray(learningSessions.documentId, documentIds), eq(learningSessions.userId, userId)))
     .orderBy(desc(learningSessions.createdAt));
 }
 

@@ -406,6 +406,7 @@ export const contextaRouter = router({
 
       const [doc] = await db
         .select({
+          userId: documents.userId,
           contextaStatus: documents.contextaStatus,
           contextaStep: documents.contextaStep,
           contextaAnalysis: documents.contextaAnalysis,
@@ -414,8 +415,11 @@ export const contextaRouter = router({
         .where(eq(documents.id, input.documentId))
         .limit(1);
 
-      if (!doc) throw new TRPCError({ code: "NOT_FOUND" });
-      return doc as {
+      if (!doc || doc.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "문서를 찾을 수 없습니다." });
+      }
+      const { userId: _userId, ...result } = doc;
+      return result as {
         contextaStatus: string | null;
         contextaStep: string | null;
         contextaAnalysis: ContextaAnalysis | null;

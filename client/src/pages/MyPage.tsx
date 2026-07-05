@@ -1,6 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
+import { getLoginUrl } from "@/const";
 import PageHeader from "@/components/PageHeader";
 import { Flame, Trophy, Target, BookOpen, TrendingUp, Award } from "lucide-react";
 
@@ -86,15 +87,35 @@ function TopicBar({ topic, pct }: { topic: string; pct: number }) {
 
 export default function MyPage() {
   const [, navigate] = useLocation();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
 
   const { data: stats, isLoading } = trpc.session.getStats.useQuery(undefined, {
     enabled: isAuthenticated,
   });
 
+  if (loading) {
+    return (
+      <div className="min-h-[100dvh] bg-[#EDECEA] flex items-center justify-center">
+        <div className="flex items-center gap-3">
+          <div className="w-3 h-3 rounded-full animate-pulse" style={{ backgroundColor: "var(--pm-indigo)" }} />
+          <span className="pm-label">로딩 중</span>
+        </div>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
-    navigate("/login");
-    return null;
+    return (
+      <div className="min-h-[100dvh] bg-[#EDECEA] flex flex-col items-center justify-center gap-4">
+        <p className="text-sm text-[#737373]">로그인이 필요합니다</p>
+        <a
+          href={getLoginUrl()}
+          className="bg-[#0F0F0F] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#262626] transition-colors"
+        >
+          로그인
+        </a>
+      </div>
+    );
   }
 
   if (isLoading || !stats) {

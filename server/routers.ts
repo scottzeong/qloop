@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME, ONE_YEAR_MS, SESSION_TTL_MS } from "../shared/const";
 import { hashPassword, verifyPassword } from "./_core/password";
 import { sdk } from "./_core/sdk";
@@ -43,6 +44,7 @@ import {
   getLearningSessionById,
   getSessionsByUserId,
   getSessionsByDocumentId,
+  getSessionsByDocumentIds,
   getSessionsByGroupId,
   updateLearningSession,
   createSessionMessage,
@@ -1102,11 +1104,11 @@ export const appRouter = router({
       }))
       .mutation(async ({ input, ctx }) => {
         const db = await getDb();
-        if (!db) throw new Error("Database unavailable");
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
         const { users } = await import("../drizzle/schema");
         const { eq } = await import("drizzle-orm");
         const existing = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
-        if (existing.length > 0) throw new Error("이미 사용 중인 이메일입니다");
+        if (existing.length > 0) throw new TRPCError({ code: "CONFLICT", message: "이미 사용 중인 이메일입니다" });
         const openId = nanoid();
         const passwordHash = await hashPassword(input.password);
         const { sql: sqlFn } = await import("drizzle-orm");
@@ -1129,18 +1131,18 @@ export const appRouter = router({
         const ip = (ctx.req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? ctx.req.socket?.remoteAddress ?? "unknown";
         checkLoginRateLimitDb(ip);
         const db = await getDb();
-        if (!db) throw new Error("Database unavailable");
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
         const { users } = await import("../drizzle/schema");
         const { eq } = await import("drizzle-orm");
         const [user] = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
         if (!user || !user.passwordHash) {
           recordLoginFailureDb(ip);
-          throw new Error("이메일 또는 비밀번호가 올바르지 않습니다");
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "이메일 또는 비밀번호가 올바르지 않습니다" });
         }
         const valid = await verifyPassword(input.password, user.passwordHash);
         if (!valid) {
           recordLoginFailureDb(ip);
-          throw new Error("이메일 또는 비밀번호가 올바르지 않습니다");
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "이메일 또는 비밀번호가 올바르지 않습니다" });
         }
         resetLoginAttemptsDb(ip);
         const sessionToken = await sdk.createSessionToken(user.openId, { name: user.name || "", expiresInMs: SESSION_TTL_MS });
@@ -1157,9 +1159,9 @@ export const appRouter = router({
 
     // ── 사용자 관리 (superadmin 전용) ──────────────────────────────────────────
     listUsers: protectedProcedure.query(async ({ ctx }) => {
-      if (ctx.user.role !== "superadmin") throw new Error("권한이 없습니다");
+      if (ctx.user.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "권한이 없습니다" });
       const db = await getDb();
-      if (!db) throw new Error("Database unavailable");
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
       const { users } = await import("../drizzle/schema");
       return db.select({
         id: users.id,
@@ -1179,10 +1181,10 @@ export const appRouter = router({
         role: z.enum(["user", "admin", "instructor", "superadmin"]),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user.role !== "superadmin") throw new Error("권한이 없습니다");
-        if (input.openId === ctx.user.openId) throw new Error("자기 자신의 역할은 변경할 수 없습니다");
+        if (ctx.user.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "권한이 없습니다" });
+        if (input.openId === ctx.user.openId) throw new TRPCError({ code: "BAD_REQUEST", message: "자기 자신의 역할은 변경할 수 없습니다" });
         const db = await getDb();
-        if (!db) throw new Error("Database unavailable");
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
         const { users } = await import("../drizzle/schema");
         const { eq } = await import("drizzle-orm");
         await db.update(users).set({ role: input.role }).where(eq(users.openId, input.openId));
@@ -1197,13 +1199,13 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) throw new Error("Database unavailable");
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
         const { users } = await import("../drizzle/schema");
         const { eq } = await import("drizzle-orm");
         const [user] = await db.select().from(users).where(eq(users.openId, ctx.user.openId)).limit(1);
-        if (!user || !user.passwordHash) throw new Error("비밀번호 인증 방식의 계정이 아닙니다");
+        if (!user || !user.passwordHash) throw new TRPCError({ code: "BAD_REQUEST", message: "비밀번호 인증 방식의 계정이 아닙니다" });
         const valid = await verifyPassword(input.currentPassword, user.passwordHash);
-        if (!valid) throw new Error("현재 비밀번호가 올바르지 않습니다");
+        if (!valid) throw new TRPCError({ code: "BAD_REQUEST", message: "현재 비밀번호가 올바르지 않습니다" });
         const newHash = await hashPassword(input.newPassword);
         await db.update(users).set({ passwordHash: newHash }).where(eq(users.openId, ctx.user.openId));
         return { success: true } as const;
@@ -1236,12 +1238,19 @@ export const appRouter = router({
       .input(z.object({ groupId: z.number() }))
       .query(async ({ ctx, input }) => {
         const group = await getDocumentGroupById(input.groupId);
-        if (!group || group.userId !== ctx.user.id) throw new Error("그룹을 찾을 수 없습니다.");
+        if (!group || group.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "그룹을 찾을 수 없습니다." });
         const docs = await getDocumentsByGroupId(input.groupId);
-        // 각 문서별 topicProgress 계산
+        // 각 문서별 topicProgress 계산 (세션은 한 번에 배치 조회하여 N+1 방지)
+        const allSessions = await getSessionsByDocumentIds(docs.map((d) => d.id), ctx.user.id);
+        const sessionsByDoc = new Map<number, typeof allSessions>();
+        for (const s of allSessions) {
+          const list = sessionsByDoc.get(s.documentId) ?? [];
+          list.push(s);
+          sessionsByDoc.set(s.documentId, list);
+        }
         const topicProgressByDoc: Record<number, Record<string, "completed" | "active">> = {};
         for (const doc of docs) {
-          const sessions = await getSessionsByDocumentId(doc.id, ctx.user.id);
+          const sessions = sessionsByDoc.get(doc.id) ?? [];
           const progressMap: Record<string, "completed" | "active"> = {};
           for (const s of sessions) {
             if (s.startTopicId) {
@@ -1268,7 +1277,7 @@ export const appRouter = router({
       .input(z.object({ groupId: z.number(), name: z.string().min(1).optional(), description: z.string().optional() }))
       .mutation(async ({ ctx, input }) => {
         const group = await getDocumentGroupById(input.groupId);
-        if (!group || group.userId !== ctx.user.id) throw new Error("그룹을 찾을 수 없습니다.");
+        if (!group || group.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "그룹을 찾을 수 없습니다." });
         await updateDocumentGroup(input.groupId, {
           ...(input.name !== undefined ? { name: input.name } : {}),
           ...(input.description !== undefined ? { description: input.description } : {}),
@@ -1281,7 +1290,7 @@ export const appRouter = router({
       .input(z.object({ groupId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const group = await getDocumentGroupById(input.groupId);
-        if (!group || group.userId !== ctx.user.id) throw new Error("그룹을 찾을 수 없습니다.");
+        if (!group || group.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "그룹을 찾을 수 없습니다." });
         const docs = await getDocumentsByGroupId(input.groupId);
         for (const doc of docs) {
           await deleteDocument(doc.id);
@@ -1295,9 +1304,9 @@ export const appRouter = router({
       .input(z.object({ groupId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const group = await getDocumentGroupById(input.groupId);
-        if (!group || group.userId !== ctx.user.id) throw new Error("그룹을 찾을 수 없습니다.");
+        if (!group || group.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "그룹을 찾을 수 없습니다." });
         const docs = await getDocumentsByGroupId(input.groupId);
-        if (docs.length === 0) throw new Error("그룹에 문서가 없습니다.");
+        if (docs.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "그룹에 문서가 없습니다." });
 
         await updateDocumentGroup(input.groupId, { analysisStatus: "analyzing" });
 
@@ -1326,7 +1335,7 @@ export const appRouter = router({
             }
           }
 
-          if (docTextEntries.length === 0) throw new Error("분석할 수 있는 문서 내용이 없습니다. 텍스트가 포함된 PDF 또는 문서를 업로드해주세요.");
+          if (docTextEntries.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "분석할 수 있는 문서 내용이 없습니다. 텍스트가 포함된 PDF 또는 문서를 업로드해주세요." });
 
           const combinedText = docTextEntries.map(e => e.text).join("\n\n" + "=".repeat(50) + "\n\n");
           const maxLen = 60000;
@@ -1450,7 +1459,7 @@ Return ONLY valid JSON matching the schema exactly.`;
           });
 
           const rawContent = response.choices[0]?.message?.content;
-          if (!rawContent) throw new Error("AI 통합 분석 결과를 받지 못했습니다.");
+          if (!rawContent) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI 통합 분석 결과를 받지 못했습니다." });
 
           let unifiedStructure: DocumentStructure;
           try {
@@ -1470,7 +1479,7 @@ Return ONLY valid JSON matching the schema exactly.`;
               comparisonTables: [],
             };
           } catch {
-            throw new Error("AI 통합 분석 결과를 파싱하지 못했습니다. 다시 시도해 주세요.");
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI 통합 분석 결과를 파싱하지 못했습니다. 다시 시도해 주세요." });
           }
 
           await updateDocumentGroup(input.groupId, { analysisStatus: "done", structure: unifiedStructure });
@@ -1485,7 +1494,7 @@ Return ONLY valid JSON matching the schema exactly.`;
       .input(z.object({ groupId: z.number(), structure: z.enum(["tree", "conceptMap", "learningPath"]) }))
       .mutation(async ({ ctx, input }) => {
         const group = await getDocumentGroupById(input.groupId);
-        if (!group || group.userId !== ctx.user.id) throw new Error("그룹을 찾을 수 없습니다.");
+        if (!group || group.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "그룹을 찾을 수 없습니다." });
         await updateDocumentGroup(input.groupId, { selectedStructure: input.structure, structureLocked: 1 });
         return { success: true };
       }),
@@ -1494,7 +1503,7 @@ Return ONLY valid JSON matching the schema exactly.`;
       .input(z.object({ groupId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const group = await getDocumentGroupById(input.groupId);
-        if (!group || group.userId !== ctx.user.id) throw new Error("그룹을 찾을 수 없습니다.");
+        if (!group || group.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "그룹을 찾을 수 없습니다." });
         await updateDocumentGroup(input.groupId, { structureLocked: 0, selectedStructure: null });
         return { success: true };
       }),
@@ -1515,27 +1524,27 @@ Return ONLY valid JSON matching the schema exactly.`;
       .mutation(async ({ ctx, input }) => {
         // 허용된 MIME 타입 검증
         if (!ALLOWED_MIME_TYPES.includes(input.mimeType as AllowedMime)) {
-          throw new Error("지원하지 않는 파일 형식입니다. PDF, DOC, DOCX, PPT, PPTX만 업로드 가능합니다.");
+          throw new TRPCError({ code: "BAD_REQUEST", message: "지원하지 않는 파일 형식입니다. PDF, DOC, DOCX, PPT, PPTX만 업로드 가능합니다." });
         }
 
         // 파일 크기 제한: 50MB
         const MAX_FILE_SIZE = 50 * 1024 * 1024;
         if (input.fileSize > MAX_FILE_SIZE) {
-          throw new Error("파일 크기가 너무 큽니다. 최대 50MB까지 업로드 가능합니다.");
+          throw new TRPCError({ code: "BAD_REQUEST", message: "파일 크기가 너무 큽니다. 최대 50MB까지 업로드 가능합니다." });
         }
 
         // 사용자당 문서 수 제한
         const MAX_DOCUMENTS_PER_USER = 200;
         const existingDocs = await getDocumentsByUserId(ctx.user.id);
         if (existingDocs.length >= MAX_DOCUMENTS_PER_USER) {
-          throw new Error(`문서는 최대 ${MAX_DOCUMENTS_PER_USER}개까지 업로드할 수 있습니다. 불필요한 문서를 삭제 후 다시 시도해 주세요.`);
+          throw new TRPCError({ code: "BAD_REQUEST", message: `문서는 최대 ${MAX_DOCUMENTS_PER_USER}개까지 업로드할 수 있습니다. 불필요한 문서를 삭제 후 다시 시도해 주세요.` });
         }
 
         const buffer = Buffer.from(input.fileData, "base64");
 
         // 실제 버퍼 크기 재검증 (클라이언트가 fileSize를 속일 수 있으므로)
         if (buffer.length > MAX_FILE_SIZE) {
-          throw new Error("파일 크기가 너무 큽니다. 최대 50MB까지 업로드 가능합니다.");
+          throw new TRPCError({ code: "BAD_REQUEST", message: "파일 크기가 너무 큽니다. 최대 50MB까지 업로드 가능합니다." });
         }
 
         // magic bytes로 실제 파일 형식 검증
@@ -1552,7 +1561,7 @@ Return ONLY valid JSON matching the schema exactly.`;
             magic.every((byte, i) => buffer[i] === byte)
           );
           if (!matches) {
-            throw new Error("파일 내용이 선언된 형식과 일치하지 않습니다.");
+            throw new TRPCError({ code: "BAD_REQUEST", message: "파일 내용이 선언된 형식과 일치하지 않습니다." });
           }
         }
         const safeFileName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -1610,7 +1619,7 @@ Return ONLY valid JSON matching the schema exactly.`;
       .input(z.object({ documentId: z.number(), text: z.string() }))
       .mutation(async ({ ctx, input }) => {
         const doc = await getDocumentById(input.documentId);
-        if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
+        if (!doc || doc.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "문서를 찾을 수 없습니다." });
         await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "structuring");
         // 분석을 백그라운드에서 실행하고 즉시 반환
         (async () => { try {
@@ -1634,7 +1643,7 @@ Return ONLY valid JSON matching the schema exactly.`;
       .input(z.object({ documentId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const doc = await getDocumentById(input.documentId);
-        if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
+        if (!doc || doc.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "문서를 찾을 수 없습니다." });
         // 단계 1: extracting (파일 접근 중)
         await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "extracting");
         // 분석을 백그라운드에서 실행하고 즉시 반환
@@ -1643,7 +1652,7 @@ Return ONLY valid JSON matching the schema exactly.`;
           if (doc.fileType === "text") {
             const signedUrl = await storageGetSignedUrl(doc.storageKey);
             const res = await fetch(signedUrl);
-            if (!res.ok) throw new Error("텍스트 파일을 불러올 수 없습니다.");
+            if (!res.ok) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "텍스트 파일을 불러올 수 없습니다." });
             const text = await res.text();
             await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "structuring");
             const structureResult = await analyzeTextContent(text, doc.title, ctx.user.id);
@@ -1694,7 +1703,7 @@ Return ONLY valid JSON matching the schema exactly.`;
       .input(z.object({ documentId: z.number() }))
       .query(async ({ ctx, input }) => {
         const doc = await getDocumentById(input.documentId);
-        if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
+        if (!doc || doc.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "문서를 찾을 수 없습니다." });
         return doc;
       }),
 
@@ -1703,7 +1712,7 @@ Return ONLY valid JSON matching the schema exactly.`;
       .input(z.object({ documentId: z.number() }))
       .query(async ({ ctx, input }) => {
         const doc = await getDocumentById(input.documentId);
-        if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
+        if (!doc || doc.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "문서를 찾을 수 없습니다." });
         return {
           analysisStatus: (doc as any).analysisStatus as string,
           analysisStep: (doc as any).analysisStep as string | null,
@@ -1717,8 +1726,8 @@ Return ONLY valid JSON matching the schema exactly.`;
       .input(z.object({ documentId: z.number() }))
       .query(async ({ ctx, input }) => {
         const doc = await getDocumentById(input.documentId);
-        if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
-        if (!doc.storageUrl) throw new Error("파일을 찾을 수 없습니다.");
+        if (!doc || doc.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "문서를 찾을 수 없습니다." });
+        if (!doc.storageUrl) throw new TRPCError({ code: "NOT_FOUND", message: "파일을 찾을 수 없습니다." });
         // analyze 엔드포인트와 동일한 키 추출 방식 사용
         const actualKey = doc.storageUrl
           .replace(/^\/r2-storage\//, "")
@@ -1732,7 +1741,7 @@ Return ONLY valid JSON matching the schema exactly.`;
       .input(z.object({ documentId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const doc = await getDocumentById(input.documentId);
-        if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
+        if (!doc || doc.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "문서를 찾을 수 없습니다." });
         // 그룹 소속 문서인 경우 그룹 구조 완전 초기화 (자료 변경 시 기존 통합 분석 결과가 일관성 없어짐)
         if (doc.groupId) {
           await updateDocumentGroup(doc.groupId, {
@@ -1758,11 +1767,11 @@ Return ONLY valid JSON matching the schema exactly.`;
       }))
       .mutation(async ({ ctx, input }) => {
         const doc = await getDocumentById(input.documentId);
-        if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
+        if (!doc || doc.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "문서를 찾을 수 없습니다." });
         // 이미 잠긴 경우 변경 불가
-        if ((doc as any).structureLocked === 1) throw new Error("이미 학습 구조가 확정되었습니다. 재분석을 실행하면 초기화됩니다.");
+        if ((doc as any).structureLocked === 1) throw new TRPCError({ code: "CONFLICT", message: "이미 학습 구조가 확정되었습니다. 재분석을 실행하면 초기화됩니다." });
         const db = await getDb();
-        if (!db) throw new Error("DB 연결 실패");
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB 연결 실패" });
         await db.update(documents).set({
           selectedStructure: input.structure,
           structureLocked: 1,
@@ -1777,9 +1786,9 @@ Return ONLY valid JSON matching the schema exactly.`;
       }))
       .mutation(async ({ ctx, input }) => {
         const doc = await getDocumentById(input.documentId);
-        if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
+        if (!doc || doc.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "문서를 찾을 수 없습니다." });
         const db = await getDb();
-        if (!db) throw new Error("DB 연결 실패");
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB 연결 실패" });
         await db.update(documents).set({ learningLanguage: input.learningLanguage }).where(eq(documents.id, input.documentId));
         return { success: true };
       }),
@@ -1788,10 +1797,10 @@ Return ONLY valid JSON matching the schema exactly.`;
       .input(z.object({ documentId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const doc = await getDocumentById(input.documentId);
-        if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
+        if (!doc || doc.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "문서를 찾을 수 없습니다." });
         // 학습 구조 잠금 해제 + 구조 선택 초기화
         const db2 = await getDb();
-        if (!db2) throw new Error("DB 연결 실패");
+        if (!db2) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB 연결 실패" });
         await db2.update(documents).set({
           selectedStructure: null,
           structureLocked: 0,
@@ -1804,7 +1813,7 @@ Return ONLY valid JSON matching the schema exactly.`;
           if (doc.fileType === "text") {
             const signedUrl = await storageGetSignedUrl(doc.storageKey);
             const res = await fetch(signedUrl);
-            if (!res.ok) throw new Error("텍스트 파일을 불러올 수 없습니다.");
+            if (!res.ok) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "텍스트 파일을 불러올 수 없습니다." });
             const text = await res.text();
             await updateDocumentAnalysis(input.documentId, "analyzing", undefined, undefined, "structuring");
             const structureResult = await analyzeTextContent(text, doc.title, ctx.user.id);
@@ -1856,7 +1865,7 @@ Return ONLY valid JSON matching the schema exactly.`;
       )
       .mutation(async ({ ctx, input }) => {
          const doc = await getDocumentById(input.documentId);
-        if (!doc || doc.userId !== ctx.user.id) throw new Error("문서를 찾을 수 없습니다.");
+        if (!doc || doc.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "문서를 찾을 수 없습니다." });
         // QLoop 모델 분기: core=0, curated=2, open=1
         const openQloopModeVal = input.qloopModel === "open" ? 1 : input.qloopModel === "curated" ? 2 : 0;
         const openQloopMode = openQloopModeVal === 1; // 인터넷 검색 여부 (Open QLoop)
@@ -1941,7 +1950,7 @@ Return ONLY valid JSON matching the schema exactly.`;
         } catch (aiErr) {
           // AI 호출 실패 시 세션을 error 상태로 업데이트 후 예외 전파
           await updateLearningSession(sessionId, { status: "paused" });
-          throw new Error("첫 질문 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "첫 질문 생성에 실패했습니다. 잠시 후 다시 시도해 주세요." });
         }
 
         await createSessionMessage({
@@ -1971,18 +1980,18 @@ Return ONLY valid JSON matching the schema exactly.`;
       )
       .mutation(async ({ ctx, input }) => {
         const session = await getLearningSessionById(input.sessionId);
-        if (!session || session.userId !== ctx.user.id) throw new Error("세션을 찾을 수 없습니다.");
-        if (session.status !== "active") throw new Error("이미 종료된 세션입니다.");
+        if (!session || session.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "세션을 찾을 수 없습니다." });
+        if (session.status !== "active") throw new TRPCError({ code: "CONFLICT", message: "이미 종료된 세션입니다." });
 
         // ── 세션당 메시지 수 상한 (무한 AI 호출 방지) ─────────────────────────
         const MAX_MESSAGES_PER_SESSION = 200;
         if ((session.totalQuestions ?? 0) >= MAX_MESSAGES_PER_SESSION) {
-          throw new Error("세션당 최대 메시지 수를 초과했습니다. 세션을 완료하고 새로 시작해 주세요.");
+          throw new TRPCError({ code: "BAD_REQUEST", message: "세션당 최대 메시지 수를 초과했습니다. 세션을 완료하고 새로 시작해 주세요." });
         }
 
         const doc = session.documentId ? await getDocumentById(session.documentId) : null;
         const sessionGroup = session.groupId ? await getDocumentGroupById(session.groupId) : null;
-        if (!doc && !sessionGroup) throw new Error("문서를 찾을 수 없습니다.");
+        if (!doc && !sessionGroup) throw new TRPCError({ code: "NOT_FOUND", message: "문서를 찾을 수 없습니다." });
         const titleForSession = sessionGroup ? sessionGroup.name : (doc?.title ?? "");
 
         // 학습자 메시지 저장
@@ -2064,7 +2073,7 @@ Return ONLY valid JSON matching the schema exactly.`;
             input.learnerLevel
           );
         } catch (aiErr) {
-          throw new Error("AI 응답 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI 응답 생성에 실패했습니다. 잠시 후 다시 시도해 주세요." });
         }
 
         // AI 메시지 저장
@@ -2215,7 +2224,7 @@ Return ONLY valid JSON matching the schema exactly.`;
       }))
       .mutation(async ({ ctx, input }) => {
         const session = await getLearningSessionById(input.sessionId);
-        if (!session || session.userId !== ctx.user.id) throw new Error("세션을 찾을 수 없습니다.");
+        if (!session || session.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "세션을 찾을 수 없습니다." });
         const openQloopMode = input.qloopModel === "open" ? 1 : input.qloopModel === "curated" ? 2 : 0;
         await updateLearningSession(input.sessionId, { openQloopMode });
         return { success: true, qloopModel: input.qloopModel };
@@ -2225,7 +2234,7 @@ Return ONLY valid JSON matching the schema exactly.`;
       .input(z.object({ sessionId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const session = await getLearningSessionById(input.sessionId);
-        if (!session || session.userId !== ctx.user.id) throw new Error("세션을 찾을 수 없습니다.");
+        if (!session || session.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "세션을 찾을 수 없습니다." });
         // 그룹 세션 또는 개별 문서 세션 모두 지원
         const doc = session.documentId ? await getDocumentById(session.documentId) : null;
         const group = session.groupId ? await getDocumentGroupById(session.groupId) : null;
@@ -2278,7 +2287,7 @@ Return ONLY valid JSON matching the schema exactly.`;
       .input(z.object({ sessionId: z.number() }))
       .query(async ({ ctx, input }) => {
         const session = await getLearningSessionById(input.sessionId);
-        if (!session || session.userId !== ctx.user.id) throw new Error("세션을 찾을 수 없습니다.");
+        if (!session || session.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "세션을 찾을 수 없습니다." });
         return getSessionMessages(input.sessionId);
       }),
 
@@ -2287,7 +2296,7 @@ Return ONLY valid JSON matching the schema exactly.`;
       .input(z.object({ sessionId: z.number() }))
       .query(async ({ ctx, input }) => {
         const session = await getLearningSessionById(input.sessionId);
-        if (!session || session.userId !== ctx.user.id) throw new Error("세션을 찾을 수 없습니다.");
+        if (!session || session.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "세션을 찾을 수 없습니다." });
         return session;
       }),
 
@@ -2334,7 +2343,7 @@ Return ONLY valid JSON matching the schema exactly.`;
       .input(z.object({ sessionId: z.number() }))
       .query(async ({ ctx, input }) => {
         const session = await getLearningSessionById(input.sessionId);
-        if (!session || session.userId !== ctx.user.id) throw new Error("세션을 찾을 수 없습니다.");
+        if (!session || session.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "세션을 찾을 수 없습니다." });
         const messages = await getSessionMessages(input.sessionId);
 
         const weakConcepts: string[] = [];
@@ -2524,9 +2533,9 @@ Return ONLY valid JSON matching the schema exactly.`;
       .input(z.object({ sessionId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) throw new Error("Database unavailable");
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
         const session = await getLearningSessionById(input.sessionId);
-        if (!session || session.userId !== ctx.user.id) throw new Error("세션을 찾을 수 없습니다.");
+        if (!session || session.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "세션을 찾을 수 없습니다." });
         const { sessionMessages, questionEvaluations, moduleEvaluations: meTable, learningSessions } = await import("../drizzle/schema");
         const { eq } = await import("drizzle-orm");
         // 관련 데이터 삭제 (순서: 메시지 → 평가 → 모듈 평가 → 세션)

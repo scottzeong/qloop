@@ -395,7 +395,9 @@ export const socraticRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const [question] = await db.select().from(questions).where(eq(questions.id, input.questionId)).limit(1);
-      if (!question) throw new TRPCError({ code: "NOT_FOUND", message: "질문을 찾을 수 없습니다" });
+      if (!question || question.learnerId !== ctx.user.id || question.sessionId !== input.sessionId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "질문을 찾을 수 없습니다" });
+      }
 
       const [questionType] = await db.select().from(questionTypes).where(eq(questionTypes.id, question.questionTypeId)).limit(1);
       const weights = await getWeightsForQuestionType(question.questionTypeId);
@@ -533,8 +535,14 @@ ${dimensionDescriptions}
       const allMisconceptions: string[] = [];
       const allStrengths: string[] = [];
 
+      const evalQuestionTypeIds = Array.from(new Set(evals.map((ev) => ev.questionTypeId)));
+      const evalQuestionTypes = evalQuestionTypeIds.length > 0
+        ? await db.select().from(questionTypes).where(inArray(questionTypes.id, evalQuestionTypeIds))
+        : [];
+      const questionTypeById = new Map(evalQuestionTypes.map((qt) => [qt.id, qt]));
+
       for (const ev of evals) {
-        const [qt] = await db.select().from(questionTypes).where(eq(questionTypes.id, ev.questionTypeId)).limit(1);
+        const qt = questionTypeById.get(ev.questionTypeId);
         if (qt) {
           if (!typeScores[qt.name]) typeScores[qt.name] = [];
           typeScores[qt.name].push(ev.weightedScore ?? 0);

@@ -1,11 +1,19 @@
 import type { Express } from "express";
 import { storageGetSignedUrl } from "../storage";
+import { sdk } from "./sdk";
 
 export function registerStorageProxy(app: Express) {
   app.get("/r2-storage/*", async (req, res) => {
     const key = (req.params as Record<string, string>)[0];
     if (!key) {
       res.status(400).send("Missing storage key");
+      return;
+    }
+
+    try {
+      await sdk.authenticateRequest(req);
+    } catch {
+      res.status(401).send("Unauthorized");
       return;
     }
 

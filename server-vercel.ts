@@ -4,6 +4,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { appRouter } from "./server/routers";
 import { createContext } from "./server/_core/context";
 import { storageGetSignedUrl } from "./server/storage";
+import { sdk } from "./server/_core/sdk";
 
 const app = express();
 app.use(express.json({ limit: "50mb" }));
@@ -19,6 +20,12 @@ app.get("/r2-storage/*", async (req: Request, res: Response) => {
   try {
     const key = (req.params as Record<string, string>)[0];
     if (!key) { res.status(400).send("Missing storage key"); return; }
+    try {
+      await sdk.authenticateRequest(req);
+    } catch {
+      res.status(401).send("Unauthorized");
+      return;
+    }
     const signedUrl = await storageGetSignedUrl(key);
     res.set("Cache-Control", "no-store").redirect(307, signedUrl);
   } catch (err: any) {

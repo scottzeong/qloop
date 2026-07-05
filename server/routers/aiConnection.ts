@@ -112,38 +112,40 @@ export const aiConnectionRouter = router({
         )
         .limit(1);
 
-      // setAsDefault가 true이면 기존 default 해제
-      if (input.setAsDefault) {
-        await db
-          .update(aiConnections)
-          .set({ isDefault: 0 })
-          .where(eq(aiConnections.userId, ctx.user.id));
-      }
+      await db.transaction(async (tx) => {
+        // setAsDefault가 true이면 기존 default 해제
+        if (input.setAsDefault) {
+          await tx
+            .update(aiConnections)
+            .set({ isDefault: 0 })
+            .where(eq(aiConnections.userId, ctx.user.id));
+        }
 
-      if (existing.length > 0) {
-        // 업데이트
-        await db
-          .update(aiConnections)
-          .set({
+        if (existing.length > 0) {
+          // 업데이트
+          await tx
+            .update(aiConnections)
+            .set({
+              apiKeyEncrypted: encrypted,
+              apiKeyMasked: masked,
+              selectedModel: input.selectedModel,
+              isDefault: input.setAsDefault ? 1 : existing[0].isDefault,
+              connectionStatus: "untested",
+            })
+            .where(eq(aiConnections.id, existing[0].id));
+        } else {
+          // 신규 생성
+          await tx.insert(aiConnections).values({
+            userId: ctx.user.id,
+            providerName: input.providerName,
             apiKeyEncrypted: encrypted,
             apiKeyMasked: masked,
             selectedModel: input.selectedModel,
-            isDefault: input.setAsDefault ? 1 : existing[0].isDefault,
+            isDefault: input.setAsDefault ? 1 : 0,
             connectionStatus: "untested",
-          })
-          .where(eq(aiConnections.id, existing[0].id));
-      } else {
-        // 신규 생성
-        await db.insert(aiConnections).values({
-          userId: ctx.user.id,
-          providerName: input.providerName,
-          apiKeyEncrypted: encrypted,
-          apiKeyMasked: masked,
-          selectedModel: input.selectedModel,
-          isDefault: input.setAsDefault ? 1 : 0,
-          connectionStatus: "untested",
-        });
-      }
+          });
+        }
+      });
 
       invalidateUserConnectionCache(ctx.user.id);
       return { success: true };
@@ -213,7 +215,8 @@ export const aiConnectionRouter = router({
         success = result.success;
         if (!success) errorMessage = result.error ?? "연결 테스트 실패";
       } catch (e) {
-        errorMessage = e instanceof Error ? e.message : "알 수 없는 오류";
+        console.error("[aiConnection.test] 연결 테스트 실패:", e);
+        errorMessage = "연결 테스트 중 오류가 발생했습니다. API Key와 모델 설정을 확인해 주세요.";
       }
 
       await db
@@ -247,17 +250,19 @@ export const aiConnectionRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "연결을 찾을 수 없습니다." });
       }
 
-      // 기존 default 해제
-      await db
-        .update(aiConnections)
-        .set({ isDefault: 0 })
-        .where(eq(aiConnections.userId, ctx.user.id));
+      await db.transaction(async (tx) => {
+        // 기존 default 해제
+        await tx
+          .update(aiConnections)
+          .set({ isDefault: 0 })
+          .where(eq(aiConnections.userId, ctx.user.id));
 
-      // 새 default 설정
-      await db
-        .update(aiConnections)
-        .set({ isDefault: 1 })
-        .where(eq(aiConnections.id, input.connectionId));
+        // 새 default 설정
+        await tx
+          .update(aiConnections)
+          .set({ isDefault: 1 })
+          .where(eq(aiConnections.id, input.connectionId));
+      });
 
       invalidateUserConnectionCache(ctx.user.id);
       return { success: true };
